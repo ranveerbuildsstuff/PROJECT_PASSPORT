@@ -6,25 +6,25 @@
 
 ## Slice 1: Scaffold + Domain Model
 
-- [ ] Initialize Vite app with React 18+ and TypeScript in strict mode.
-- [ ] Configure Tailwind CSS with custom design tokens from `DESIGN.md` (colors, fonts, radius).
-- [ ] Configure ESLint and Prettier with strict linting rules.
-- [ ] Configure Vitest and React Testing Library for testing.
-- [ ] Set up package scripts: `dev`, `build`, `typecheck`, `lint`, and `test`.
-- [ ] Install self-hosted fonts (`@fontsource/inter`, `@fontsource/jetbrains-mono`) and configure them.
-- [ ] Implement placeholder home page route with React Router and write an RTL smoke test.
-- [ ] In `src/domain/passport.schema.ts`, implement Passport Schema v1 using Zod (`schemaVersion: 1`).
-- [ ] Derive static TypeScript types using `z.infer`.
-- [ ] Implement `createEmptyPassport()` generating a valid default passport object with UUID and timestamps.
-- [ ] Implement `validatePassport(data)` returning typed results with user-friendly plain-language error messages.
-- [ ] Implement `migratePassport(data)` validating v1 schema and ready for forward compatibility.
-- [ ] Implement `computeReadiness(passport)` returning 0–100 score across the 7 required checks.
-- [ ] Implement `estimateTokens(text)` calculating `Math.ceil(length / 4)`.
-- [ ] Implement `passportToMarkdown(passport)` with stable section ordering, omitting empty sections.
-- [ ] Create synthetic fixture (e-commerce project) in `tests/fixtures/ecommerce-passport.json` with a descriptive `README.md`.
-- [ ] **Tests added:** Unit tests for schema validation, empty factory, plain-language error formatting, migration, readiness scoring, token estimation, and markdown conversion.
-- [ ] **Docs updated:** Update `PROGRESS.md` with implementation details and decisions.
-- [ ] **Commit message:** `Slice 1: scaffold and domain model`
+- [x] Initialize Vite app with React 18+ and TypeScript in strict mode.
+- [x] Configure Tailwind CSS with custom design tokens from `DESIGN.md` (colors, fonts, radius).
+- [x] Configure ESLint and Prettier with strict linting rules.
+- [x] Configure Vitest and React Testing Library for testing.
+- [x] Set up package scripts: `dev`, `build`, `typecheck`, `lint`, and `test`.
+- [x] Configure typography tokens for Inter and JetBrains Mono (font packages deferred to Slice 3 per user instruction).
+- [x] Implement placeholder home page route with React Router and write an RTL smoke test.
+- [x] In `src/domain/passport.schema.ts`, implement Passport Schema v1 using Zod (`schemaVersion: 1`).
+- [x] Derive static TypeScript types using `z.infer`.
+- [x] Implement `createEmptyPassport()` generating a valid default passport object with UUID and timestamps.
+- [x] Implement `validatePassport(data)` returning typed results with user-friendly plain-language error messages.
+- [x] Implement `migratePassport(data)` validating v1 schema and ready for forward compatibility.
+- [x] Implement `computeReadiness(passport)` returning 0–100 score across the 7 required checks.
+- [x] Implement `estimateTokens(text)` calculating `Math.ceil(length / 4)`.
+- [x] Implement `passportToMarkdown(passport)` with stable section ordering, omitting empty sections.
+- [x] Create synthetic fixture (e-commerce project) in `tests/fixtures/ecommerce-passport.json` with a descriptive `README.md`.
+- [x] **Tests added:** Unit tests for schema validation, empty factory, plain-language error formatting, migration, readiness scoring, token estimation, and markdown conversion.
+- [x] **Docs updated:** Update `PROGRESS.md` with implementation details and decisions.
+- [x] **Commit message:** `Slice 1: scaffold + domain model`
 
 **Done when:**
 - `npm run typecheck`, `npm run lint`, `npm test`, and `npm run build` all pass with zero errors.

@@ -1,0 +1,96 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Markdown Serializer (passportToMarkdown) > renders markdown snapshot for the synthetic e-commerce fixture 1`] = `
+"# Aura Commerce Storefront
+Status: IN_PROGRESS | Schema: v1
+Last updated: 2026-03-05T14:30:00.000Z
+
+## Goal
+
+Build an open-source headless e-commerce storefront for artisanal pottery makers with local-first cart persistence and Stripe Checkout.
+
+## Summary
+
+Full-stack headless storefront utilizing Next.js App Router and Prisma ORM. Currently focusing on cart state synchronization and checkout session webhooks.
+
+## Next Action
+
+Finish the Stripe webhook endpoint in \`src/app/api/webhooks/stripe/route.ts\` to handle idempotency keys.
+
+## Tech Stack
+
+- **Next.js** (Frontend & API Routes, v14.2.0) — App Router architecture with React Server Components
+- **TypeScript** (Language, v5.4.0) — Strict mode enabled throughout
+- **Tailwind CSS** (Styling, v3.4.1) — Custom artisanal color palette and typography
+- **Prisma** (Database ORM, v5.11.0) — PostgreSQL schema migrations and typed client
+- **Stripe** (Payment Processing, v14.21.0) — Hosted checkout sessions with signed webhook verification
+
+## Requirements
+
+- [MUST] Catalog browsing must render server-side for optimal SEO and Core Web Vitals.
+- [MUST] Cart items must persist across browser reloads without requiring user login.
+- [SHOULD] Support discount coupon codes during the checkout initiation flow.
+- [COULD] Customer order history lookup via email verification link.
+
+## Decisions
+
+### [ACTIVE] Use Stripe Hosted Checkout instead of custom payment element
+
+*Date: 2026-03-02*
+
+**Reason:** Reduces PCI compliance scope and simplifies mobile payment sheet integration.
+
+### [ACTIVE] Store cart state in localStorage instead of server-side session cookies
+
+*Date: 2026-03-03*
+
+**Reason:** Allows completely anonymous browsing without database writes until checkout starts.
+
+### [SUPERSEDED] Use SQLite for production catalog storage
+
+*Date: 2026-03-01*
+
+**Reason:** Initially considered for simplicity, but replaced by PostgreSQL for concurrent inventory transactions.
+
+## Completed Work
+
+- [x] PostgreSQL database schema for products, variants, and inventory levels.
+- [x] Product detail pages with image gallery and variant selector.
+- [x] Zustand cart store with localStorage synchronization.
+
+## Tasks
+
+- [ ] [DOING] [HIGH] Implement Stripe webhook handler for checkout.session.completed event.
+- [ ] [TODO] [HIGH] Add inventory decrement transaction upon verified payment webhook.
+- [ ] [TODO] [MEDIUM] Build order confirmation thank-you page with order summary.
+- [ ] [BLOCKED] [MEDIUM] Setup Resend email notifications for customer receipts.
+
+## Bugs & Issues
+
+- [OPEN] [SEVERITY: MEDIUM] Rapid double-click on 'Add to Cart' button increments quantity twice.
+- [OPEN] [SEVERITY: LOW] Cart badge badge count flashes 0 briefly during SSR hydration.
+- [FIXED] [SEVERITY: HIGH] Product slug collation error on special characters.
+
+## AI Instructions
+
+- Always preserve strict TypeScript typing; never use \`any\`.
+- Database mutations must execute inside explicit Prisma transactions.
+- Do not log Stripe customer credentials, payment tokens, or webhook secrets.
+
+## Open Questions
+
+- Should inventory be reserved for 15 minutes when the customer enters Stripe Checkout?
+- Do we require address verification for international shipping destinations?
+
+## Project Files
+
+- \`prisma/schema.prisma\` (2450 bytes, included) — Data model definitions for Products, Variants, Orders, and Customers.
+- \`src/app/api/webhooks/stripe/route.ts\` (3820 bytes, included) — Webhook listener verifying Stripe signatures and processing payments.
+- \`src/lib/cart-store.ts\` (1940 bytes, included) — Zustand client store managing local cart items and persistence.
+
+## Attached Conversations
+
+- **Stripe Webhook Idempotency Architecture** (claude, ~4200 tokens est., 12 messages, included)
+- **Next.js App Router Cart Hydration Strategy** (chatgpt, ~2900 tokens est., 8 messages, excluded)
+"
+`;

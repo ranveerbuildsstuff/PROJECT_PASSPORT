@@ -1,0 +1,197 @@
+{
+  "schemaVersion": 1,
+  "project": {
+    "id": "e4b2d861-4fa3-4a6c-9410-b98fc80693a1",
+    "name": "Aura Commerce Storefront",
+    "goal": "Build an open-source headless e-commerce storefront for artisanal pottery makers with local-first cart persistence and Stripe Checkout.",
+    "summary": "Full-stack headless storefront utilizing Next.js App Router and Prisma ORM. Currently focusing on cart state synchronization and checkout session webhooks.",
+    "status": "in_progress",
+    "createdAt": "2026-03-01T09:00:00.000Z",
+    "updatedAt": "2026-03-05T14:30:00.000Z"
+  },
+  "stack": [
+    {
+      "name": "Next.js",
+      "role": "Frontend & API Routes",
+      "version": "14.2.0",
+      "notes": "App Router architecture with React Server Components"
+    },
+    {
+      "name": "TypeScript",
+      "role": "Language",
+      "version": "5.4.0",
+      "notes": "Strict mode enabled throughout"
+    },
+    {
+      "name": "Tailwind CSS",
+      "role": "Styling",
+      "version": "3.4.1",
+      "notes": "Custom artisanal color palette and typography"
+    },
+    {
+      "name": "Prisma",
+      "role": "Database ORM",
+      "version": "5.11.0",
+      "notes": "PostgreSQL schema migrations and typed client"
+    },
+    {
+      "name": "Stripe",
+      "role": "Payment Processing",
+      "version": "14.21.0",
+      "notes": "Hosted checkout sessions with signed webhook verification"
+    }
+  ],
+  "requirements": [
+    {
+      "id": "req-1",
+      "text": "Catalog browsing must render server-side for optimal SEO and Core Web Vitals.",
+      "priority": "must"
+    },
+    {
+      "id": "req-2",
+      "text": "Cart items must persist across browser reloads without requiring user login.",
+      "priority": "must"
+    },
+    {
+      "id": "req-3",
+      "text": "Support discount coupon codes during the checkout initiation flow.",
+      "priority": "should"
+    },
+    {
+      "id": "req-4",
+      "text": "Customer order history lookup via email verification link.",
+      "priority": "could"
+    }
+  ],
+  "decisions": [
+    {
+      "id": "dec-1",
+      "decision": "Use Stripe Hosted Checkout instead of custom payment element",
+      "reason": "Reduces PCI compliance scope and simplifies mobile payment sheet integration.",
+      "date": "2026-03-02",
+      "status": "active"
+    },
+    {
+      "id": "dec-2",
+      "decision": "Store cart state in localStorage instead of server-side session cookies",
+      "reason": "Allows completely anonymous browsing without database writes until checkout starts.",
+      "date": "2026-03-03",
+      "status": "active"
+    },
+    {
+      "id": "dec-3",
+      "decision": "Use SQLite for production catalog storage",
+      "reason": "Initially considered for simplicity, but replaced by PostgreSQL for concurrent inventory transactions.",
+      "date": "2026-03-01",
+      "status": "superseded"
+    }
+  ],
+  "completed": [
+    {
+      "id": "comp-1",
+      "text": "PostgreSQL database schema for products, variants, and inventory levels."
+    },
+    {
+      "id": "comp-2",
+      "text": "Product detail pages with image gallery and variant selector."
+    },
+    {
+      "id": "comp-3",
+      "text": "Zustand cart store with localStorage synchronization."
+    }
+  ],
+  "tasks": [
+    {
+      "id": "task-1",
+      "text": "Implement Stripe webhook handler for checkout.session.completed event.",
+      "status": "doing",
+      "priority": "high"
+    },
+    {
+      "id": "task-2",
+      "text": "Add inventory decrement transaction upon verified payment webhook.",
+      "status": "todo",
+      "priority": "high"
+    },
+    {
+      "id": "task-3",
+      "text": "Build order confirmation thank-you page with order summary.",
+      "status": "todo",
+      "priority": "medium"
+    },
+    {
+      "id": "task-4",
+      "text": "Setup Resend email notifications for customer receipts.",
+      "status": "blocked",
+      "priority": "medium"
+    }
+  ],
+  "bugs": [
+    {
+      "id": "bug-1",
+      "text": "Rapid double-click on 'Add to Cart' button increments quantity twice.",
+      "severity": "medium",
+      "status": "open"
+    },
+    {
+      "id": "bug-2",
+      "text": "Cart badge badge count flashes 0 briefly during SSR hydration.",
+      "severity": "low",
+      "status": "open"
+    },
+    {
+      "id": "bug-3",
+      "text": "Product slug collation error on special characters.",
+      "severity": "high",
+      "status": "fixed"
+    }
+  ],
+  "instructions": [
+    "Always preserve strict TypeScript typing; never use `any`.",
+    "Database mutations must execute inside explicit Prisma transactions.",
+    "Do not log Stripe customer credentials, payment tokens, or webhook secrets."
+  ],
+  "files": [
+    {
+      "path": "prisma/schema.prisma",
+      "purpose": "Data model definitions for Products, Variants, Orders, and Customers.",
+      "included": true,
+      "sizeBytes": 2450
+    },
+    {
+      "path": "src/app/api/webhooks/stripe/route.ts",
+      "purpose": "Webhook listener verifying Stripe signatures and processing payments.",
+      "included": true,
+      "sizeBytes": 3820
+    },
+    {
+      "path": "src/lib/cart-store.ts",
+      "purpose": "Zustand client store managing local cart items and persistence.",
+      "included": true,
+      "sizeBytes": 1940
+    }
+  ],
+  "conversations": [
+    {
+      "id": "conv-1",
+      "title": "Stripe Webhook Idempotency Architecture",
+      "source": "claude",
+      "messageCount": 12,
+      "tokenEstimate": 4200,
+      "included": true
+    },
+    {
+      "id": "conv-2",
+      "title": "Next.js App Router Cart Hydration Strategy",
+      "source": "chatgpt",
+      "messageCount": 8,
+      "tokenEstimate": 2900,
+      "included": false
+    }
+  ],
+  "nextAction": "Finish the Stripe webhook endpoint in `src/app/api/webhooks/stripe/route.ts` to handle idempotency keys.",
+  "openQuestions": [
+    "Should inventory be reserved for 15 minutes when the customer enters Stripe Checkout?",
+    "Do we require address verification for international shipping destinations?"
+  ]
+}

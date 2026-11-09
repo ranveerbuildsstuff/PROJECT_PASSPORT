@@ -1,7 +1,10 @@
 node_modules
 dist
+dist-ssr
+*.local
 .env*
 /private
 *.log
 .DS_Store
 coverage
+*.tsbuildinfo
