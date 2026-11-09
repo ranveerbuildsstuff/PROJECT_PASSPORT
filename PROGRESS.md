@@ -1,11 +1,11 @@
 # PROGRESS.md — Project Roadmap & Status
 
-Current slice: none (Slice 1 & 1b complete)
+Current slice: none (Slice 1, 1b & 2 complete)
 
 ## Slices Checklist
 
 - [x] Slice 1: Scaffold + domain model (schema, readiness, tokens, markdown renderer)
-- [ ] Slice 2: Local storage (Dexie, service layer, backup/restore)
+- [x] Slice 2: Local storage (Dexie, service layer, backup/restore)
 - [ ] Slice 3: App shell, design system, dashboard
 - [ ] Slice 4: Passport editor + live preview
 - [ ] Slice 5: Capture prompt, reconstruct prompt, paste-back + merge
@@ -75,6 +75,34 @@ Current slice: none (Slice 1 & 1b complete)
   - *Removal of `ReadinessOptions` and text scanning:* The initial implementation relied on ephemeral runtime options (`options.explicitNoBugs`) and fragile string matching in `instructions` (`"no bugs"`, `"no known bugs"`). These states were not preserved across reload, checkpoint save/restore, or export/import. Introducing `bugsReviewed: boolean` in the schema persists this explicit user confirmation state.
   - *Schema version remains 1:* Because the application is in pre-release and no persistent stored user data exists yet, `schemaVersion` remains `1`. Backward compatibility is preserved via Zod's `.default(false)`.
   - *Plain-Language Fallback:* Replaced `issue.message` fallback with path-aware plain-language translations (`The field "<path>" has an invalid value`, `${label} must be a list`, `${label} must be text`), strictly adhering to SPEC.md invariant forbidding raw Zod messages to end users.
+
+### Slice 2: Local Storage & Service Layer
+- **What was built:**
+  - Installed `dexie` (`^4.4.7`) and dev dependency `fake-indexeddb` (`^6.2.8`).
+  - Configured `src/test/setup.ts` with `fake-indexeddb/auto` and jsdom fallback for `structuredClone`.
+  - Implemented Dexie database definition in `src/storage/db.ts` (version 1) with 5 tables: `projects`, `passports`, `checkpoints`, `conversations`, and `files`.
+  - Implemented typed domain storage errors with plain-language explanations and actionable next steps in `src/storage/errors.ts`: `StorageUnavailable`, `ValidationFailed`, `QuotaExceeded`, and `BackupInvalid`.
+  - Implemented storage service module in `src/storage/storageService.ts`:
+    - Project CRUD: `createProject`, `listProjects`, `getProject`, `renameProject` (single transaction updating project and passport), `deleteProject` (single transaction cascading to passport, checkpoints, conversations, files).
+    - Passport operations: `getPassport` (runs `migratePassport` on read), `savePassport` (validates with `validatePassport`, updates `project.updatedAt`).
+    - Conversations & Files: `add/list/get/remove` for conversations and files, storing file content as string or `Uint8Array` (Blob strictly avoided).
+    - Backup & Restore: `exportEverything` and `importBackup` supporting chunked (~32 KB) base64 binary encoding, atomic all-or-nothing transaction, passport migration validation, version checks, and 50 MB warning threshold.
+    - Persistence & Environment utilities: `isAvailable` (with graceful fallback if IndexedDB is blocked or in private mode), `requestPersistentStorage`, `getStorageUsage`, `formatBytes`.
+  - Implemented public storage barrel export in `src/storage/index.ts` maintaining strict service-layer isolation (Dexie instance never leaked to UI).
+  - Wrote comprehensive integration test suite in `src/storage/__tests__/storageService.test.ts` (13 tests) verifying all lifecycle operations, cascade deletions, validation rejections, sync guarantees, binary chunking, and error handling.
+- **Key file paths:**
+  - `src/storage/db.ts`
+  - `src/storage/errors.ts`
+  - `src/storage/storageService.ts`
+  - `src/storage/index.ts`
+  - `src/storage/__tests__/storageService.test.ts`
+  - `src/test/setup.ts`
+  - `TASKS.md`
+  - `PROGRESS.md`
+- **Decisions & Deviations:**
+  - *Uint8Array over Blob:* File contents are stored strictly as `string` for text or `Uint8Array` for binary data. Blobs were excluded to avoid cross-realm identity bugs in testing and browser variations.
+  - *Chunked Base64 Encoding:* Binary files in full backups are converted to base64 in 32 KB chunks to prevent JavaScript call-stack overflow (`Maximum call stack size exceeded`) on large files.
+  - *All-or-Nothing Import Transaction:* `importBackup` runs in a single read-write Dexie transaction across all 5 tables after performing up-front validation on every project and passport, guaranteeing that corrupted backups leave existing data completely untouched.
 
 ---
 

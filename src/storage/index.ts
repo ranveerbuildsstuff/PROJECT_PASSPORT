@@ -1,0 +1,47 @@
+export {
+  createProject,
+  listProjects,
+  getProject,
+  renameProject,
+  deleteProject,
+  getPassport,
+  savePassport,
+  addConversation,
+  listConversations,
+  getConversation,
+  removeConversation,
+  addFile,
+  listFiles,
+  getFile,
+  removeFile,
+  exportEverything,
+  importBackup,
+  requestPersistentStorage,
+  getStorageUsage,
+  isAvailable,
+  formatBytes,
+  uint8ArrayToBase64,
+  base64ToUint8Array,
+  _setStorageAvailableForTesting,
+  type BackupData,
+  type BackupProjectItem,
+  type BackupFileRecord,
+  type ImportBackupResult,
+  type StorageUsage,
+} from './storageService';
+
+export {
+  StorageUnavailable,
+  ValidationFailed,
+  QuotaExceeded,
+  BackupInvalid,
+} from './errors';
+
+export type {
+  ProjectRecord,
+  PassportRecord,
+  CheckpointRecord,
+  ConversationMessage,
+  ConversationRecord,
+  FileRecord,
+} from './db';

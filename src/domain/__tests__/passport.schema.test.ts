@@ -108,9 +108,8 @@ describe('Passport Schema v1 & Validation', () => {
   });
 
   it('validates an older v1 object without bugsReviewed and sets bugsReviewed to false', () => {
-    const empty = createEmptyPassport();
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { bugsReviewed: _omitted, ...olderV1 } = empty;
+    const olderV1: Record<string, unknown> = { ...createEmptyPassport() };
+    delete olderV1.bugsReviewed;
     const res = validatePassport(olderV1);
     expect(res.success).toBe(true);
     expect(res.data?.bugsReviewed).toBe(false);

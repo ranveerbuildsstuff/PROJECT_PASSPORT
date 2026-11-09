@@ -35,17 +35,16 @@
 
 ## Slice 2: Local Storage & Service Layer
 
-- [ ] Install Dexie and `fake-indexeddb` (for test suite).
-- [ ] In `src/storage/db.ts`, declare the Dexie database schema for passports, checkpoints, files, and conversation metadata.
-- [ ] In `src/storage/passportService.ts`, implement CRUD operations for project passports.
-- [ ] Implement transactional integrity for passport mutations and metadata updates.
-- [ ] Implement single-project JSON backup export and restore operations.
-- [ ] Implement full database dump and restore mechanism with schema version verification.
-- [ ] Provide storage quota query utility and human-readable size formatting.
-- [ ] Write integration tests for storage operations using `fake-indexeddb`.
-- [ ] **Tests added:** Unit and integration tests for CRUD, transactional updates, single-project backup/restore, and full database export/import.
-- [ ] **Docs updated:** Document storage schema and service methods in `PROGRESS.md`.
-- [ ] **Commit message:** `Slice 2: local storage and service layer`
+- [x] Install Dexie and `fake-indexeddb` (for test suite).
+- [x] In `src/storage/db.ts`, declare the Dexie database schema for passports, checkpoints, files, and conversation metadata.
+- [x] In `src/storage/storageService.ts`, implement CRUD operations for projects, passports, conversations, and files.
+- [x] Implement transactional integrity for passport mutations, project renaming, and cascade deletions.
+- [x] Implement full database backup export and atomic restore mechanism with schema validation and chunked base64 binary encoding.
+- [x] Provide storage quota query utility, persistent storage request, and human-readable size formatting.
+- [x] Write integration tests for storage operations using `fake-indexeddb`.
+- [x] **Tests added:** Integration tests for project lifecycle, cascade delete, validation rejection, bugsReviewed persistence, chunked binary roundtrip, invalid backup rejection, 50MB warning, and storage unavailability.
+- [x] **Docs updated:** Document storage schema, error classes, and service methods in `PROGRESS.md`.
+- [x] **Commit message:** `Slice 2: local storage`
 
 **Done when:**
 - `npm run typecheck`, `npm run lint`, `npm test`, and `npm run build` pass.
