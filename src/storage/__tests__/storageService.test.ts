@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   createProject,
   listProjects,
@@ -20,15 +20,12 @@ import {
   requestPersistentStorage,
   getStorageUsage,
   isAvailable,
-  formatBytes,
-  uint8ArrayToBase64,
-  base64ToUint8Array,
-  _setStorageAvailableForTesting,
   StorageUnavailable,
   ValidationFailed,
   BackupInvalid,
   type BackupData,
 } from '../index';
+import { _setStorageAvailableForTesting } from '../testing';
 import { db } from '../db';
 import type { PassportV1 } from '../../domain';
 
@@ -124,6 +121,442 @@ describe('Storage Service & Dexie Layer', () => {
     expect(await db.checkpoints.count()).toBe(0);
     expect(await db.conversations.count()).toBe(0);
     expect(await db.files.count()).toBe(0);
+  });
+
+  it('rollback proof: deleteProject rolls back all tables when a later write fails before files are deleted', async () => {
+    const project = await createProject('Atomic Delete Project');
+    const projectId = project.id;
+
+    await db.checkpoints.put({
+      id: 'ckpt-del-fail',
+      projectId,
+      createdAt: new Date().toISOString(),
+    });
+
+    await addConversation({
+      id: 'conv-del-fail',
+      projectId,
+      title: 'Rollback Conv',
+      source: 'claude',
+      messages: [{ role: 'user', text: 'Preserve me' }],
+      createdAt: new Date().toISOString(),
+    });
+
+    await addFile({
+      id: 'file-del-fail',
+      projectId,
+      path: 'important.txt',
+      mime: 'text/plain',
+      content: 'Do not delete me if transaction fails',
+      sizeBytes: 37,
+    });
+
+    expect(await db.projects.get(projectId)).toBeDefined();
+    expect(await db.passports.get(projectId)).toBeDefined();
+    expect(await db.checkpoints.get('ckpt-del-fail')).toBeDefined();
+    expect(await db.conversations.get('conv-del-fail')).toBeDefined();
+    expect(await db.files.get('file-del-fail')).toBeDefined();
+
+    // Spy on db.files.where to force an error after passport is deleted but before files are deleted
+    const spy = vi.spyOn(db.files, 'where').mockImplementation(() => {
+      throw new Error('Simulated failure before files are deleted');
+    });
+
+    let thrown: unknown;
+    try {
+      await deleteProject(projectId);
+    } catch (err) {
+      thrown = err;
+    } finally {
+      spy.mockRestore();
+    }
+
+    expect(thrown).toBeDefined();
+
+    // Assert that NOTHING changed afterwards: every table still holds the project's data
+    const projectAfter = await db.projects.get(projectId);
+    expect(projectAfter).toBeDefined();
+    expect(projectAfter?.name).toBe('Atomic Delete Project');
+
+    const passportAfter = await db.passports.get(projectId);
+    expect(passportAfter).toBeDefined();
+
+    const ckptAfter = await db.checkpoints.get('ckpt-del-fail');
+    expect(ckptAfter).toBeDefined();
+
+    const convAfter = await db.conversations.get('conv-del-fail');
+    expect(convAfter).toBeDefined();
+
+    const fileAfter = await db.files.get('file-del-fail');
+    expect(fileAfter).toBeDefined();
+  });
+
+  it('rollback proof: renameProject rolls back both project and passport when updating the second record fails', async () => {
+    const project = await createProject('Original Name');
+    const projectId = project.id;
+
+    // Spy on db.passports.put (the second record updated in renameProject)
+    const spy = vi.spyOn(db.passports, 'put').mockImplementation(() => {
+      throw new Error('Simulated failure during passport put in renameProject');
+    });
+
+    let thrown: unknown;
+    try {
+      await renameProject(projectId, 'Brand New Name');
+    } catch (err) {
+      thrown = err;
+    } finally {
+      spy.mockRestore();
+    }
+
+    expect(thrown).toBeDefined();
+
+    // Assert that both the projects row and the passport still have the OLD name
+    const projectAfter = await db.projects.get(projectId);
+    const passportAfter = await db.passports.get(projectId);
+
+    expect(projectAfter?.name).toBe('Original Name');
+    expect(passportAfter?.passport.project.name).toBe('Original Name');
+  });
+
+  it('rollback proof: importBackup rolls back entirely when a second project fails during write, leaving pre-existing data unchanged', async () => {
+    // Create pre-existing project
+    const preExisting = await createProject('Pre-existing Safe Project');
+    const preExistingId = preExisting.id;
+
+    // Prepare backup with 2 new projects
+    const backup: BackupData = {
+      backupVersion: 1,
+      createdAt: new Date().toISOString(),
+      projects: [
+        {
+          project: {
+            id: 'proj-batch-1',
+            name: 'Batch Project 1',
+            updatedAt: new Date().toISOString(),
+            status: 'idea',
+          },
+          passport: {
+            schemaVersion: 1,
+            project: {
+              id: 'proj-batch-1',
+              name: 'Batch Project 1',
+              goal: 'Goal 1',
+              summary: 'Summary 1',
+              status: 'idea',
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            },
+            stack: [],
+            requirements: [],
+            decisions: [],
+            completed: [],
+            tasks: [],
+            bugs: [],
+            bugsReviewed: false,
+            instructions: [],
+            files: [],
+            conversations: [],
+            nextAction: 'Action 1',
+            openQuestions: [],
+          },
+          conversations: [],
+          files: [],
+          checkpoints: [],
+        },
+        {
+          project: {
+            id: 'proj-batch-2',
+            name: 'Batch Project 2',
+            updatedAt: new Date().toISOString(),
+            status: 'idea',
+          },
+          passport: {
+            schemaVersion: 1,
+            project: {
+              id: 'proj-batch-2',
+              name: 'Batch Project 2',
+              goal: 'Goal 2',
+              summary: 'Summary 2',
+              status: 'idea',
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            },
+            stack: [],
+            requirements: [],
+            decisions: [],
+            completed: [],
+            tasks: [],
+            bugs: [],
+            bugsReviewed: false,
+            instructions: [],
+            files: [],
+            conversations: [],
+            nextAction: 'Action 2',
+            openQuestions: [],
+          },
+          conversations: [],
+          files: [],
+          checkpoints: [],
+        },
+      ],
+    };
+
+    // Spy on db.projects.put to let the first project write succeed, but throw on the second project write
+    const originalPut = db.projects.put.bind(db.projects);
+    let putCalls = 0;
+    const spy = vi.spyOn(db.projects, 'put').mockImplementation((...args) => {
+      putCalls++;
+      if (putCalls === 2) {
+        throw new Error('Simulated failure writing second project in backup');
+      }
+      return originalPut(...args);
+    });
+
+    let thrown: unknown;
+    try {
+      await importBackup(backup);
+    } catch (err) {
+      thrown = err;
+    } finally {
+      spy.mockRestore();
+    }
+
+    expect(thrown).toBeDefined();
+
+    // Assert that neither project exists afterwards
+    expect(await db.projects.get('proj-batch-1')).toBeUndefined();
+    expect(await db.passports.get('proj-batch-1')).toBeUndefined();
+    expect(await db.projects.get('proj-batch-2')).toBeUndefined();
+    expect(await db.passports.get('proj-batch-2')).toBeUndefined();
+
+    // Assert that pre-existing data is unchanged
+    const preExistingAfter = await db.projects.get(preExistingId);
+    expect(preExistingAfter).toBeDefined();
+    expect(preExistingAfter?.name).toBe('Pre-existing Safe Project');
+
+    const preExistingPassportAfter = await db.passports.get(preExistingId);
+    expect(preExistingPassportAfter?.passport.project.name).toBe('Pre-existing Safe Project');
+
+    const allProjects = await listProjects();
+    expect(allProjects.length).toBe(1);
+    expect(allProjects[0]?.id).toBe(preExistingId);
+  });
+
+  it('replaces existing project with same ID on importBackup, removing old extra conversations and keeping unrelated projects', async () => {
+    // 1. Create an unrelated project
+    const unrelated = await createProject('Unrelated Project');
+
+    // 2. Create target project that will be replaced
+    const target = await createProject('Original Target Project');
+    const targetId = target.id;
+
+    // Add 2 conversations to target project: C1 and C2
+    await addConversation({
+      id: 'conv-stay',
+      projectId: targetId,
+      title: 'Conversation Stay',
+      source: 'claude',
+      messages: [{ role: 'user', text: 'Stay' }],
+      createdAt: '2026-01-01T00:00:00.000Z',
+    });
+    await addConversation({
+      id: 'conv-extra',
+      projectId: targetId,
+      title: 'Conversation Extra Old',
+      source: 'chatgpt',
+      messages: [{ role: 'user', text: 'Extra' }],
+      createdAt: '2026-01-02T00:00:00.000Z',
+    });
+
+    expect((await listConversations(targetId)).length).toBe(2);
+
+    // 3. Prepare backup containing targetId, but ONLY containing conv-stay (conv-extra is omitted)
+    const backup: BackupData = {
+      backupVersion: 1,
+      createdAt: new Date().toISOString(),
+      projects: [
+        {
+          project: {
+            id: targetId,
+            name: 'Replaced Target Project',
+            updatedAt: new Date().toISOString(),
+            status: 'done',
+          },
+          passport: {
+            schemaVersion: 1,
+            project: {
+              id: targetId,
+              name: 'Replaced Target Project',
+              goal: 'Replaced Goal',
+              summary: 'Replaced Summary',
+              status: 'done',
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            },
+            stack: [{ name: 'React', role: 'Frontend' }],
+            requirements: [],
+            decisions: [],
+            completed: [],
+            tasks: [],
+            bugs: [],
+            bugsReviewed: true,
+            instructions: [],
+            files: [],
+            conversations: [],
+            nextAction: 'Ready to ship',
+            openQuestions: [],
+          },
+          conversations: [
+            {
+              id: 'conv-stay',
+              projectId: targetId,
+              title: 'Conversation Stay Updated',
+              source: 'claude',
+              messages: [{ role: 'user', text: 'Stay Updated' }],
+              createdAt: '2026-01-01T00:00:00.000Z',
+            },
+          ],
+          files: [],
+          checkpoints: [],
+        },
+      ],
+    };
+
+    const res = await importBackup(backup);
+    expect(res.success).toBe(true);
+    expect(res.projectsImported).toBe(1);
+
+    // Check target project was replaced
+    const targetAfter = await getProject(targetId);
+    expect(targetAfter?.name).toBe('Replaced Target Project');
+    expect(targetAfter?.status).toBe('done');
+
+    const passportAfter = await getPassport(targetId);
+    expect(passportAfter?.project.name).toBe('Replaced Target Project');
+    expect(passportAfter?.bugsReviewed).toBe(true);
+
+    // Old extra conversation is gone after restore!
+    const targetConvs = await listConversations(targetId);
+    expect(targetConvs.length).toBe(1);
+    expect(targetConvs[0]?.id).toBe('conv-stay');
+    expect(targetConvs[0]?.title).toBe('Conversation Stay Updated');
+    expect(await getConversation('conv-extra')).toBeNull();
+
+    // Unrelated project is preserved
+    const unrelatedAfter = await getProject(unrelated.id);
+    expect(unrelatedAfter).not.toBeNull();
+    expect(unrelatedAfter?.name).toBe('Unrelated Project');
+  });
+
+  it('imports backup into an empty database successfully', async () => {
+    // Ensure database is completely empty
+    await db.projects.clear();
+    await db.passports.clear();
+    await db.checkpoints.clear();
+    await db.conversations.clear();
+    await db.files.clear();
+
+    expect(await db.projects.count()).toBe(0);
+
+    const backup: BackupData = {
+      backupVersion: 1,
+      createdAt: new Date().toISOString(),
+      projects: [
+        {
+          project: {
+            id: 'fresh-proj-1',
+            name: 'Fresh Database Project',
+            updatedAt: new Date().toISOString(),
+            status: 'idea',
+          },
+          passport: {
+            schemaVersion: 1,
+            project: {
+              id: 'fresh-proj-1',
+              name: 'Fresh Database Project',
+              goal: 'Bootstrap',
+              summary: 'Starting from scratch',
+              status: 'idea',
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            },
+            stack: [],
+            requirements: [],
+            decisions: [],
+            completed: [],
+            tasks: [],
+            bugs: [],
+            bugsReviewed: false,
+            instructions: [],
+            files: [],
+            conversations: [],
+            nextAction: 'First task',
+            openQuestions: [],
+          },
+          conversations: [],
+          files: [],
+          checkpoints: [],
+        },
+      ],
+    };
+
+    const result = await importBackup(backup);
+    expect(result.success).toBe(true);
+    expect(result.projectsImported).toBe(1);
+
+    const importedProject = await getProject('fresh-proj-1');
+    expect(importedProject).not.toBeNull();
+    expect(importedProject?.name).toBe('Fresh Database Project');
+
+    const importedPassport = await getPassport('fresh-proj-1');
+    expect(importedPassport?.project.name).toBe('Fresh Database Project');
+  });
+
+  it('savePassport updates project.updatedAt to a later value and keeps passport project.id and name in sync with projects row', async () => {
+    const project = await createProject('Initial Project Name');
+    const initialUpdatedAt = project.updatedAt;
+
+    // Small delay to ensure timestamp strictly advances
+    await new Promise((resolve) => setTimeout(resolve, 15));
+
+    const passport = (await getPassport(project.id))!;
+    expect(passport.project.id).toBe(project.id);
+    expect(passport.project.name).toBe('Initial Project Name');
+
+    // Update the passport name and save
+    passport.project.name = 'Updated In Passport';
+    await savePassport(passport);
+
+    const updatedProject = (await getProject(project.id))!;
+    const updatedPassport = (await getPassport(project.id))!;
+
+    // project.updatedAt is updated to a later value
+    expect(new Date(updatedProject.updatedAt).getTime()).toBeGreaterThan(
+      new Date(initialUpdatedAt).getTime()
+    );
+
+    // Keeps passport's project.id and name in sync with projects row
+    expect(updatedPassport.project.id).toBe(project.id);
+    expect(updatedProject.id).toBe(project.id);
+    expect(updatedPassport.project.name).toBe('Updated In Passport');
+    expect(updatedProject.name).toBe('Updated In Passport');
+    expect(updatedProject.updatedAt).toBe(updatedPassport.project.updatedAt);
+  });
+
+  it('confirms production isAvailable actually tries to open the database and catches open errors', async () => {
+    _setStorageAvailableForTesting(null);
+
+    // Normal state: opens successfully
+    expect(await isAvailable()).toBe(true);
+
+    // Spy on db.open to simulate failure (e.g. storage blocked or private mode)
+    const spy = vi.spyOn(db, 'open').mockRejectedValueOnce(new Error('IndexedDB blocked'));
+    expect(await isAvailable()).toBe(false);
+    spy.mockRestore();
+
+    // When restored, isAvailable succeeds again
+    expect(await isAvailable()).toBe(true);
   });
 
   it('rejects invalid passport data on savePassport and leaves the existing record unchanged', async () => {
@@ -346,7 +779,7 @@ describe('Storage Service & Dexie Layer', () => {
 
   it('throws StorageUnavailable when local storage is unavailable or blocked', async () => {
     _setStorageAvailableForTesting(false);
-    expect(isAvailable()).toBe(false);
+    expect(await isAvailable()).toBe(false);
 
     await expect(createProject('Should Fail')).rejects.toThrow(StorageUnavailable);
     await expect(listProjects()).rejects.toThrow(StorageUnavailable);
@@ -360,7 +793,7 @@ describe('Storage Service & Dexie Layer', () => {
     ).rejects.toThrow(StorageUnavailable);
 
     _setStorageAvailableForTesting(null);
-    expect(isAvailable()).toBe(true);
+    expect(await isAvailable()).toBe(true);
   });
 
   it('verifies conversation and file CRUD functions', async () => {
@@ -404,22 +837,6 @@ describe('Storage Service & Dexie Layer', () => {
 
     await removeFile('f1');
     expect(await getFile('f1')).toBeNull();
-  });
-
-  it('tests uint8ArrayToBase64 and base64ToUint8Array roundtrip', () => {
-    const sample = new Uint8Array([0, 1, 2, 255, 128, 42, 64]);
-    const b64 = uint8ArrayToBase64(sample);
-    const decoded = base64ToUint8Array(b64);
-    expect(Array.from(decoded)).toEqual(Array.from(sample));
-  });
-
-  it('tests formatBytes utility', () => {
-    expect(formatBytes(0)).toBe('0 B');
-    expect(formatBytes(500)).toBe('500 B');
-    expect(formatBytes(1024)).toBe('1.0 KB');
-    expect(formatBytes(1536)).toBe('1.5 KB');
-    expect(formatBytes(1048576)).toBe('1.0 MB');
-    expect(formatBytes(1073741824)).toBe('1.0 GB');
   });
 
   it('gracefully handles requestPersistentStorage and getStorageUsage when navigator.storage is absent', async () => {

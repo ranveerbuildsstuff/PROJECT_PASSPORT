@@ -233,11 +233,24 @@ Readiness measures handoff preparedness across 7 equally-weighted checks:
 - **Package Import:**
   A Full `.zip` package can be imported on another machine or browser instance. Round-trip export then import must yield an identical passport data structure.
 
-## 12. Privacy Rule
+## 12. Local Storage & Full Database Backup
+
+- **Storage Engine:**
+  Dexie (IndexedDB wrapper) running strictly locally in the browser with zero remote transmission.
+- **Transactional Atomicity:**
+  All multi-entity mutations (`createProject`, `renameProject`, `deleteProject`, `savePassport`, `importBackup`) execute within single atomic Dexie read-write transactions (`db.transaction('rw', [...], ...)`). If any operation fails partway through, all affected tables are completely rolled back to their pre-transaction state.
+- **Full Database Backup & Conflict Behaviour:**
+  - Database exports produce a JSON backup archive containing projects, passports, conversations, files (with chunked base64 binary encoding), and checkpoints.
+  - When importing a backup (`importBackup`), mutations execute inside a single atomic transaction spanning all storage tables.
+  - **Conflict Behaviour:** When an imported backup project shares the same `id` as an existing local project, the existing project's data (passport, conversations, files, checkpoints) is atomically **REPLACED** with the backup project's data within the single transaction. Unrelated local projects with different IDs are preserved. Any old records belonging to the replaced project (such as extra conversations or files not present in the backup) are completely removed upon restore.
+  - Importing into an empty database restores all included projects cleanly.
+  - If writing any project within the backup fails, the entire transaction rolls back, leaving pre-existing data untouched.
+
+## 13. Privacy Rule
 
 User content (conversations, file contents, code snippets, passport text) **never** leaves the local device. It is **never** sent to any external server, never logged to the browser console, never included in URLs, and never included in error reports shown to third parties.
 
-## 13. Roadmap
+## 14. Roadmap
 
 Build **ONE** slice per ticket. Never build ahead, but never make architecture choices that block subsequent slices.
 
@@ -253,7 +266,7 @@ Build **ONE** slice per ticket. Never build ahead, but never make architecture c
 10. **Slice 10:** Export package, destination presets, import package
 11. **Slice 11:** Polish, PWA, landing + privacy pages, deploy docs
 
-## 14. Parking Lot (NOT in MVP; Do Not Build, Do Not Block)
+## 15. Parking Lot (NOT in MVP; Do Not Build, Do Not Block)
 
 - Cloud synchronization across devices
 - User accounts, authentication, or cloud database profiles

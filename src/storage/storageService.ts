@@ -18,29 +18,31 @@ import {
   migratePassport,
   type PassportV1,
 } from '../domain';
+import {
+  uint8ArrayToBase64,
+  base64ToUint8Array,
+  formatBytes,
+} from '../lib';
+import { getTestingStorageOverride } from './testing';
 
-let testingStorageAvailabilityOverride: boolean | null = null;
-
-export function _setStorageAvailableForTesting(available: boolean | null): void {
-  testingStorageAvailabilityOverride = available;
-}
-
-export function isAvailable(): boolean {
-  if (testingStorageAvailabilityOverride !== null) {
-    return testingStorageAvailabilityOverride;
+export async function isAvailable(): Promise<boolean> {
+  const override = getTestingStorageOverride();
+  if (override !== null) {
+    return override;
   }
   try {
     if (typeof indexedDB === 'undefined' || indexedDB === null) {
       return false;
     }
+    await db.open();
     return true;
   } catch {
     return false;
   }
 }
 
-function ensureAvailable(): void {
-  if (!isAvailable()) {
+async function ensureAvailable(): Promise<void> {
+  if (!(await isAvailable())) {
     throw new StorageUnavailable();
   }
 }
@@ -83,7 +85,7 @@ function mapStorageError(err: unknown): never {
 // ----------------------------------------------------------------------------
 
 export async function createProject(name = 'Untitled Project'): Promise<ProjectRecord> {
-  ensureAvailable();
+  await ensureAvailable();
   try {
     const passport = createEmptyPassport(name);
     const project: ProjectRecord = {
@@ -105,7 +107,7 @@ export async function createProject(name = 'Untitled Project'): Promise<ProjectR
 }
 
 export async function listProjects(): Promise<ProjectRecord[]> {
-  ensureAvailable();
+  await ensureAvailable();
   try {
     return await db.projects.orderBy('updatedAt').reverse().toArray();
   } catch (err) {
@@ -114,7 +116,7 @@ export async function listProjects(): Promise<ProjectRecord[]> {
 }
 
 export async function getProject(id: string): Promise<ProjectRecord | null> {
-  ensureAvailable();
+  await ensureAvailable();
   try {
     const project = await db.projects.get(id);
     return project ?? null;
@@ -124,7 +126,7 @@ export async function getProject(id: string): Promise<ProjectRecord | null> {
 }
 
 export async function renameProject(id: string, newName: string): Promise<void> {
-  ensureAvailable();
+  await ensureAvailable();
   try {
     await db.transaction('rw', [db.projects, db.passports], async () => {
       const project = await db.projects.get(id);
@@ -151,7 +153,7 @@ export async function renameProject(id: string, newName: string): Promise<void> 
 }
 
 export async function deleteProject(id: string): Promise<void> {
-  ensureAvailable();
+  await ensureAvailable();
   try {
     await db.transaction(
       'rw',
@@ -174,7 +176,7 @@ export async function deleteProject(id: string): Promise<void> {
 // ----------------------------------------------------------------------------
 
 export async function getPassport(projectId: string): Promise<PassportV1 | null> {
-  ensureAvailable();
+  await ensureAvailable();
   try {
     const record: PassportRecord | undefined = await db.passports.get(projectId);
     if (!record) {
@@ -194,7 +196,7 @@ export async function getPassport(projectId: string): Promise<PassportV1 | null>
 }
 
 export async function savePassport(passport: PassportV1): Promise<void> {
-  ensureAvailable();
+  await ensureAvailable();
   const validation = validatePassport(passport);
   if (!validation.success || !validation.data) {
     throw new ValidationFailed(
@@ -239,7 +241,7 @@ export async function savePassport(passport: PassportV1): Promise<void> {
 // ----------------------------------------------------------------------------
 
 export async function addConversation(conversation: ConversationRecord): Promise<string> {
-  ensureAvailable();
+  await ensureAvailable();
   try {
     await db.conversations.put(conversation);
     return conversation.id;
@@ -249,7 +251,7 @@ export async function addConversation(conversation: ConversationRecord): Promise
 }
 
 export async function listConversations(projectId: string): Promise<ConversationRecord[]> {
-  ensureAvailable();
+  await ensureAvailable();
   try {
     return await db.conversations.where('projectId').equals(projectId).sortBy('createdAt');
   } catch (err) {
@@ -258,7 +260,7 @@ export async function listConversations(projectId: string): Promise<Conversation
 }
 
 export async function getConversation(id: string): Promise<ConversationRecord | null> {
-  ensureAvailable();
+  await ensureAvailable();
   try {
     const conversation = await db.conversations.get(id);
     return conversation ?? null;
@@ -268,7 +270,7 @@ export async function getConversation(id: string): Promise<ConversationRecord | 
 }
 
 export async function removeConversation(id: string): Promise<void> {
-  ensureAvailable();
+  await ensureAvailable();
   try {
     await db.conversations.delete(id);
   } catch (err) {
@@ -281,7 +283,7 @@ export async function removeConversation(id: string): Promise<void> {
 // ----------------------------------------------------------------------------
 
 export async function addFile(file: FileRecord): Promise<string> {
-  ensureAvailable();
+  await ensureAvailable();
   try {
     await db.files.put(file);
     return file.id;
@@ -291,7 +293,7 @@ export async function addFile(file: FileRecord): Promise<string> {
 }
 
 export async function listFiles(projectId: string): Promise<FileRecord[]> {
-  ensureAvailable();
+  await ensureAvailable();
   try {
     return await db.files.where('projectId').equals(projectId).toArray();
   } catch (err) {
@@ -300,7 +302,7 @@ export async function listFiles(projectId: string): Promise<FileRecord[]> {
 }
 
 export async function getFile(id: string): Promise<FileRecord | null> {
-  ensureAvailable();
+  await ensureAvailable();
   try {
     const file = await db.files.get(id);
     return file ?? null;
@@ -310,7 +312,7 @@ export async function getFile(id: string): Promise<FileRecord | null> {
 }
 
 export async function removeFile(id: string): Promise<void> {
-  ensureAvailable();
+  await ensureAvailable();
   try {
     await db.files.delete(id);
   } catch (err) {
@@ -353,26 +355,6 @@ export interface ImportBackupResult {
   warning?: string;
 }
 
-export function uint8ArrayToBase64(bytes: Uint8Array): string {
-  const CHUNK_SIZE = 0x8000; // ~32 KB per chunk to avoid call-stack limits
-  let binary = '';
-  for (let i = 0; i < bytes.length; i += CHUNK_SIZE) {
-    const chunk = bytes.subarray(i, i + CHUNK_SIZE);
-    const chunkArray = Array.from(chunk);
-    binary += String.fromCharCode(...chunkArray);
-  }
-  return btoa(binary);
-}
-
-export function base64ToUint8Array(base64: string): Uint8Array {
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return bytes;
-}
-
 function serializeFileForBackup(file: FileRecord): BackupFileRecord {
   const isBinary = file.content instanceof Uint8Array || typeof file.content !== 'string';
   const content = isBinary
@@ -406,7 +388,7 @@ function deserializeFileFromBackup(file: BackupFileRecord): FileRecord {
 }
 
 export async function exportEverything(): Promise<BackupData> {
-  ensureAvailable();
+  await ensureAvailable();
   try {
     const projects = await db.projects.toArray();
     const backupProjects: BackupProjectItem[] = [];
@@ -449,7 +431,7 @@ export async function exportEverything(): Promise<BackupData> {
 export async function importBackup(
   backupInput: BackupData | string
 ): Promise<ImportBackupResult> {
-  ensureAvailable();
+  await ensureAvailable();
 
   let byteSize = 0;
   let parsedBackup: unknown;
@@ -572,13 +554,14 @@ export async function importBackup(
       'rw',
       [db.projects, db.passports, db.checkpoints, db.conversations, db.files],
       async () => {
-        await db.projects.clear();
-        await db.passports.clear();
-        await db.checkpoints.clear();
-        await db.conversations.clear();
-        await db.files.clear();
-
         for (const item of prepared) {
+          // Replace existing project data for this project ID atomically
+          await db.projects.delete(item.project.id);
+          await db.passports.delete(item.project.id);
+          await db.checkpoints.where('projectId').equals(item.project.id).delete();
+          await db.conversations.where('projectId').equals(item.project.id).delete();
+          await db.files.where('projectId').equals(item.project.id).delete();
+
           await db.projects.put(item.project);
           await db.passports.put({
             projectId: item.project.id,
@@ -625,15 +608,6 @@ export async function requestPersistentStorage(): Promise<boolean> {
     // Fail gracefully
   }
   return false;
-}
-
-export function formatBytes(bytes: number): string {
-  if (bytes <= 0 || isNaN(bytes)) return '0 B';
-  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(1024));
-  const unitIndex = Math.min(i, units.length - 1);
-  const val = bytes / Math.pow(1024, unitIndex);
-  return `${val.toFixed(unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
 }
 
 export interface StorageUsage {

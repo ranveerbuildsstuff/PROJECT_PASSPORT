@@ -53,6 +53,25 @@
 
 ---
 
+## Slice 2b: Storage Hardening (Fix + Proof)
+
+- [x] Remove test hook `_setStorageAvailableForTesting` from `src/storage/index.ts` public barrel; move into dedicated `src/storage/testing.ts`.
+- [x] Relocate generic binary/format helpers (`uint8ArrayToBase64`, `base64ToUint8Array`, `formatBytes`) to `src/lib`.
+- [x] Harden `isAvailable()` to asynchronously probe and open the database catching blocked/private-mode errors.
+- [x] Implement same-ID project replacement conflict behaviour in `importBackup` while preserving unrelated projects.
+- [x] Add real failure injection rollback proof tests for `deleteProject`, `renameProject`, and `importBackup`.
+- [x] Add tests for same-ID replacement (extra conversations removed) and importing into an empty database.
+- [x] Add test verifying `savePassport` updates `project.updatedAt` to a later value and maintains strict ID/name sync.
+- [x] Document storage & backup behavior in `SPEC.md` and `PROGRESS.md`.
+- [x] **Commit message:** `Slice 2b: storage hardening`
+
+**Done when:**
+- `npm run typecheck`, `npm run lint`, `npm test`, and `npm run build` pass with zero errors.
+- Rollback proof tests demonstrate full transaction rollback under failure injection.
+- No test hooks or forbidden patterns leak across codebase.
+
+---
+
 ## Slice 3: App Shell, Design System & Dashboard
 
 - [ ] Install `lucide-react` for system iconography.

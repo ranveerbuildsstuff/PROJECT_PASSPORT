@@ -1,11 +1,12 @@
 # PROGRESS.md — Project Roadmap & Status
 
-Current slice: none (Slice 1, 1b & 2 complete)
+Current slice: none (Slice 1, 1b, 2 & 2b complete)
 
 ## Slices Checklist
 
 - [x] Slice 1: Scaffold + domain model (schema, readiness, tokens, markdown renderer)
 - [x] Slice 2: Local storage (Dexie, service layer, backup/restore)
+- [x] Slice 2b: Storage hardening (fix + proof)
 - [ ] Slice 3: App shell, design system, dashboard
 - [ ] Slice 4: Passport editor + live preview
 - [ ] Slice 5: Capture prompt, reconstruct prompt, paste-back + merge
@@ -103,6 +104,35 @@ Current slice: none (Slice 1, 1b & 2 complete)
   - *Uint8Array over Blob:* File contents are stored strictly as `string` for text or `Uint8Array` for binary data. Blobs were excluded to avoid cross-realm identity bugs in testing and browser variations.
   - *Chunked Base64 Encoding:* Binary files in full backups are converted to base64 in 32 KB chunks to prevent JavaScript call-stack overflow (`Maximum call stack size exceeded`) on large files.
   - *All-or-Nothing Import Transaction:* `importBackup` runs in a single read-write Dexie transaction across all 5 tables after performing up-front validation on every project and passport, guaranteeing that corrupted backups leave existing data completely untouched.
+
+### Slice 2b: Storage Hardening (Fix + Proof)
+- **What was changed & hardened:**
+  - Removed `_setStorageAvailableForTesting` from `src/storage/index.ts` public barrel and relocated to `src/storage/testing.ts`.
+  - Moved generic binary and formatting helpers (`uint8ArrayToBase64`, `base64ToUint8Array`, `formatBytes`) from `src/storage` to `src/lib/` with dedicated tests in `src/lib/__tests__/lib.test.ts`.
+  - Hardened `isAvailable()` to asynchronously probe and open the database with `await db.open()`, catching private browsing/blocked storage errors and respecting testing overrides.
+  - Implemented same-ID project replacement conflict behaviour in `importBackup`: when an imported project shares the same ID as an existing project, its data (passport, conversations, files, checkpoints) is atomically replaced within the single Dexie transaction while preserving unrelated projects.
+  - Added failure-injection rollback proof tests in `src/storage/__tests__/storageService.test.ts` for:
+    - `deleteProject`: fails after passport is deleted but before files are; verifies all tables retain project data.
+    - `renameProject`: fails on the second write; verifies both projects table and passport retain old name.
+    - `importBackup`: with two projects where second fails on write; verifies neither exists afterwards and pre-existing data is untouched.
+  - Added tests verifying same-ID replacement removes orphaned conversations from prior state and importing into an empty database succeeds.
+  - Added test confirming `savePassport` updates `project.updatedAt` to a later value and keeps passport `project.id` and `name` in sync with projects table.
+  - Documented storage atomicity and backup conflict replacement in `SPEC.md` Section 12.
+- **Key file paths:**
+  - `src/lib/binary.ts`
+  - `src/lib/format.ts`
+  - `src/lib/index.ts`
+  - `src/lib/__tests__/lib.test.ts`
+  - `src/storage/testing.ts`
+  - `src/storage/storageService.ts`
+  - `src/storage/index.ts`
+  - `src/storage/__tests__/storageService.test.ts`
+  - `SPEC.md`
+  - `TASKS.md`
+  - `PROGRESS.md`
+- **Decisions & Deviations:**
+  - *Same-ID Project Replacement:* Rather than wiping all tables on backup restore, `importBackup` removes only existing records for the matching project IDs and writes the imported data within a single atomic transaction. Unrelated projects already in IndexedDB remain intact.
+  - *Async `isAvailable` Probe:* `isAvailable()` was made asynchronous to actively invoke `await db.open()`, ensuring blocked IndexedDB instances in private browsing or restricted browser profiles are caught reliably.
 
 ---
 
