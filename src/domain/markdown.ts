@@ -101,6 +101,8 @@ export function passportToMarkdown(passport: PassportV1): string {
       (b) => `- [${b.status.toUpperCase()}] [SEVERITY: ${b.severity.toUpperCase()}] ${b.text}`,
     );
     sections.push(`## Bugs & Issues\n\n${bugLines.join('\n')}`);
+  } else if (passport.bugsReviewed) {
+    sections.push('## Bugs & Issues\n\nNone reported (confirmed by the user)');
   }
 
   // 11. AI Instructions

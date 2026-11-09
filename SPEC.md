@@ -80,6 +80,7 @@ The schema is defined using Zod exclusively in `src/domain`. Static TypeScript t
   - `text`: string
   - `severity`: `'low'` | `'medium'` | `'high'`
   - `status`: `'open'` | `'fixed'`
+- `bugsReviewed`: boolean (default `false`; `true` means the user confirms the bug list is complete, even if empty). `schemaVersion` stays 1 because the application is pre-release and no stored user data exists yet.
 - `instructions`: Array of strings (user rules for the AI: style, conventions, constraints)
 - `files`: Manifest array of objects:
   - `path`: string
@@ -108,7 +109,7 @@ Readiness measures handoff preparedness across 7 equally-weighted checks:
 3. **Decisions:** At least one active decision (`decisions` has an entry with `status === 'active'`).
 4. **Context Attached:** At least one file or conversation attached (`files.length > 0 || conversations.length > 0`).
 5. **Pending Tasks:** At least one pending task (`tasks` has an entry with `status === 'todo' || status === 'doing' || status === 'blocked'`).
-6. **Bugs / Limitations:** Bugs recorded, or explicitly marked none (`bugs.length > 0` or explicit acknowledgment).
+6. **Bugs / Limitations:** Bugs recorded, or explicitly marked none (`bugs.length > 0 || bugsReviewed === true`).
 7. **Next Action:** `nextAction` is non-empty.
 
 **Calculation:** `score = Math.round((passedChecks / 7) * 100)`
@@ -127,6 +128,7 @@ Readiness measures handoff preparedness across 7 equally-weighted checks:
   - Leave fields empty or omitted rather than fabricating details.
   - Record decisions with explicit reasons.
   - Accurately list completed items, pending tasks, and open bugs.
+  - Set `bugsReviewed` to `true` only if it knows there are no open bugs, otherwise `false`.
   - Define an explicit `nextAction`.
   - **Never** include secrets, credentials, API keys, or passwords.
 - **Reconstruct Prompt:**

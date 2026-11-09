@@ -100,12 +100,12 @@
 
 ## Slice 5: Capture Prompt, Reconstruct Prompt, Paste-back & Merge
 
-- [ ] In `src/export/prompts.ts`, implement `generateCapturePrompt()` strictly enforcing Schema v1 formatting.
+- [ ] In `src/export/prompts.ts`, implement `generateCapturePrompt()` strictly enforcing Schema v1 formatting (instructing the AI to set `bugsReviewed` to `true` only if confirmed no open bugs, otherwise `false`).
 - [ ] Implement `generateReconstructPrompt(conversations, tokenBudget)` with token cap warning.
 - [ ] Implement Capture Dialog with one-click prompt copying and clear step-by-step instructions.
-- [ ] In `src/import/jsonExtractor.ts`, implement pure JSON extraction handling markdown code fences, raw text, smart quotes, and trailing prose.
+- [ ] In `src/import/jsonExtractor.ts`, implement pure JSON extraction handling markdown code fences, raw text, smart quotes, and trailing prose (ensuring `bugsReviewed` is preserved or defaulted to `false`).
 - [ ] Implement validation runner for extracted JSON providing plain-language explanations on failures.
-- [ ] Implement section-by-section Merge UI showing diffs and controls for Replace / Merge / Skip per section.
+- [ ] Implement section-by-section Merge UI showing diffs and controls for Replace / Merge / Skip per section (including `bugsReviewed` handling).
 - [ ] Implement automatic checkpoint creation before applying any paste-back merge.
 - [ ] **Tests added:** Unit tests for prompt generation, resilient JSON extraction, edge-case parsing (smart quotes, trailing comments), and merge logic.
 - [ ] **Docs updated:** Note prompt templates and extraction heuristics in `PROGRESS.md`.

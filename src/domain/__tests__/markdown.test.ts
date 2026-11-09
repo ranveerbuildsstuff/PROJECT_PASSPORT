@@ -61,4 +61,22 @@ describe('Markdown Serializer (passportToMarkdown)', () => {
     const md = passportToMarkdown(ecommerceFixture as PassportV1);
     expect(md).toMatchSnapshot();
   });
+
+  it('renders "None reported (confirmed by the user)" when bugs is empty and bugsReviewed is true', () => {
+    const p = createEmptyPassport('Reviewed Project');
+    p.bugs = [];
+    p.bugsReviewed = true;
+    const md = passportToMarkdown(p);
+
+    expect(md).toContain('## Bugs & Issues\n\nNone reported (confirmed by the user)');
+  });
+
+  it('omits "Bugs & Issues" section when bugs is empty and bugsReviewed is false', () => {
+    const p = createEmptyPassport('Unreviewed Project');
+    p.bugs = [];
+    p.bugsReviewed = false;
+    const md = passportToMarkdown(p);
+
+    expect(md).not.toContain('## Bugs & Issues');
+  });
 });

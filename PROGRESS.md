@@ -1,6 +1,6 @@
 # PROGRESS.md — Project Roadmap & Status
 
-Current slice: none (Slice 1 complete)
+Current slice: none (Slice 1 & 1b complete)
 
 ## Slices Checklist
 
@@ -51,6 +51,30 @@ Current slice: none (Slice 1 complete)
   - *Tailwind CSS Setup:* Used current stable Tailwind v4 (`@tailwindcss/vite` 4.3.5) with CSS theme variables (`@theme` in `src/index.css`), eliminating PostCSS configuration overhead.
   - *Font packages:* Deferred installation of `@fontsource/inter` and `@fontsource/jetbrains-mono` to Slice 3 (App shell & Design System) per explicit prompt instruction ("Do not add dexie, jszip or fonts yet").
   - *Dependencies:* Restricted strictly to slice 1 requirements (`react`, `react-dom`, `react-router-dom`, `zod`, `tailwindcss`, `@tailwindcss/vite`, `vitest`, `@testing-library/react`, `@testing-library/jest-dom`, `jsdom`, `eslint`, `typescript-eslint`, `prettier`).
+
+### Slice 1b: Persist bugsReviewed & Plain-Language Fallback
+- **What was changed:**
+  - Added top-level boolean field `bugsReviewed` (default `false`) to Passport Schema v1 (`PassportSchemaV1`), factory (`createEmptyPassport`), and synthetic fixture (`ecommerce-passport.json`).
+  - Removed `ReadinessOptions` and its `explicitNoBugs` parameter along with all fragile `instructions` text scanning from `src/domain/readiness.ts`. Check 6 now passes purely if `bugs.length > 0 || bugsReviewed === true`.
+  - Updated `src/domain/markdown.ts`: when `bugs` is empty and `bugsReviewed` is `true`, renders `## Bugs & Issues\n\nNone reported (confirmed by the user)`. When `bugs` is empty and `bugsReviewed` is `false`, omits the section.
+  - Overhauled `formatZodIssueToPlainLanguage` in `src/domain/passport.schema.ts`: added field label map and eliminated all raw Zod issue message leaks (such as "Expected string, received number"). Fallback now generates human-readable path-based text (`The field "<path>" has an invalid value`) with explicit type explanations for lists, objects, text, and booleans.
+  - Updated `SPEC.md`, `TASKS.md` (Slice 5 capture/merge requirements), and fixture documentation.
+- **Key file paths:**
+  - `SPEC.md`
+  - `src/domain/passport.schema.ts`
+  - `src/domain/readiness.ts`
+  - `src/domain/markdown.ts`
+  - `tests/fixtures/ecommerce-passport.json`
+  - `tests/fixtures/README.md`
+  - `src/domain/__tests__/readiness.test.ts`
+  - `src/domain/__tests__/passport.schema.test.ts`
+  - `src/domain/__tests__/markdown.test.ts`
+  - `TASKS.md`
+  - `PROGRESS.md`
+- **Decisions & Deviations:**
+  - *Removal of `ReadinessOptions` and text scanning:* The initial implementation relied on ephemeral runtime options (`options.explicitNoBugs`) and fragile string matching in `instructions` (`"no bugs"`, `"no known bugs"`). These states were not preserved across reload, checkpoint save/restore, or export/import. Introducing `bugsReviewed: boolean` in the schema persists this explicit user confirmation state.
+  - *Schema version remains 1:* Because the application is in pre-release and no persistent stored user data exists yet, `schemaVersion` remains `1`. Backward compatibility is preserved via Zod's `.default(false)`.
+  - *Plain-Language Fallback:* Replaced `issue.message` fallback with path-aware plain-language translations (`The field "<path>" has an invalid value`, `${label} must be a list`, `${label} must be text`), strictly adhering to SPEC.md invariant forbidding raw Zod messages to end users.
 
 ---
 

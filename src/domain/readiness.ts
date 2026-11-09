@@ -14,10 +14,6 @@ export interface ReadinessResult {
   checks: ReadinessCheck[];
 }
 
-export interface ReadinessOptions {
-  explicitNoBugs?: boolean;
-}
-
 /**
  * Computes readiness score (0–100) based on 7 equal checks:
  * 1. objective: project.goal non-empty
@@ -25,13 +21,10 @@ export interface ReadinessOptions {
  * 3. active decision: at least one decision with status 'active'
  * 4. context attached: at least one file or conversation attached
  * 5. pending task: at least one task with status 'todo' | 'doing' | 'blocked'
- * 6. bugs/limitations recorded: bugs.length > 0 or explicitly marked none
+ * 6. bugs/limitations recorded: bugs.length > 0 or bugsReviewed === true
  * 7. nextAction set: nextAction non-empty
  */
-export function computeReadiness(
-  passport: PassportV1,
-  options?: ReadinessOptions,
-): ReadinessResult {
+export function computeReadiness(passport: PassportV1): ReadinessResult {
   const objectivePassed = Boolean(passport.project.goal && passport.project.goal.trim().length > 0);
   const stackPassed = passport.stack.length > 0;
   const decisionsPassed = passport.decisions.some((d) => d.status === 'active');
@@ -39,12 +32,7 @@ export function computeReadiness(
   const tasksPassed = passport.tasks.some(
     (t) => t.status === 'todo' || t.status === 'doing' || t.status === 'blocked',
   );
-  const bugsPassed =
-    passport.bugs.length > 0 ||
-    Boolean(options?.explicitNoBugs) ||
-    passport.instructions.some(
-      (i) => i.toLowerCase().includes('no bugs') || i.toLowerCase().includes('no known bugs'),
-    );
+  const bugsPassed = passport.bugs.length > 0 || passport.bugsReviewed === true;
   const nextActionPassed = Boolean(passport.nextAction && passport.nextAction.trim().length > 0);
 
   const checks: ReadinessCheck[] = [
@@ -82,7 +70,7 @@ export function computeReadiness(
       id: 'bugs',
       label: 'Bugs or limitations noted',
       passed: bugsPassed,
-      description: 'Bugs or known limitations are recorded (or explicitly marked none).',
+      description: 'Bugs are recorded, or confirmed reviewed by the user.',
     },
     {
       id: 'nextAction',

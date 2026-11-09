@@ -100,6 +100,7 @@ export const PassportSchemaV1 = z.object({
   completed: z.array(CompletedItemSchema),
   tasks: z.array(TaskSchema),
   bugs: z.array(BugSchema),
+  bugsReviewed: z.boolean().default(false),
   instructions: z.array(z.string()),
   files: z.array(FileManifestItemSchema),
   conversations: z.array(ConversationRefSchema),
@@ -132,16 +133,70 @@ export interface ValidationResult<T> {
   errors: string[];
 }
 
+const FIELD_LABELS: Record<string, string> = {
+  project: 'Project',
+  stack: 'Stack',
+  requirements: 'Requirements',
+  decisions: 'Decisions',
+  completed: 'Completed',
+  tasks: 'Tasks',
+  bugs: 'Bugs',
+  bugsReviewed: 'Bugs reviewed',
+  instructions: 'Instructions',
+  files: 'Files',
+  conversations: 'Conversations',
+  nextAction: 'Next action',
+  openQuestions: 'Open questions',
+};
+
+const ARRAY_FIELDS = new Set([
+  'stack',
+  'requirements',
+  'decisions',
+  'completed',
+  'tasks',
+  'bugs',
+  'instructions',
+  'files',
+  'conversations',
+  'openQuestions',
+]);
+
 export function formatZodIssueToPlainLanguage(issue: z.ZodIssue): string {
   const path = issue.path;
   const first = path[0];
   const second = path[1];
   const third = path[2];
 
+  if (first === 'bugsReviewed') {
+    return 'Bugs reviewed must be true or false';
+  }
+
+  if (first === 'nextAction' && issue.code === 'invalid_type' && issue.expected === 'string') {
+    return 'Next action must be text';
+  }
+
+  if (
+    path.length === 1 &&
+    issue.code === 'invalid_type' &&
+    ARRAY_FIELDS.has(String(first)) &&
+    issue.expected === 'array'
+  ) {
+    const label = FIELD_LABELS[String(first)] || String(first);
+    return `${label} must be a list`;
+  }
+
   if (first === 'project') {
+    if (path.length === 1 && issue.code === 'invalid_type') {
+      return 'Project must be an object';
+    }
     if (second === 'name') return 'Project name cannot be empty';
     if (second === 'status') return 'Project status must be one of: idea, in_progress, paused, done';
-    if (second === 'id') return 'Project ID is required';
+    if (second === 'id') return 'Project ID is missing';
+    if (second === 'goal') return 'Project goal must be text';
+    if (second === 'summary') return 'Project summary must be text';
+    if (second === 'createdAt') return 'Project creation date must be text';
+    if (second === 'updatedAt') return 'Project update date must be text';
     return `Project ${String(second || 'metadata')} is invalid`;
   }
 
@@ -150,6 +205,7 @@ export function formatZodIssueToPlainLanguage(issue: z.ZodIssue): string {
     if (third === 'text') return `Task ${itemNum} needs some text`;
     if (third === 'status') return `Task ${itemNum} has an invalid status`;
     if (third === 'priority') return `Task ${itemNum} has an invalid priority`;
+    if (third === 'id') return `Task ${itemNum} ID is missing`;
     return `Task ${itemNum} is invalid`;
   }
 
@@ -158,6 +214,7 @@ export function formatZodIssueToPlainLanguage(issue: z.ZodIssue): string {
     if (third === 'text') return `Bug ${itemNum} needs a description`;
     if (third === 'severity') return `Bug ${itemNum} has an invalid severity`;
     if (third === 'status') return `Bug ${itemNum} has an invalid status`;
+    if (third === 'id') return `Bug ${itemNum} ID is missing`;
     return `Bug ${itemNum} is invalid`;
   }
 
@@ -166,12 +223,17 @@ export function formatZodIssueToPlainLanguage(issue: z.ZodIssue): string {
     if (third === 'decision') return `Decision ${itemNum} needs a description`;
     if (third === 'reason') return `Decision ${itemNum} needs a reason`;
     if (third === 'status') return `Decision ${itemNum} has an invalid status`;
+    if (third === 'date') return `Decision ${itemNum} date must be text`;
+    if (third === 'id') return `Decision ${itemNum} ID is missing`;
     return `Decision ${itemNum} is invalid`;
   }
 
   if (first === 'stack' && typeof second === 'number') {
     const itemNum = second + 1;
     if (third === 'name') return `Stack item ${itemNum} needs a name`;
+    if (third === 'role') return `Stack item ${itemNum} role must be text`;
+    if (third === 'version') return `Stack item ${itemNum} version must be text`;
+    if (third === 'notes') return `Stack item ${itemNum} notes must be text`;
     return `Stack item ${itemNum} is invalid`;
   }
 
@@ -179,12 +241,14 @@ export function formatZodIssueToPlainLanguage(issue: z.ZodIssue): string {
     const itemNum = second + 1;
     if (third === 'text') return `Requirement ${itemNum} needs some text`;
     if (third === 'priority') return `Requirement ${itemNum} has an invalid priority`;
+    if (third === 'id') return `Requirement ${itemNum} ID is missing`;
     return `Requirement ${itemNum} is invalid`;
   }
 
   if (first === 'completed' && typeof second === 'number') {
     const itemNum = second + 1;
     if (third === 'text') return `Completed item ${itemNum} needs some text`;
+    if (third === 'id') return `Completed item ${itemNum} ID is missing`;
     return `Completed item ${itemNum} is invalid`;
   }
 
@@ -192,6 +256,8 @@ export function formatZodIssueToPlainLanguage(issue: z.ZodIssue): string {
     const itemNum = second + 1;
     if (third === 'path') return `File ${itemNum} is missing a path`;
     if (third === 'sizeBytes') return `File ${itemNum} has an invalid size`;
+    if (third === 'included') return `File ${itemNum} included must be true or false`;
+    if (third === 'purpose') return `File ${itemNum} purpose must be text`;
     return `File ${itemNum} is invalid`;
   }
 
@@ -199,7 +265,21 @@ export function formatZodIssueToPlainLanguage(issue: z.ZodIssue): string {
     const itemNum = second + 1;
     if (third === 'title') return `Conversation ${itemNum} is missing a title`;
     if (third === 'source') return `Conversation ${itemNum} has an invalid source`;
+    if (third === 'messageCount') return `Conversation ${itemNum} message count must be a number`;
+    if (third === 'tokenEstimate') return `Conversation ${itemNum} token estimate must be a number`;
+    if (third === 'included') return `Conversation ${itemNum} included must be true or false`;
+    if (third === 'id') return `Conversation ${itemNum} ID is missing`;
     return `Conversation ${itemNum} is invalid`;
+  }
+
+  if (first === 'openQuestions' && typeof second === 'number') {
+    const itemNum = second + 1;
+    return `Open question ${itemNum} must be text`;
+  }
+
+  if (first === 'instructions' && typeof second === 'number') {
+    const itemNum = second + 1;
+    return `Instruction ${itemNum} must be text`;
   }
 
   if (first === 'schemaVersion') {
@@ -207,10 +287,21 @@ export function formatZodIssueToPlainLanguage(issue: z.ZodIssue): string {
   }
 
   if (issue.code === 'invalid_type' && issue.received === 'undefined' && path.length === 1) {
-    return `Missing required section: ${String(first)}`;
+    const label = FIELD_LABELS[String(first)] || String(first);
+    return `${label} section is missing`;
   }
 
-  return issue.message || `Invalid field: ${path.join('.')}`;
+  if (path.length === 1 && issue.code === 'invalid_type') {
+    const label = FIELD_LABELS[String(first)] || String(first);
+    if (issue.expected === 'string') return `${label} must be text`;
+    if (issue.expected === 'boolean') return `${label} must be true or false`;
+    if (issue.expected === 'number') return `${label} must be a number`;
+    if (issue.expected === 'array') return `${label} must be a list`;
+    if (issue.expected === 'object') return `${label} must be an object`;
+  }
+
+  const pathStr = path.length > 0 ? path.join('.') : 'root';
+  return `The field "${pathStr}" has an invalid value`;
 }
 
 export function validatePassport(data: unknown): ValidationResult<PassportV1> {
@@ -267,6 +358,7 @@ export function createEmptyPassport(name = 'Untitled Project'): PassportV1 {
     completed: [],
     tasks: [],
     bugs: [],
+    bugsReviewed: false,
     instructions: [],
     files: [],
     conversations: [],

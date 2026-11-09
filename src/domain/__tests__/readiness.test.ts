@@ -91,16 +91,24 @@ describe('Readiness Scoring Engine', () => {
     expect(result.checks.find((c) => c.id === 'tasks')?.passed).toBe(true);
   });
 
-  it('evaluates check 6 (bugs) with explicitNoBugs option or instruction note', () => {
+  it('evaluates check 6 (bugs) based strictly on bugs presence or bugsReviewed flag', () => {
     const p = createEmptyPassport();
+    p.bugs = [];
+    p.bugsReviewed = false;
     expect(computeReadiness(p).checks.find((c) => c.id === 'bugs')?.passed).toBe(false);
 
-    const withOption = computeReadiness(p, { explicitNoBugs: true });
-    expect(withOption.checks.find((c) => c.id === 'bugs')?.passed).toBe(true);
+    p.bugsReviewed = true;
+    expect(computeReadiness(p).checks.find((c) => c.id === 'bugs')?.passed).toBe(true);
 
-    p.instructions.push('Project status: no known bugs at this phase');
-    const withInstruction = computeReadiness(p);
-    expect(withInstruction.checks.find((c) => c.id === 'bugs')?.passed).toBe(true);
+    p.bugsReviewed = false;
+    p.bugs.push({ id: 'b1', text: 'Bug 1', severity: 'low', status: 'open' });
+    expect(computeReadiness(p).checks.find((c) => c.id === 'bugs')?.passed).toBe(true);
+
+    const pWithInstruction = createEmptyPassport();
+    pWithInstruction.bugs = [];
+    pWithInstruction.bugsReviewed = false;
+    pWithInstruction.instructions.push('There are no bugs and no known bugs in this system');
+    expect(computeReadiness(pWithInstruction).checks.find((c) => c.id === 'bugs')?.passed).toBe(false);
   });
 
   it('evaluates check 7 (nextAction) independently', () => {

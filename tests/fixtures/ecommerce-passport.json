@@ -146,6 +146,7 @@
       "status": "fixed"
     }
   ],
+  "bugsReviewed": false,
   "instructions": [
     "Always preserve strict TypeScript typing; never use `any`.",
     "Database mutations must execute inside explicit Prisma transactions.",

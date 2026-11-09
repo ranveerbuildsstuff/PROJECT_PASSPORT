@@ -106,4 +106,58 @@ describe('Passport Schema v1 & Validation', () => {
     expect(res.errors).toContain('Decision 1 needs a reason');
     expect(res.errors).toContain('Stack item 1 needs a name');
   });
+
+  it('validates an older v1 object without bugsReviewed and sets bugsReviewed to false', () => {
+    const empty = createEmptyPassport();
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { bugsReviewed: _omitted, ...olderV1 } = empty;
+    const res = validatePassport(olderV1);
+    expect(res.success).toBe(true);
+    expect(res.data?.bugsReviewed).toBe(false);
+  });
+
+  it('rejects non-boolean bugsReviewed with plain-language error', () => {
+    const invalidData = {
+      ...createEmptyPassport(),
+      bugsReviewed: 'yes',
+    };
+    const res = validatePassport(invalidData);
+    expect(res.success).toBe(false);
+    expect(res.errors).toContain('Bugs reviewed must be true or false');
+  });
+
+  it('fails validation for bad inputs with plain-language errors and no raw zod messages', () => {
+    const badCases: Array<{ name: string; override: Record<string, unknown> }> = [
+      { name: 'nextAction: 123', override: { nextAction: 123 } },
+      { name: 'stack: "x"', override: { stack: 'x' } },
+      { name: 'openQuestions: [1]', override: { openQuestions: [1] } },
+      { name: 'instructions: "a"', override: { instructions: 'a' } },
+      { name: 'bugsReviewed: "yes"', override: { bugsReviewed: 'yes' } },
+      {
+        name: 'files: [{path:"a", purpose:"", included:"yes", sizeBytes:1}]',
+        override: {
+          files: [{ path: 'a', purpose: '', included: 'yes', sizeBytes: 1 }],
+        },
+      },
+      { name: 'project: "x"', override: { project: 'x' } },
+    ];
+
+    const forbiddenPattern = /expected|received|invalid input|required/i;
+
+    for (const { name, override } of badCases) {
+      const invalidData = {
+        ...createEmptyPassport(),
+        ...override,
+      };
+      const res = validatePassport(invalidData);
+      expect(res.success, `Expected ${name} to fail validation`).toBe(false);
+      expect(res.errors.length, `Expected ${name} to have errors`).toBeGreaterThan(0);
+      for (const err of res.errors) {
+        expect(
+          err,
+          `Error message "${err}" in test case "${name}" should not match forbidden pattern`,
+        ).not.toMatch(forbiddenPattern);
+      }
+    }
+  });
 });
