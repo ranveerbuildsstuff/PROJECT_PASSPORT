@@ -1,6 +1,6 @@
 # PROGRESS.md — Project Roadmap & Status
 
-Current slice: none (Slice 1, 1b, 2, 2b & Tooling Ticket T1 complete)
+Current slice: none (Slice 1, 1b, 2, 2b, 2c & Tooling Ticket T1, T1b complete)
 
 ## Slices Checklist
 
@@ -8,6 +8,8 @@ Current slice: none (Slice 1, 1b, 2, 2b & Tooling Ticket T1 complete)
 - [x] Slice 2: Local storage (Dexie, service layer, backup/restore)
 - [x] Slice 2b: Storage hardening (fix + proof)
 - [x] Tooling Ticket T1: Automated browser testing (Playwright)
+- [x] Slice 2c: Storage fixes (name validation, ProjectNotFound, test consolidation)
+- [x] Tooling Ticket T1b: Harness hardening (forbidOnly, helpers selftest)
 - [ ] Slice 3: App shell, design system, dashboard
 - [ ] Slice 4: Passport editor + live preview
 - [ ] Slice 5: Capture prompt, reconstruct prompt, paste-back + merge
@@ -22,157 +24,17 @@ Current slice: none (Slice 1, 1b, 2, 2b & Tooling Ticket T1 complete)
 
 ## Decisions & Deviations
 
-### Slice 1: Scaffold + Domain Model
-- **What was built:**
-  - Initialized Vite + React + TypeScript in strict mode (`noUncheckedIndexedAccess: true`).
-  - Configured stable Tailwind CSS v4 (`tailwindcss@4.3.5` + `@tailwindcss/vite@4.3.5`) with design tokens from `DESIGN.md` in `src/index.css`.
-  - Configured ESLint 9 (flat config) and Prettier.
-  - Configured Vitest + React Testing Library + `jsdom`.
-  - Implemented pure domain module in `src/domain/`:
-    - `passport.schema.ts`: Zod schema v1, types derived via `z.infer`, `createEmptyPassport` (UUID + ISO dates), `validatePassport` with plain-language error formatting.
-    - `readiness.ts`: 7-check 0–100 scoring engine based on SPEC.md.
-    - `tokens.ts`: `estimateTokens` (`Math.ceil(chars / 4)`) and `formatTokenEstimate`.
-    - `markdown.ts`: `passportToMarkdown` with stable deterministic section order, omitting empty sections.
-    - `migrate.ts`: `migratePassport` validating v1 data with clean errors on unknown versions.
-    - `index.ts`: Barrel export for all domain utilities.
-  - Implemented synthetic test fixture in `tests/fixtures/ecommerce-passport.json` with descriptive `tests/fixtures/README.md`.
-  - Implemented placeholder Home Page with React Router in `src/App.tsx` and smoke test in `src/__tests__/App.test.tsx`.
-- **Key file paths:**
-  - `src/domain/passport.schema.ts`
-  - `src/domain/readiness.ts`
-  - `src/domain/tokens.ts`
-  - `src/domain/markdown.ts`
-  - `src/domain/migrate.ts`
-  - `src/domain/index.ts`
-  - `src/App.tsx`
-  - `src/main.tsx`
-  - `src/index.css`
-  - `tests/fixtures/ecommerce-passport.json`
-  - `tests/fixtures/README.md`
-- **Decisions & Deviations:**
-  - *Tailwind CSS Setup:* Used current stable Tailwind v4 (`@tailwindcss/vite` 4.3.5) with CSS theme variables (`@theme` in `src/index.css`), eliminating PostCSS configuration overhead.
-  - *Font packages:* Deferred installation of `@fontsource/inter` and `@fontsource/jetbrains-mono` to Slice 3 (App shell & Design System) per explicit prompt instruction ("Do not add dexie, jszip or fonts yet").
-  - *Dependencies:* Restricted strictly to slice 1 requirements (`react`, `react-dom`, `react-router-dom`, `zod`, `tailwindcss`, `@tailwindcss/vite`, `vitest`, `@testing-library/react`, `@testing-library/jest-dom`, `jsdom`, `eslint`, `typescript-eslint`, `prettier`).
+### Slice 1 & 1b: Scaffold, Domain Model & bugsReviewed
+Initialized Vite + React 18 + TypeScript strict mode with Tailwind CSS v4 design tokens. Implemented pure Zod schema v1, UUID factory, token estimation, markdown generation, and 7-check readiness score. Added `bugsReviewed: boolean` to persist explicit user review state across reloads, removed fragile keyword text scanning, and enforced plain-language error formatting preventing raw Zod leaks.
 
-### Slice 1b: Persist bugsReviewed & Plain-Language Fallback
-- **What was changed:**
-  - Added top-level boolean field `bugsReviewed` (default `false`) to Passport Schema v1 (`PassportSchemaV1`), factory (`createEmptyPassport`), and synthetic fixture (`ecommerce-passport.json`).
-  - Removed `ReadinessOptions` and its `explicitNoBugs` parameter along with all fragile `instructions` text scanning from `src/domain/readiness.ts`. Check 6 now passes purely if `bugs.length > 0 || bugsReviewed === true`.
-  - Updated `src/domain/markdown.ts`: when `bugs` is empty and `bugsReviewed` is `true`, renders `## Bugs & Issues\n\nNone reported (confirmed by the user)`. When `bugs` is empty and `bugsReviewed` is `false`, omits the section.
-  - Overhauled `formatZodIssueToPlainLanguage` in `src/domain/passport.schema.ts`: added field label map and eliminated all raw Zod issue message leaks (such as "Expected string, received number"). Fallback now generates human-readable path-based text (`The field "<path>" has an invalid value`) with explicit type explanations for lists, objects, text, and booleans.
-  - Updated `SPEC.md`, `TASKS.md` (Slice 5 capture/merge requirements), and fixture documentation.
-- **Key file paths:**
-  - `SPEC.md`
-  - `src/domain/passport.schema.ts`
-  - `src/domain/readiness.ts`
-  - `src/domain/markdown.ts`
-  - `tests/fixtures/ecommerce-passport.json`
-  - `tests/fixtures/README.md`
-  - `src/domain/__tests__/readiness.test.ts`
-  - `src/domain/__tests__/passport.schema.test.ts`
-  - `src/domain/__tests__/markdown.test.ts`
-  - `TASKS.md`
-  - `PROGRESS.md`
-- **Decisions & Deviations:**
-  - *Removal of `ReadinessOptions` and text scanning:* The initial implementation relied on ephemeral runtime options (`options.explicitNoBugs`) and fragile string matching in `instructions` (`"no bugs"`, `"no known bugs"`). These states were not preserved across reload, checkpoint save/restore, or export/import. Introducing `bugsReviewed: boolean` in the schema persists this explicit user confirmation state.
-  - *Schema version remains 1:* Because the application is in pre-release and no persistent stored user data exists yet, `schemaVersion` remains `1`. Backward compatibility is preserved via Zod's `.default(false)`.
-  - *Plain-Language Fallback:* Replaced `issue.message` fallback with path-aware plain-language translations (`The field "<path>" has an invalid value`, `${label} must be a list`, `${label} must be text`), strictly adhering to SPEC.md invariant forbidding raw Zod messages to end users.
+### Slice 2 & 2b: Local Storage & Service Layer Hardening
+Implemented Dexie database with 5 tables (`projects`, `passports`, `checkpoints`, `conversations`, `files`) and typed error classes. All multi-entity mutations run in atomic transactions. Used chunked base64 for binary files and `Uint8Array` over Blobs. Hardened `isAvailable()` to asynchronously probe `db.open()`, isolated test hooks to `src/storage/testing.ts`, implemented same-ID replacement on backup import, and verified rollback under injected failures.
 
-### Slice 2: Local Storage & Service Layer
-- **What was built:**
-  - Installed `dexie` (`^4.4.7`) and dev dependency `fake-indexeddb` (`^6.2.8`).
-  - Configured `src/test/setup.ts` with `fake-indexeddb/auto` and jsdom fallback for `structuredClone`.
-  - Implemented Dexie database definition in `src/storage/db.ts` (version 1) with 5 tables: `projects`, `passports`, `checkpoints`, `conversations`, and `files`.
-  - Implemented typed domain storage errors with plain-language explanations and actionable next steps in `src/storage/errors.ts`: `StorageUnavailable`, `ValidationFailed`, `QuotaExceeded`, and `BackupInvalid`.
-  - Implemented storage service module in `src/storage/storageService.ts`:
-    - Project CRUD: `createProject`, `listProjects`, `getProject`, `renameProject` (single transaction updating project and passport), `deleteProject` (single transaction cascading to passport, checkpoints, conversations, files).
-    - Passport operations: `getPassport` (runs `migratePassport` on read), `savePassport` (validates with `validatePassport`, updates `project.updatedAt`).
-    - Conversations & Files: `add/list/get/remove` for conversations and files, storing file content as string or `Uint8Array` (Blob strictly avoided).
-    - Backup & Restore: `exportEverything` and `importBackup` supporting chunked (~32 KB) base64 binary encoding, atomic all-or-nothing transaction, passport migration validation, version checks, and 50 MB warning threshold.
-    - Persistence & Environment utilities: `isAvailable` (with graceful fallback if IndexedDB is blocked or in private mode), `requestPersistentStorage`, `getStorageUsage`, `formatBytes`.
-  - Implemented public storage barrel export in `src/storage/index.ts` maintaining strict service-layer isolation (Dexie instance never leaked to UI).
-  - Wrote comprehensive integration test suite in `src/storage/__tests__/storageService.test.ts` (13 tests) verifying all lifecycle operations, cascade deletions, validation rejections, sync guarantees, binary chunking, and error handling.
-- **Key file paths:**
-  - `src/storage/db.ts`
-  - `src/storage/errors.ts`
-  - `src/storage/storageService.ts`
-  - `src/storage/index.ts`
-  - `src/storage/__tests__/storageService.test.ts`
-  - `src/test/setup.ts`
-  - `TASKS.md`
-  - `PROGRESS.md`
-- **Decisions & Deviations:**
-  - *Uint8Array over Blob:* File contents are stored strictly as `string` for text or `Uint8Array` for binary data. Blobs were excluded to avoid cross-realm identity bugs in testing and browser variations.
-  - *Chunked Base64 Encoding:* Binary files in full backups are converted to base64 in 32 KB chunks to prevent JavaScript call-stack overflow (`Maximum call stack size exceeded`) on large files.
-  - *All-or-Nothing Import Transaction:* `importBackup` runs in a single read-write Dexie transaction across all 5 tables after performing up-front validation on every project and passport, guaranteeing that corrupted backups leave existing data completely untouched.
+### Tooling Ticket T1 & T1b: Automated E2E Browser Testing & Harness Hardening
+Configured Playwright on dedicated port 4179 (webServer preview) with Chrome channel testing desktop (1280x800) and mobile-360 (360x640) viewports. Added axe-core accessibility scanner, screenshot utility, console error collector, and verified real IndexedDB Uint8Array persistence. Hardened with `forbidOnly: true` and selftests in `e2e/helpers.selftest.spec.ts` proving axe violations and console errors are caught.
 
-### Slice 2b: Storage Hardening (Fix + Proof)
-- **What was changed & hardened:**
-  - Removed `_setStorageAvailableForTesting` from `src/storage/index.ts` public barrel and relocated to `src/storage/testing.ts`.
-  - Moved generic binary and formatting helpers (`uint8ArrayToBase64`, `base64ToUint8Array`, `formatBytes`) from `src/storage` to `src/lib/` with dedicated tests in `src/lib/__tests__/lib.test.ts`.
-  - Hardened `isAvailable()` to asynchronously probe and open the database with `await db.open()`, catching private browsing/blocked storage errors and respecting testing overrides.
-  - Implemented same-ID project replacement conflict behaviour in `importBackup`: when an imported project shares the same ID as an existing project, its data (passport, conversations, files, checkpoints) is atomically replaced within the single Dexie transaction while preserving unrelated projects.
-  - Added failure-injection rollback proof tests in `src/storage/__tests__/storageService.test.ts` for:
-    - `deleteProject`: fails after passport is deleted but before files are; verifies all tables retain project data.
-    - `renameProject`: fails on the second write; verifies both projects table and passport retain old name.
-    - `importBackup`: with two projects where second fails on write; verifies neither exists afterwards and pre-existing data is untouched.
-  - Added tests verifying same-ID replacement removes orphaned conversations from prior state and importing into an empty database succeeds.
-  - Added test confirming `savePassport` updates `project.updatedAt` to a later value and keeps passport `project.id` and `name` in sync with projects table.
-  - Documented storage atomicity and backup conflict replacement in `SPEC.md` Section 12.
-- **Key file paths:**
-  - `src/lib/binary.ts`
-  - `src/lib/format.ts`
-  - `src/lib/index.ts`
-  - `src/lib/__tests__/lib.test.ts`
-  - `src/storage/testing.ts`
-  - `src/storage/storageService.ts`
-  - `src/storage/index.ts`
-  - `src/storage/__tests__/storageService.test.ts`
-  - `SPEC.md`
-  - `TASKS.md`
-  - `PROGRESS.md`
-- **Decisions & Deviations:**
-  - *Same-ID Project Replacement:* Rather than wiping all tables on backup restore, `importBackup` removes only existing records for the matching project IDs and writes the imported data within a single atomic transaction. Unrelated projects already in IndexedDB remain intact.
-  - *Async `isAvailable` Probe:* `isAvailable()` was made asynchronous to actively invoke `await db.open()`, ensuring blocked IndexedDB instances in private browsing or restricted browser profiles are caught reliably.
-
-### Tooling Ticket T1: Automated Browser Testing (Playwright)
-- **What was built:**
-  - Installed `@playwright/test` and `@axe-core/playwright` as devDependencies.
-  - Configured `playwright.config.ts`:
-    - Dedicated port `4179` (`127.0.0.1:4179`).
-    - WebServer running `npm run build && npx vite preview --host 127.0.0.1 --port 4179 --strictPort` (`reuseExistingServer: false`, `timeout: 120000`).
-    - Two projects: `desktop` (1280x800) and `mobile-360` (viewport 360x640, `isMobile: true`, `hasTouch: true`).
-    - Google Chrome channel (`channel: 'chrome'`) using the locally installed Chrome binary (`C:\Program Files\Google\Chrome\Application\chrome.exe`).
-    - Reporters: `list`, `json` (`e2e-results/results.json`), and `html` (`playwright-report`, `open: 'never'`).
-  - Added package script `"test:e2e": "playwright test"`.
-  - Configured `vite.config.ts` Vitest configuration to exclude `e2e/**`.
-  - Extended `tsconfig.json` to typecheck `e2e/` and `playwright.config.ts`.
-  - Configured ESLint (`eslint.config.js`) and `.gitignore` for E2E artifacts (`e2e-results/`, `playwright-report/`, `test-results/`).
-  - Implemented reusable E2E helpers in `e2e/helpers.ts`:
-    - `shot(page, name)`: captures screenshot to `e2e-results/screenshots/<project>-<name>.png`.
-    - `expectNoSeriousA11y(page)`: runs Axe scan and fails on serious or critical violations, printing rule IDs, descriptions, element selectors, and help URLs.
-    - `collectConsoleErrors(page)`: captures `console.error` and `pageerror` events.
-  - Implemented smoke test in `e2e/smoke.spec.ts`:
-    - Loads placeholder app, asserts h1 "Project Passport" visible with web-first assertions, verifies zero console errors.
-    - Runs Axe scan verifying zero serious/critical violations.
-    - Proves real-browser storage by opening raw IndexedDB inside `page.evaluate`, writing and reading a record with a `Uint8Array` binary payload, deleting the database, and asserting match.
-    - Captures screenshots (`desktop-home.png`, `mobile-360-home.png`).
-  - Updated `AGENTS.md` engineering rules and per-slice process to require Playwright E2E specs for all UI slices.
-- **Key file paths:**
-  - `playwright.config.ts`
-  - `e2e/helpers.ts`
-  - `e2e/smoke.spec.ts`
-  - `package.json`
-  - `vite.config.ts`
-  - `tsconfig.json`
-  - `eslint.config.js`
-  - `.gitignore`
-  - `AGENTS.md`
-  - `TASKS.md`
-  - `PROGRESS.md`
-- **Decisions & Deviations:**
-  - *Browser Channel:* Used already-installed Google Chrome via `channel: 'chrome'`.
-  - *Zero Additional Dependencies:* Avoided installing `@types/node` or any other packages to strictly comply with dependency restrictions; node path manipulation in `e2e/helpers.ts` was implemented using pure strings, letting Playwright handle directory creation natively.
+### Slice 2c: Storage Fixes
+Consolidated manual checklist tests into `storageService.test.ts` and deleted redundant test files. Added trimmed name validation to `createProject` and `renameProject` rejecting empty/whitespace names with `ValidationFailed`. Prevented `savePassport` from creating projects by requiring an existing project row or throwing typed `ProjectNotFound`.
 
 ---
 
