@@ -11,6 +11,7 @@ import {
   ValidationFailed,
   QuotaExceeded,
   BackupInvalid,
+  ProjectNotFound,
 } from './errors';
 import {
   createEmptyPassport,
@@ -52,7 +53,8 @@ function mapStorageError(err: unknown): never {
     err instanceof StorageUnavailable ||
     err instanceof ValidationFailed ||
     err instanceof QuotaExceeded ||
-    err instanceof BackupInvalid
+    err instanceof BackupInvalid ||
+    err instanceof ProjectNotFound
   ) {
     throw err;
   }
@@ -86,8 +88,16 @@ function mapStorageError(err: unknown): never {
 
 export async function createProject(name = 'Untitled Project'): Promise<ProjectRecord> {
   await ensureAvailable();
+  const trimmed = name.trim();
+  if (!trimmed) {
+    throw new ValidationFailed(
+      'Project name cannot be empty',
+      ['Project name cannot be empty'],
+      'Please enter a non-empty name for the project.'
+    );
+  }
   try {
-    const passport = createEmptyPassport(name);
+    const passport = createEmptyPassport(trimmed);
     const project: ProjectRecord = {
       id: passport.project.id,
       name: passport.project.name,
@@ -127,21 +137,35 @@ export async function getProject(id: string): Promise<ProjectRecord | null> {
 
 export async function renameProject(id: string, newName: string): Promise<void> {
   await ensureAvailable();
+  const trimmed = newName.trim();
+  if (!trimmed) {
+    throw new ValidationFailed(
+      'Project name cannot be empty',
+      ['Project name cannot be empty'],
+      'Please enter a non-empty name for the project.'
+    );
+  }
   try {
     await db.transaction('rw', [db.projects, db.passports], async () => {
       const project = await db.projects.get(id);
       if (!project) {
-        throw new Error(`Project "${id}" not found`);
+        throw new ProjectNotFound(
+          `Project "${id}" was not found.`,
+          'Please verify the project ID or select an existing project.'
+        );
       }
       const passportRecord = await db.passports.get(id);
       if (!passportRecord) {
-        throw new Error(`Passport for project "${id}" not found`);
+        throw new ProjectNotFound(
+          `Passport for project "${id}" was not found.`,
+          'Please verify the project ID or select an existing project.'
+        );
       }
 
       const now = new Date().toISOString();
-      project.name = newName;
+      project.name = trimmed;
       project.updatedAt = now;
-      passportRecord.passport.project.name = newName;
+      passportRecord.passport.project.name = trimmed;
       passportRecord.passport.project.updatedAt = now;
 
       await db.projects.put(project);
@@ -211,25 +235,23 @@ export async function savePassport(passport: PassportV1): Promise<void> {
 
   try {
     await db.transaction('rw', [db.projects, db.passports], async () => {
+      const existingProject = await db.projects.get(validPassport.project.id);
+      if (!existingProject) {
+        throw new ProjectNotFound(
+          `Project "${validPassport.project.id}" was not found.`,
+          'Cannot save passport because the project does not exist. Please create or import the project first.'
+        );
+      }
+
+      existingProject.name = validPassport.project.name;
+      existingProject.status = validPassport.project.status;
+      existingProject.updatedAt = now;
+      await db.projects.put(existingProject);
+
       await db.passports.put({
         projectId: validPassport.project.id,
         passport: validPassport,
       });
-
-      const existingProject = await db.projects.get(validPassport.project.id);
-      if (existingProject) {
-        existingProject.name = validPassport.project.name;
-        existingProject.status = validPassport.project.status;
-        existingProject.updatedAt = now;
-        await db.projects.put(existingProject);
-      } else {
-        await db.projects.put({
-          id: validPassport.project.id,
-          name: validPassport.project.name,
-          status: validPassport.project.status,
-          updatedAt: now,
-        });
-      }
     });
   } catch (err) {
     mapStorageError(err);

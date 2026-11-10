@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import * as storageExports from '../index';
 import {
   createProject,
   listProjects,
@@ -23,11 +24,12 @@ import {
   StorageUnavailable,
   ValidationFailed,
   BackupInvalid,
+  ProjectNotFound,
   type BackupData,
 } from '../index';
 import { _setStorageAvailableForTesting } from '../testing';
 import { db } from '../db';
-import type { PassportV1 } from '../../domain';
+import { createEmptyPassport, type PassportV1 } from '../../domain';
 
 describe('Storage Service & Dexie Layer', () => {
   beforeEach(async () => {
@@ -37,6 +39,17 @@ describe('Storage Service & Dexie Layer', () => {
     await db.checkpoints.clear();
     await db.conversations.clear();
     await db.files.clear();
+  });
+
+  it('verifies test hook isolation: _setStorageAvailableForTesting is not exported from src/storage/index.ts', () => {
+    const exportedKeys = Object.keys(storageExports);
+    expect(exportedKeys).not.toContain('_setStorageAvailableForTesting');
+    expect('_setStorageAvailableForTesting' in storageExports).toBe(false);
+    expect(
+      (storageExports as Record<string, unknown>)['_setStorageAvailableForTesting']
+    ).toBeUndefined();
+    expect(exportedKeys).not.toContain('getTestingStorageOverride');
+    expect('getTestingStorageOverride' in storageExports).toBe(false);
   });
 
   it('verifies create, list, rename, and delete lifecycle for projects', async () => {
@@ -550,13 +563,110 @@ describe('Storage Service & Dexie Layer', () => {
     // Normal state: opens successfully
     expect(await isAvailable()).toBe(true);
 
-    // Spy on db.open to simulate failure (e.g. storage blocked or private mode)
-    const spy = vi.spyOn(db, 'open').mockRejectedValueOnce(new Error('IndexedDB blocked'));
+    // Spy on db.open to simulate failure with generic error
+    const spy = vi
+      .spyOn(db, 'open')
+      .mockRejectedValueOnce(new Error('IndexedDB blocked by browser security policy'));
     expect(await isAvailable()).toBe(false);
+    expect(spy).toHaveBeenCalled();
     spy.mockRestore();
+
+    // Verify rejection with DOMException SecurityError
+    const secSpy = vi
+      .spyOn(db, 'open')
+      .mockRejectedValueOnce(
+        new DOMException(
+          'A mutation operation was attempted in a read-only transaction',
+          'SecurityError'
+        )
+      );
+    expect(await isAvailable()).toBe(false);
+    expect(secSpy).toHaveBeenCalled();
+    secSpy.mockRestore();
 
     // When restored, isAvailable succeeds again
     expect(await isAvailable()).toBe(true);
+  });
+
+  it('rejects empty or whitespace-only names on createProject and stores trimmed names', async () => {
+    // Rejected create: empty string
+    await expect(createProject('')).rejects.toThrow(ValidationFailed);
+    await expect(createProject('')).rejects.toThrow('Project name cannot be empty');
+    expect(await db.projects.count()).toBe(0);
+    expect(await db.passports.count()).toBe(0);
+
+    // Rejected create: whitespace-only string
+    await expect(createProject('   \t\n  ')).rejects.toThrow(ValidationFailed);
+    await expect(createProject('   \t\n  ')).rejects.toThrow('Project name cannot be empty');
+    expect(await db.projects.count()).toBe(0);
+    expect(await db.passports.count()).toBe(0);
+
+    // Trimmed name stored
+    const created = await createProject('   Padded Project Name   ');
+    expect(created.name).toBe('Padded Project Name');
+
+    const projectInDb = await db.projects.get(created.id);
+    expect(projectInDb?.name).toBe('Padded Project Name');
+
+    const passportInDb = await db.passports.get(created.id);
+    expect(passportInDb?.passport.project.name).toBe('Padded Project Name');
+  });
+
+  it('rejects empty or whitespace-only names on renameProject and stores trimmed names', async () => {
+    const project = await createProject('Original Valid Name');
+
+    // Rejected rename: empty string
+    await expect(renameProject(project.id, '')).rejects.toThrow(ValidationFailed);
+    await expect(renameProject(project.id, '')).rejects.toThrow('Project name cannot be empty');
+
+    // Old name still stored in both projects row and passport
+    const projAfterEmpty = await db.projects.get(project.id);
+    const passAfterEmpty = await db.passports.get(project.id);
+    expect(projAfterEmpty?.name).toBe('Original Valid Name');
+    expect(passAfterEmpty?.passport.project.name).toBe('Original Valid Name');
+
+    // Rejected rename: whitespace-only string
+    await expect(renameProject(project.id, '    ')).rejects.toThrow(ValidationFailed);
+    await expect(renameProject(project.id, '    ')).rejects.toThrow('Project name cannot be empty');
+
+    // Old name still stored in both
+    const projAfterWhitespace = await db.projects.get(project.id);
+    const passAfterWhitespace = await db.passports.get(project.id);
+    expect(projAfterWhitespace?.name).toBe('Original Valid Name');
+    expect(passAfterWhitespace?.passport.project.name).toBe('Original Valid Name');
+
+    // Trimmed name stored
+    await renameProject(project.id, '   Trimmed Renamed Name   ');
+    const projAfterTrim = await db.projects.get(project.id);
+    const passAfterTrim = await db.passports.get(project.id);
+    expect(projAfterTrim?.name).toBe('Trimmed Renamed Name');
+    expect(passAfterTrim?.passport.project.name).toBe('Trimmed Renamed Name');
+  });
+
+  it('savePassport throws ProjectNotFound and does NOT create projects when project row does not exist', async () => {
+    // 1. Saving a passport with an unknown id is rejected
+    const dummyPassport = createEmptyPassport('Unknown Project');
+    await expect(savePassport(dummyPassport)).rejects.toThrow(ProjectNotFound);
+    await expect(savePassport(dummyPassport)).rejects.toThrow(
+      `Project "${dummyPassport.project.id}" was not found.`
+    );
+    expect(await db.projects.get(dummyPassport.project.id)).toBeUndefined();
+    expect(await db.passports.get(dummyPassport.project.id)).toBeUndefined();
+
+    // 2. Saving after deleteProject does not bring the project back
+    const project = await createProject('Ephemeral Project');
+    const savedPassport = (await getPassport(project.id))!;
+    expect(savedPassport).not.toBeNull();
+
+    // Delete the project
+    await deleteProject(project.id);
+    expect(await db.projects.get(project.id)).toBeUndefined();
+    expect(await db.passports.get(project.id)).toBeUndefined();
+
+    // Attempting to save after deleteProject must throw ProjectNotFound and write nothing
+    await expect(savePassport(savedPassport)).rejects.toThrow(ProjectNotFound);
+    expect(await db.projects.get(project.id)).toBeUndefined();
+    expect(await db.passports.get(project.id)).toBeUndefined();
   });
 
   it('rejects invalid passport data on savePassport and leaves the existing record unchanged', async () => {

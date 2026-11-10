@@ -52,3 +52,17 @@ export class BackupInvalid extends Error {
     this.nextStep = nextStep;
   }
 }
+
+export class ProjectNotFound extends Error {
+  readonly nextStep: string;
+
+  constructor(
+    message = 'The requested project was not found.',
+    nextStep = 'Please verify the project ID or create a new project.'
+  ) {
+    super(message);
+    this.name = 'ProjectNotFound';
+    this.nextStep = nextStep;
+  }
+}
+

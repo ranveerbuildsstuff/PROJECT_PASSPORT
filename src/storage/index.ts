@@ -31,6 +31,7 @@ export {
   ValidationFailed,
   QuotaExceeded,
   BackupInvalid,
+  ProjectNotFound,
 } from './errors';
 
 export type {
