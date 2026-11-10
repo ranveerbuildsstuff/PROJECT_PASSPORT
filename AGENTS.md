@@ -13,7 +13,7 @@ When starting any slice or answering any question, always read files in this exa
 
 - **Architecture:** Single Vite web application (strictly **NOT** a monorepo).
 - **Core:** React, TypeScript (strict mode enabled), Tailwind CSS, React Router.
-- **Testing:** Vitest + React Testing Library (+ `fake-indexeddb` for storage testing).
+- **Testing:** Vitest + React Testing Library (+ `fake-indexeddb` for storage testing); Playwright + `@axe-core/playwright` for automated E2E browser and accessibility testing.
 - **Code Quality:** ESLint + Prettier.
 - **Data Validation:** Zod (single source of truth for runtime and static types).
 - **Client Storage:** Dexie (IndexedDB wrapper).
@@ -73,6 +73,10 @@ private/          # Gitignored directory for real user test files and exports
     Every slice must deliver comprehensive Vitest unit tests verifying all logic introduced.
 11. **Single Source of Truth Maintenance:**
     Maintain `SPEC.md` as the ultimate authority. When behavior or product decisions change, update `SPEC.md` within the same slice and record the rationale in `PROGRESS.md`.
+12. **Automated E2E Testing & Browser Invariants:**
+    - Playwright launches its own throwaway headless browser. NEVER use MCP chrome-devtools tools, browser subagents, remote debugging ports, or the user's real Chrome profile (no `launchPersistentContext` with a user data dir, no `--remote-debugging-port`, never close or restart the user's Chrome).
+    - Dedicated E2E web server runs strictly on port `4179` (`127.0.0.1:4179`), started and stopped automatically by Playwright's `webServer` configuration.
+    - Two projects must be tested: `desktop` (1280x800) and `mobile-360` (viewport 360x640, `isMobile: true`, `hasTouch: true`).
 
 ## 5. Per-Slice Execution Process
 
@@ -80,20 +84,26 @@ For every implementation ticket, follow this exact workflow:
 1. **Read:** Examine `SPEC.md`, `AGENTS.md`, `DESIGN.md`, `TASKS.md`, and `PROGRESS.md`.
 2. **Plan:** Post a concise plan (maximum 10 lines outlining files to touch and clarifying any ambiguities). If ambiguous, ask before writing code; otherwise proceed.
 3. **Scope Control:** Touch nothing outside the assigned slice scope. Do not build ahead.
-4. **Verification Gate:**
+4. **Implementation & E2E Testing:**
+   Every slice that changes the UI ships Playwright specs in `e2e/` for each user-visible flow it adds (run on desktop and mobile-360), including empty, error and keyboard-only paths, and an axe scan of each new screen. Run `npm run test:e2e` yourself, fix the CODE until green (fix a test only if the test is wrong, and say why; never weaken, skip or delete a test), and report the raw list-reporter output. Do NOT hand me a manual test checklist for anything that can be automated; list separately only what genuinely cannot be (a real phone, subjective look).
+5. **Visual Self-Review:**
+   After screenshots are produced, if you can view images, inspect them against `DESIGN.md` and list issues found and fixed.
+6. **Verification Gate:**
    Before finalizing, ensure the following commands pass with zero errors:
    - `npm run typecheck`
    - `npm run lint`
    - `npm test`
    - `npm run build`
+   - `npm run test:e2e`
    Update `PROGRESS.md`, check off completed items in `TASKS.md`, and commit:
-   `git commit -m "Slice N: <title>"` (initialize git repository if not already done).
-5. **Completion Report:**
+   `git commit -m "Slice N: <title>"` (or ticket prefix, e.g. `T1: <title>`).
+7. **Completion Report:**
    Conclude by reporting:
    - Summary of accomplishments
    - List of created and modified files
+   - Raw list-reporter output of `npm run test:e2e`
    - Vitest test suite count and pass status
-   - Manual test checklist (maximum 8 concrete items)
-6. **Stop:** Cease execution and await the user's direction.
+   - Any non-automatable observations (if applicable)
+8. **Stop:** Cease execution and await the user's direction.
 
 *Note on contradictions:* If a user ticket explicitly contradicts `SPEC.md`, the ticket wins. Update `SPEC.md` in that ticket and document the modification under "Decisions & deviations" in `PROGRESS.md`.

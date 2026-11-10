@@ -1,12 +1,13 @@
 # PROGRESS.md — Project Roadmap & Status
 
-Current slice: none (Slice 1, 1b, 2 & 2b complete)
+Current slice: none (Slice 1, 1b, 2, 2b & Tooling Ticket T1 complete)
 
 ## Slices Checklist
 
 - [x] Slice 1: Scaffold + domain model (schema, readiness, tokens, markdown renderer)
 - [x] Slice 2: Local storage (Dexie, service layer, backup/restore)
 - [x] Slice 2b: Storage hardening (fix + proof)
+- [x] Tooling Ticket T1: Automated browser testing (Playwright)
 - [ ] Slice 3: App shell, design system, dashboard
 - [ ] Slice 4: Passport editor + live preview
 - [ ] Slice 5: Capture prompt, reconstruct prompt, paste-back + merge
@@ -133,6 +134,45 @@ Current slice: none (Slice 1, 1b, 2 & 2b complete)
 - **Decisions & Deviations:**
   - *Same-ID Project Replacement:* Rather than wiping all tables on backup restore, `importBackup` removes only existing records for the matching project IDs and writes the imported data within a single atomic transaction. Unrelated projects already in IndexedDB remain intact.
   - *Async `isAvailable` Probe:* `isAvailable()` was made asynchronous to actively invoke `await db.open()`, ensuring blocked IndexedDB instances in private browsing or restricted browser profiles are caught reliably.
+
+### Tooling Ticket T1: Automated Browser Testing (Playwright)
+- **What was built:**
+  - Installed `@playwright/test` and `@axe-core/playwright` as devDependencies.
+  - Configured `playwright.config.ts`:
+    - Dedicated port `4179` (`127.0.0.1:4179`).
+    - WebServer running `npm run build && npx vite preview --host 127.0.0.1 --port 4179 --strictPort` (`reuseExistingServer: false`, `timeout: 120000`).
+    - Two projects: `desktop` (1280x800) and `mobile-360` (viewport 360x640, `isMobile: true`, `hasTouch: true`).
+    - Google Chrome channel (`channel: 'chrome'`) using the locally installed Chrome binary (`C:\Program Files\Google\Chrome\Application\chrome.exe`).
+    - Reporters: `list`, `json` (`e2e-results/results.json`), and `html` (`playwright-report`, `open: 'never'`).
+  - Added package script `"test:e2e": "playwright test"`.
+  - Configured `vite.config.ts` Vitest configuration to exclude `e2e/**`.
+  - Extended `tsconfig.json` to typecheck `e2e/` and `playwright.config.ts`.
+  - Configured ESLint (`eslint.config.js`) and `.gitignore` for E2E artifacts (`e2e-results/`, `playwright-report/`, `test-results/`).
+  - Implemented reusable E2E helpers in `e2e/helpers.ts`:
+    - `shot(page, name)`: captures screenshot to `e2e-results/screenshots/<project>-<name>.png`.
+    - `expectNoSeriousA11y(page)`: runs Axe scan and fails on serious or critical violations, printing rule IDs, descriptions, element selectors, and help URLs.
+    - `collectConsoleErrors(page)`: captures `console.error` and `pageerror` events.
+  - Implemented smoke test in `e2e/smoke.spec.ts`:
+    - Loads placeholder app, asserts h1 "Project Passport" visible with web-first assertions, verifies zero console errors.
+    - Runs Axe scan verifying zero serious/critical violations.
+    - Proves real-browser storage by opening raw IndexedDB inside `page.evaluate`, writing and reading a record with a `Uint8Array` binary payload, deleting the database, and asserting match.
+    - Captures screenshots (`desktop-home.png`, `mobile-360-home.png`).
+  - Updated `AGENTS.md` engineering rules and per-slice process to require Playwright E2E specs for all UI slices.
+- **Key file paths:**
+  - `playwright.config.ts`
+  - `e2e/helpers.ts`
+  - `e2e/smoke.spec.ts`
+  - `package.json`
+  - `vite.config.ts`
+  - `tsconfig.json`
+  - `eslint.config.js`
+  - `.gitignore`
+  - `AGENTS.md`
+  - `TASKS.md`
+  - `PROGRESS.md`
+- **Decisions & Deviations:**
+  - *Browser Channel:* Used already-installed Google Chrome via `channel: 'chrome'`.
+  - *Zero Additional Dependencies:* Avoided installing `@types/node` or any other packages to strictly comply with dependency restrictions; node path manipulation in `e2e/helpers.ts` was implemented using pure strings, letting Playwright handle directory creation natively.
 
 ---
 

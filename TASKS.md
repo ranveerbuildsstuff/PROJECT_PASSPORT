@@ -72,6 +72,26 @@
 
 ---
 
+## Tooling Ticket T1: Automated Browser Testing (Playwright)
+
+- [x] Install devDependencies: `@playwright/test` and `@axe-core/playwright`.
+- [x] Configure `playwright.config.ts` with dedicated port 4179, preview webServer, desktop (1280x800) and mobile-360 (360x640) projects, channel `chrome`.
+- [x] Add `"test:e2e": "playwright test"` script in `package.json`.
+- [x] Configure Vitest to exclude `e2e/**` in `vite.config.ts`.
+- [x] Extend `tsconfig.json` to typecheck `e2e/` and `playwright.config.ts`.
+- [x] Extend ESLint ignore list in `eslint.config.js` and `.gitignore` for E2E artifacts (`e2e-results/`, `playwright-report/`, `test-results/`).
+- [x] Implement E2E helpers in `e2e/helpers.ts`: `shot(page, name)`, `expectNoSeriousA11y(page)`, `collectConsoleErrors(page)`.
+- [x] Implement smoke spec in `e2e/smoke.spec.ts`: loads placeholder app with h1, zero console errors, axe scan passes, real-browser IndexedDB Uint8Array roundtrip + deletion proof, screenshots.
+- [x] Update `AGENTS.md` per-slice process, hard rules, dedicated port 4179, and visual self-review.
+- [x] **Tests added:** 4 E2E tests across desktop and mobile-360 covering app smoke, accessibility, and real-browser IndexedDB binary storage.
+- [x] **Commit message:** `T1: Playwright E2E harness`
+
+**Done when:**
+- `npm run typecheck`, `npm run lint`, `npm test`, `npm run build`, and `npm run test:e2e` all pass with zero errors.
+- Port 4179 is confirmed free after tests complete.
+
+---
+
 ## Slice 3: App Shell, Design System & Dashboard
 
 - [ ] Install `lucide-react` for system iconography.
