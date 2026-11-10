@@ -7,6 +7,7 @@
   --color-text-primary: var(--text-primary);
   --color-text-muted: var(--text-muted);
   --color-accent-brass: var(--accent-brass);
+  --color-accent-brass-contrast: var(--accent-brass-contrast);
   --color-success: var(--color-success);
   --color-warning: var(--color-warning);
   --color-danger: var(--color-danger);
@@ -22,6 +23,7 @@
   --text-primary: #e6edf3;
   --text-muted: #8b949e;
   --accent-brass: #c9a227;
+  --accent-brass-contrast: #000000;
   --color-success: #3fb950;
   --color-warning: #d29922;
   --color-danger: #f85149;
@@ -33,7 +35,8 @@
   --border-subtle: #d0d7de;
   --text-primary: #1f2328;
   --text-muted: #656d76;
-  --accent-brass: #9a7b1c;
+  --accent-brass: #745706;
+  --accent-brass-contrast: #ffffff;
   --color-success: #1a7f37;
   --color-warning: #9a6700;
   --color-danger: #cf222e;

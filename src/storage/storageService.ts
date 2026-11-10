@@ -150,15 +150,15 @@ export async function renameProject(id: string, newName: string): Promise<void> 
       const project = await db.projects.get(id);
       if (!project) {
         throw new ProjectNotFound(
-          `Project "${id}" was not found.`,
-          'Please verify the project ID or select an existing project.'
+          `Project "${id}" was not found. It may have been deleted.`,
+          'Go back to your projects and try again.'
         );
       }
       const passportRecord = await db.passports.get(id);
       if (!passportRecord) {
         throw new ProjectNotFound(
-          `Passport for project "${id}" was not found.`,
-          'Please verify the project ID or select an existing project.'
+          `Project "${id}" was not found. It may have been deleted.`,
+          'Go back to your projects and try again.'
         );
       }
 
@@ -238,8 +238,8 @@ export async function savePassport(passport: PassportV1): Promise<void> {
       const existingProject = await db.projects.get(validPassport.project.id);
       if (!existingProject) {
         throw new ProjectNotFound(
-          `Project "${validPassport.project.id}" was not found.`,
-          'Cannot save passport because the project does not exist. Please create or import the project first.'
+          `Project "${validPassport.project.id}" was not found. It may have been deleted.`,
+          'Go back to your projects and try again.'
         );
       }
 

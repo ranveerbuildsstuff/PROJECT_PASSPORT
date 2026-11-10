@@ -119,6 +119,33 @@
 
 ---
 
+## Slice 3b: UI Polish & Test Gaps
+
+- [x] Status stamp: show human label ("Idea", "In progress", "Paused", "Done") with no "STATUS:" prefix and no underscores via shared `formatProjectStatus()` function with unit tests.
+- [x] Remove "↗" icon next to project name on dashboard cards; whole title is the link (min height 44px).
+- [x] Long project names wrap to at most 2 lines (line-clamp-2) with full title attribute on dashboard cards and project page header.
+- [x] Footer copy updated to "Your data never leaves this device", keeping "The AI is replaceable; the project is not".
+- [x] Header backup button: icon plus visible "Backup" label from 640px (`sm:`) up; icon-only below with accessible name "Backup and restore".
+- [x] Mobile badge: compact `ON DEVICE` badge with `aria-label` and `title="Stored only on this device"`.
+- [x] Dialog titles in sentence case ("New project", "Rename project", "Delete project", "Backup & restore") with updated tests/locators.
+- [x] `ProjectNotFound` error message updated to plain language with next step; updated tests.
+- [x] Project page tab strip at 360px: horizontally scrollable with visible edge fade affordance and 44px targets; no page-level horizontal scroll.
+- [x] Remove fixed sleeps (`setTimeout`/`waitForTimeout`) anywhere in `e2e/`.
+- [x] Implement reusable `auditPageLayoutAndTouchTargets` helper in `e2e/helpers.ts` checking no horizontal overflow and all interactive elements >= 44x44px across empty dashboard, 3 projects, overview with tab strip, and all dialogs on desktop and mobile-360.
+- [x] Add serious/critical axe scans for dashboard (3 projects, light theme), project overview (light theme), new project dialog (light theme), storage-blocked screen, rename/delete/backup dialogs, and placeholder tabs. Fix contrast token values without changing DESIGN.md token names.
+- [x] `e2e/backup.spec.ts`: add same-ID replace E2E test, invalid JSON structure fixture test, unknown backupVersion fixture test in `tests/fixtures/`, and restore count assertion.
+- [x] Update `shot()` to accept `{ fullPage: true }` and regenerate all screenshots for visual self-review.
+- [x] **Commit message:** `Slice 3b: polish and test gaps`
+
+**Done when:**
+- `npm run typecheck`, `npm run lint`, `npm test`, `npm run build`, and `npm run test:e2e` pass with zero errors.
+- Zero fixed sleeps in `e2e/`.
+- Touch target and overflow audit passes on all key views across desktop and mobile-360.
+- All light and dark theme axe scans pass with zero serious/critical violations.
+- Port 4179 is confirmed free.
+
+---
+
 ## Slice 4: Passport Editor & Live Preview
 
 - [ ] Implement form controls in `src/ui/`: `Input`, `Textarea`, select dropdowns, and key-value item lists.

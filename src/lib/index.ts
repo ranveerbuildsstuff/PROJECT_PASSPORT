@@ -1,2 +1,2 @@
 export { uint8ArrayToBase64, base64ToUint8Array } from './binary';
-export { formatBytes, formatDateTime } from './format';
+export { formatBytes, formatDateTime, formatProjectStatus } from './format';

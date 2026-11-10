@@ -82,7 +82,6 @@ test.describe('Smoke Spec', () => {
 
       // 4. Close database connection
       db.close();
-      await new Promise((r) => setTimeout(r, 50));
 
       // 5. Delete database
       const deleted = await new Promise<boolean>((resolve, reject) => {

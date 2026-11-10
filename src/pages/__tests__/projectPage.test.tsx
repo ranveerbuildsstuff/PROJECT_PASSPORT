@@ -27,7 +27,7 @@ describe('ProjectPage Component Tests', () => {
 
     await waitFor(() => {
       expect(screen.getByRole('heading', { name: /Project not found/i })).toBeInTheDocument();
-      expect(screen.getByText(/We couldn't locate any local project with ID/i)).toBeInTheDocument();
+      expect(screen.getByText(/Project "non-existent-id" was not found\. It may have been deleted\./i)).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /Return to projects/i })).toBeInTheDocument();
     });
   });

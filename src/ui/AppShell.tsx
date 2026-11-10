@@ -24,7 +24,7 @@ export function AppShell({ children, onRefreshProjects }: AppShellProps) {
       </main>
 
       <footer className="w-full border-t border-border-subtle/60 py-4 px-4 sm:px-6 text-center text-xs text-text-muted">
-        <p>Project Passport &bull; The AI is replaceable; the project is not &bull; 100% Offline</p>
+        <p>Project Passport &bull; The AI is replaceable; the project is not &bull; Your data never leaves this device</p>
       </footer>
     </div>
   );

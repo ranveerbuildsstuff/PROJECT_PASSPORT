@@ -127,7 +127,7 @@ describe('AppShell & BackupDialog Tests', () => {
         screen.getByText(/Projects in this backup sharing the same ID as existing local projects will be/i)
       ).toBeInTheDocument();
       expect(screen.getByText('REPLACED')).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /Confirm and replace projects/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Confirm and restore/i })).toBeInTheDocument();
     });
   });
 });

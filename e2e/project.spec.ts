@@ -22,7 +22,7 @@ test.describe('Project Page E2E Flows', () => {
 
     // Create a project
     await page.getByRole('button', { name: /^New project$/i }).first().click();
-    const createDialog = page.getByRole('dialog', { name: 'New Project' });
+    const createDialog = page.getByRole('dialog', { name: 'New project' });
     await createDialog.getByLabel('Project name').fill('Full Stack Agent Platform');
     await createDialog.getByRole('button', { name: 'Create project' }).click();
 
@@ -92,7 +92,7 @@ test.describe('Project Page E2E Flows', () => {
 
     await expect(page.getByRole('heading', { name: 'Project not found' })).toBeVisible();
     await expect(
-      page.getByText(/We couldn't locate any local project with ID "non-existent-uuid-99999"/)
+      page.getByText(/Project "non-existent-uuid-99999" was not found\. It may have been deleted\. Go back to your projects and try again\./)
     ).toBeVisible();
 
     const returnBtn = page.getByRole('button', { name: 'Return to projects' });

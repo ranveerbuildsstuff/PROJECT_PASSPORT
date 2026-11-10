@@ -1,6 +1,6 @@
 # PROGRESS.md — Project Roadmap & Status
 
-Current slice: none (Slice 1, 1b, 2, 2b, 2c, Tooling T1, T1b & Slice 3 complete)
+Current slice: none (Slice 1, 1b, 2, 2b, 2c, Tooling T1, T1b, Slice 3 & Slice 3b complete)
 
 ## Slices Checklist
 
@@ -11,6 +11,7 @@ Current slice: none (Slice 1, 1b, 2, 2b, 2c, Tooling T1, T1b & Slice 3 complete)
 - [x] Slice 2c: Storage fixes (name validation, ProjectNotFound, test consolidation)
 - [x] Tooling Ticket T1b: Harness hardening (forbidOnly, helpers selftest)
 - [x] Slice 3: App shell, design system, dashboard
+- [x] Slice 3b: UI polish and test gaps
 - [ ] Slice 4: Passport editor + live preview
 - [ ] Slice 5: Capture prompt, reconstruct prompt, paste-back + merge
 - [ ] Slice 6: Conversation paste import
@@ -41,6 +42,19 @@ Consolidated manual checklist tests into `storageService.test.ts` and deleted re
 - **App Shell & Header:** Implemented `AppShell`, sticky `Header` with brand link, "Stored only on this device" badge, theme switcher, and `BackupDialog` (exporting timestamped JSON backup with 50MB warning indicator and importing with same-ID replacement confirmation).
 - **Pages & Routing:** Implemented `DashboardPage` (`/`) with project cards, readiness rings, status stamps, last updated timestamps, and create/rename/delete dialogs. Implemented `ProjectPage` (`/project/:id/:tab?`) with functional Overview tab (7-point readiness checklist, quick stats, next action card) and placeholders for future slices, plus friendly Project Not Found screen. Implemented full-screen `StorageBlockedPage` shown when `isAvailable()` fails.
 - **Architectural Isolation:** UI layer strictly interacts with `src/storage` functions and React hooks (`useProjects`, `useProject`), never importing Dexie directly. All touch targets >= 44x44px, no hover-only features, fully keyboard navigable, and 0 accessibility violations across desktop and mobile-360.
+
+### Slice 3b: UI Polish & Test Gaps
+- **Status Stamp & Human Labels:** Implemented `formatProjectStatus(status)` mapping `'idea' -> 'Idea'`, `'in_progress' -> 'In progress'`, `'paused' -> 'Paused'`, `'done' -> 'Done' without prefixes or underscores. Removed forced `uppercase` in `src/ui/Badge.tsx` so status badges render cleanly in human-readable sentence case.
+- **Card & Header Navigation Polish:** Removed the `"↗"` icon from dashboard project cards; made the entire title a link with `min-h-[44px]`. Applied `line-clamp-2` with `title` attributes for long project names. Updated footer to `"Your data never leaves this device"`.
+- **Responsive Header & Mobile Badge:** Added visible `"Backup"` text from 640px (`sm:`) up while maintaining accessible name `"Backup and restore"` across all viewports. Replaced mobile header badge with `"ON DEVICE"` badge with `aria-label` and `title="Stored only on this device"`.
+- **Dialog Titles in Sentence Case:** Converted all dialog titles to sentence case (`"New project"`, `"Rename project"`, `"Delete project"`, `"Backup & restore"`).
+- **Error Messages in Plain Language:** Updated `ProjectNotFound` constructor and throw sites to plain language: `"Project \"{id}\" was not found. It may have been deleted. Go back to your projects and try again."`.
+- **Responsive Horizontally Scrollable Tab Strip:** Added a smooth scroll wrapper to `src/ui/Tabs.tsx` with a right-edge gradient fade affordance (`from-bg-app to-transparent`) indicating scrollability at 360px without page-level horizontal overflow.
+- **Elimination of Fixed Sleeps:** Removed `setTimeout` from `e2e/smoke.spec.ts` and `e2e/helpers.selftest.spec.ts`, replacing with deterministic event listeners (`page.waitForEvent('pageerror')`) and microtasks.
+- **Reusable Touch-Target & Layout Audit:** Created `auditPageLayoutAndTouchTargets(page, contextName)` in `e2e/helpers.ts` asserting no page horizontal overflow (`scrollWidth <= innerWidth`) and all visible interactive elements (`button`, `a`, `[role=tab]`, `input`, `textarea`) meet `width >= 43.5 && height >= 43.5`. Identified and fixed a 32x32px toast dismiss button violation by upgrading to `min-h-[44px] min-w-[44px]`.
+- **Light Theme Contrast & Axe Audits:** Added comprehensive serious/critical axe scans in light and dark themes across dashboard with 3 projects, project overview, all dialogs, storage blocked page, and placeholder tabs. Tuned light mode `--accent-brass` to `#745706` and introduced `--accent-brass-contrast` CSS token (`#000000` in dark mode, `#ffffff` in light mode) ensuring WCAG AA contrast (> 6.3:1) without changing DESIGN.md token names.
+- **Backup Tests & Synthetic Fixtures:** Added `tests/fixtures/invalid-structure-backup.json` and `tests/fixtures/unknown-version-backup.json`. Added same-ID replacement test (create -> export -> rename -> import restores original name and maintains exactly 1 project), invalid structure test, unknown backup version test, and restored project count assertion to `e2e/backup.spec.ts`.
+- **Full-Page Screenshots & Visual Self-Review:** Enhanced `shot()` helper to accept `{ fullPage?: boolean }`, capturing complete full-height snapshots of the dashboard and project overview screens.
 
 ---
 

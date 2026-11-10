@@ -118,6 +118,13 @@ export function BackupDialog({ isOpen, onClose, onRestoreComplete }: BackupDialo
         );
       }
 
+      if ((parsed as { backupVersion?: unknown }).backupVersion !== 1) {
+        throw new BackupInvalid(
+          `Unsupported backup version: ${String((parsed as { backupVersion?: unknown }).backupVersion)}. Only backupVersion 1 is supported.`,
+          'Please use a backup exported from a compatible version of Project Passport.'
+        );
+      }
+
       const backupData = parsed as BackupData;
       setPendingBackup({
         data: backupData,
@@ -164,7 +171,7 @@ export function BackupDialog({ isOpen, onClose, onRestoreComplete }: BackupDialo
     <Dialog
       isOpen={isOpen}
       onClose={handleClose}
-      title="Backup & Restore"
+      title="Backup & restore"
       description="Export your entire local workspace or restore from a previously exported backup archive."
     >
       <div className="flex flex-col gap-6">
@@ -175,7 +182,7 @@ export function BackupDialog({ isOpen, onClose, onRestoreComplete }: BackupDialo
           >
             <div className="flex items-center gap-2 font-semibold">
               <AlertTriangle className="w-4 h-4 shrink-0" aria-hidden="true" />
-              <span>Import Error</span>
+              <span>Import error</span>
             </div>
             <p className="text-sm leading-relaxed">{importError}</p>
           </div>
@@ -238,7 +245,6 @@ export function BackupDialog({ isOpen, onClose, onRestoreComplete }: BackupDialo
                 variant="secondary"
                 size="sm"
                 onClick={() => fileInputRef.current?.click()}
-                aria-label="Choose backup file to restore"
               >
                 <Upload className="w-4 h-4" aria-hidden="true" />
                 <span>Select file</span>
@@ -284,7 +290,6 @@ export function BackupDialog({ isOpen, onClose, onRestoreComplete }: BackupDialo
                   size="sm"
                   isLoading={isImporting}
                   onClick={handleConfirmImport}
-                  aria-label="Confirm and replace projects"
                 >
                   <CheckCircle2 className="w-4 h-4" aria-hidden="true" />
                   <span>Confirm and restore</span>

@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { uint8ArrayToBase64, base64ToUint8Array, formatBytes } from '../index';
+import {
+  uint8ArrayToBase64,
+  base64ToUint8Array,
+  formatBytes,
+  formatProjectStatus,
+} from '../index';
 
 describe('src/lib utilities', () => {
   it('roundtrips binary data with uint8ArrayToBase64 and base64ToUint8Array', () => {
@@ -34,5 +39,13 @@ describe('src/lib utilities', () => {
     expect(formatBytes(1048576)).toBe('1.0 MB');
     expect(formatBytes(1073741824)).toBe('1.0 GB');
     expect(formatBytes(1099511627776)).toBe('1.0 TB');
+  });
+
+  it('maps project status to clean human-readable labels without prefixes or underscores', () => {
+    expect(formatProjectStatus('idea')).toBe('Idea');
+    expect(formatProjectStatus('in_progress')).toBe('In progress');
+    expect(formatProjectStatus('paused')).toBe('Paused');
+    expect(formatProjectStatus('done')).toBe('Done');
+    expect(formatProjectStatus('unknown_custom')).toBe('unknown_custom');
   });
 });

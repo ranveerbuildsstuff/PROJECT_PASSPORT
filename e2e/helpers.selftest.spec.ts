@@ -49,7 +49,7 @@ test.describe('E2E Helpers Selftest', () => {
     await expectNoSeriousA11y(page);
   });
 
-  test('collectConsoleErrors captures console.error and uncaught error from setTimeout', async ({
+  test('collectConsoleErrors captures console.error and uncaught page errors', async ({
     page,
   }) => {
     const consoleErrors = collectConsoleErrors(page);
@@ -62,17 +62,18 @@ test.describe('E2E Helpers Selftest', () => {
       </html>
     `);
 
+    const pageErrorPromise = page.waitForEvent('pageerror');
+
     await page.evaluate(() => {
       console.error('Deliberate test console error message');
-      setTimeout(() => {
-        throw new Error('Deliberate setTimeout uncaught error');
-      }, 20);
+      window.queueMicrotask(() => {
+        throw new Error('Deliberate uncaught error');
+      });
     });
 
-    // Wait for the setTimeout callback and pageerror event to be handled
-    await page.waitForTimeout(100);
+    await pageErrorPromise;
 
     expect(consoleErrors.some((e) => e.includes('Deliberate test console error message'))).toBe(true);
-    expect(consoleErrors.some((e) => e.includes('Deliberate setTimeout uncaught error'))).toBe(true);
+    expect(consoleErrors.some((e) => e.includes('Deliberate uncaught error'))).toBe(true);
   });
 });

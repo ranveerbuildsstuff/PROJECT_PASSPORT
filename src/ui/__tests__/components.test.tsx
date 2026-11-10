@@ -27,8 +27,8 @@ describe('UI Primitives and Design System', () => {
   });
 
   it('renders Badge in stamp style with semantic variants', () => {
-    const { rerender } = render(<Badge variant="brass">STATUS: IDEA</Badge>);
-    const badge = screen.getByText('STATUS: IDEA');
+    const { rerender } = render(<Badge variant="brass">Idea</Badge>);
+    const badge = screen.getByText('Idea');
     expect(badge).toBeInTheDocument();
     expect(badge.className).toContain('font-mono');
     expect(badge.className).toContain('border-accent-brass');

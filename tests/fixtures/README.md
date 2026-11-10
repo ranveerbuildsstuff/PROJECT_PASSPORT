@@ -23,3 +23,12 @@ This directory contains strictly synthetic, non-sensitive mock datasets designed
   - Conversation references from ChatGPT and Claude with token estimates.
   - Explicit next action and open questions.
 - **Readiness Score:** 100% (satisfies all 7 readiness criteria).
+
+### 2. `corrupted-backup.json`
+- **Description:** Malformed JSON file (missing closing bracket) used to verify that file import displays plain-language syntax error feedback.
+
+### 3. `invalid-structure-backup.json`
+- **Description:** Valid JSON file missing mandatory backup root properties (`backupVersion` and `projects`), used to verify that structure format errors are caught with plain-language guidance.
+
+### 4. `unknown-version-backup.json`
+- **Description:** Valid JSON backup archive with an unsupported `backupVersion` (99), used to verify that version mismatch errors report plain-language explanations without crashes.

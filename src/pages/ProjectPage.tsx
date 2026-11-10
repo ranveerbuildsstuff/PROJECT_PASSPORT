@@ -27,7 +27,7 @@ import {
 } from '../ui';
 import { useProject } from './hooks';
 import { computeReadiness } from '../domain';
-import { formatDateTime } from '../lib';
+import { formatDateTime, formatProjectStatus } from '../lib';
 
 const VALID_TABS = ['overview', 'passport', 'conversations', 'files', 'checkpoints', 'export'] as const;
 type TabType = typeof VALID_TABS[number];
@@ -57,7 +57,7 @@ export function ProjectPage() {
         <EmptyState
           icon={<HelpCircle className="w-8 h-8" aria-hidden="true" />}
           title="Project not found"
-          description={`We couldn't locate any local project with ID "${id}". It may have been deleted or the link is invalid.`}
+          description={`Project "${id}" was not found. It may have been deleted. Go back to your projects and try again.`}
           actionLabel="Return to projects"
           onAction={() => navigate('/')}
         />
@@ -125,11 +125,14 @@ export function ProjectPage() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-5 sm:p-6 rounded-lg border border-border-subtle bg-bg-surface">
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-3 flex-wrap">
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-text-primary">
+            <h1
+              className="text-2xl sm:text-3xl font-bold tracking-tight text-text-primary line-clamp-2"
+              title={project.name}
+            >
               {project.name}
             </h1>
             <Badge variant={getStatusVariant(project.status)}>
-              STATUS: {project.status.toUpperCase()}
+              {formatProjectStatus(project.status)}
             </Badge>
           </div>
           {passport.project.goal && (

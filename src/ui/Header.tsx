@@ -41,9 +41,14 @@ export function Header({ onRefreshProjects }: HeaderProps) {
           {/* Controls: Device indicator on mobile, Backup Dialog, Theme Toggle */}
           <div className="flex items-center gap-1 sm:gap-2">
             <div className="sm:hidden">
-              <Badge variant="default" className="text-[10px] px-1.5 py-0.5" title="Stored only on this device">
+              <Badge
+                variant="default"
+                className="text-[10px] px-1.5 py-0.5"
+                title="Stored only on this device"
+                aria-label="Stored only on this device"
+              >
                 <ShieldCheck className="w-3 h-3 text-accent-brass" aria-hidden="true" />
-                <span>Local</span>
+                <span>ON DEVICE</span>
               </Badge>
             </div>
 
@@ -52,10 +57,11 @@ export function Header({ onRefreshProjects }: HeaderProps) {
               type="button"
               onClick={() => setIsBackupOpen(true)}
               aria-label="Backup and restore"
-              title="Backup & Restore"
-              className="inline-flex items-center justify-center min-h-[44px] min-w-[44px] rounded-lg text-text-muted hover:text-text-primary hover:bg-bg-app border border-transparent hover:border-border-subtle transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-brass cursor-pointer"
+              title="Backup and restore"
+              className="inline-flex items-center justify-center min-h-[44px] min-w-[44px] px-2 sm:px-3 rounded-lg text-text-muted hover:text-text-primary hover:bg-bg-app border border-transparent hover:border-border-subtle transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-brass cursor-pointer gap-1.5"
             >
-              <HardDriveDownload className="w-5 h-5" aria-hidden="true" />
+              <HardDriveDownload className="w-5 h-5 shrink-0" aria-hidden="true" />
+              <span className="hidden sm:inline text-xs font-medium">Backup</span>
             </button>
 
             {/* Theme Toggle button */}

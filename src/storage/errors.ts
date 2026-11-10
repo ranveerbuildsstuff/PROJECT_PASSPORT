@@ -57,9 +57,15 @@ export class ProjectNotFound extends Error {
   readonly nextStep: string;
 
   constructor(
-    message = 'The requested project was not found.',
-    nextStep = 'Please verify the project ID or create a new project.'
+    projectIdOrMessage?: string,
+    nextStep = 'Go back to your projects and try again.'
   ) {
+    let message = 'The requested project was not found. It may have been deleted.';
+    if (projectIdOrMessage) {
+      message = projectIdOrMessage.includes(' ')
+        ? projectIdOrMessage
+        : `Project "${projectIdOrMessage}" was not found. It may have been deleted.`;
+    }
     super(message);
     this.name = 'ProjectNotFound';
     this.nextStep = nextStep;

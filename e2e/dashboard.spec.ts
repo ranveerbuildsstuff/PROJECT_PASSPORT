@@ -43,7 +43,7 @@ test.describe('Dashboard E2E Flows', () => {
     // Click "New project"
     await page.getByRole('button', { name: /^New project$/i }).first().click();
 
-    const dialog = page.getByRole('dialog', { name: 'New Project' });
+    const dialog = page.getByRole('dialog', { name: 'New project' });
     await expect(dialog).toBeVisible();
 
     // Submit with empty name
@@ -85,7 +85,7 @@ test.describe('Dashboard E2E Flows', () => {
 
     // Create a project first
     await page.getByRole('button', { name: /^New project$/i }).first().click();
-    const createDialog = page.getByRole('dialog', { name: 'New Project' });
+    const createDialog = page.getByRole('dialog', { name: 'New project' });
     await createDialog.getByLabel('Project name').fill('Initial Project Name');
     await createDialog.getByRole('button', { name: 'Create project' }).click();
 
@@ -96,7 +96,7 @@ test.describe('Dashboard E2E Flows', () => {
     // Click rename button
     await page.getByRole('button', { name: 'Rename Initial Project Name' }).click();
 
-    const renameDialog = page.getByRole('dialog', { name: 'Rename Project' });
+    const renameDialog = page.getByRole('dialog', { name: 'Rename project' });
     await expect(renameDialog).toBeVisible();
 
     const nameInput = renameDialog.getByLabel('New project name');
@@ -130,7 +130,7 @@ test.describe('Dashboard E2E Flows', () => {
 
     // Create a project
     await page.getByRole('button', { name: /^New project$/i }).first().click();
-    const createDialog = page.getByRole('dialog', { name: 'New Project' });
+    const createDialog = page.getByRole('dialog', { name: 'New project' });
     await createDialog.getByLabel('Project name').fill('Project To Delete');
     await createDialog.getByRole('button', { name: 'Create project' }).click();
 
@@ -140,7 +140,7 @@ test.describe('Dashboard E2E Flows', () => {
     // Open delete dialog
     await page.getByRole('button', { name: 'Delete Project To Delete' }).click();
 
-    const deleteDialog = page.getByRole('dialog', { name: 'Delete Project' });
+    const deleteDialog = page.getByRole('dialog', { name: 'Delete project' });
     await expect(deleteDialog).toBeVisible();
     await expect(
       deleteDialog.getByText(/Are you sure you want to delete “Project To Delete”?/)

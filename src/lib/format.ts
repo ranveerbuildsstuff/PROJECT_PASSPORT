@@ -20,3 +20,18 @@ export function formatDateTime(iso: string): string {
     return iso;
   }
 }
+
+export function formatProjectStatus(status: string): string {
+  switch (status) {
+    case 'idea':
+      return 'Idea';
+    case 'in_progress':
+      return 'In progress';
+    case 'paused':
+      return 'Paused';
+    case 'done':
+      return 'Done';
+    default:
+      return status;
+  }
+}

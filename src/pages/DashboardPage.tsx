@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Plus, FolderPlus, Edit3, Trash2, ArrowUpRight, FolderGit2 } from 'lucide-react';
+import { Plus, FolderPlus, Edit3, Trash2, FolderGit2 } from 'lucide-react';
 import {
   Button,
   Card,
@@ -21,7 +21,7 @@ import {
   savePassport,
   requestPersistentStorage,
 } from '../storage';
-import { formatDateTime } from '../lib';
+import { formatDateTime, formatProjectStatus } from '../lib';
 
 export function DashboardPage() {
   const navigate = useNavigate();
@@ -223,14 +223,14 @@ export function DashboardPage() {
                   <div className="flex-1 min-w-0">
                     <Link
                       to={`/project/${p.id}/overview`}
-                      className="text-base font-semibold text-text-primary hover:text-accent-brass transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-brass rounded flex items-center gap-1.5"
+                      title={p.name}
+                      className="text-base font-semibold text-text-primary hover:text-accent-brass transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-brass rounded flex items-center min-h-[44px]"
                     >
-                      <span className="truncate">{p.name}</span>
-                      <ArrowUpRight className="w-4 h-4 shrink-0 opacity-50 group-hover:opacity-100 transition-opacity" aria-hidden="true" />
+                      <span className="line-clamp-2">{p.name}</span>
                     </Link>
                     <div className="mt-1 flex items-center gap-2">
                       <Badge variant={getStatusVariant(p.status)}>
-                        STATUS: {p.status.toUpperCase()}
+                        {formatProjectStatus(p.status)}
                       </Badge>
                     </div>
                   </div>
@@ -287,7 +287,7 @@ export function DashboardPage() {
       <Dialog
         isOpen={isCreateOpen}
         onClose={() => !isSubmittingCreate && setIsCreateOpen(false)}
-        title="New Project"
+        title="New project"
         description="Create a new local passport record for an AI-assisted project."
       >
         <form onSubmit={handleCreateSubmit} noValidate className="flex flex-col gap-4">
@@ -336,7 +336,7 @@ export function DashboardPage() {
       <Dialog
         isOpen={!!renameTarget}
         onClose={() => !isSubmittingRename && setRenameTarget(null)}
-        title="Rename Project"
+        title="Rename project"
         description="Update the display name of this project across its passport records."
       >
         <form onSubmit={handleRenameSubmit} noValidate className="flex flex-col gap-4">
@@ -376,7 +376,7 @@ export function DashboardPage() {
       <Dialog
         isOpen={!!deleteTarget}
         onClose={() => !isSubmittingDelete && setDeleteTarget(null)}
-        title="Delete Project"
+        title="Delete project"
         description="Permanently remove this project and all associated passport data from local storage."
       >
         <div className="flex flex-col gap-4">

@@ -1,5 +1,10 @@
 import { test, expect } from '@playwright/test';
-import { shot, expectNoSeriousA11y, collectConsoleErrors } from './helpers';
+import {
+  shot,
+  expectNoSeriousA11y,
+  collectConsoleErrors,
+  auditPageLayoutAndTouchTargets,
+} from './helpers';
 
 test.describe('App Shell, Accessibility & Visuals', () => {
   test('8. Storage blocked: displays full-screen friendly screen without crashing', async ({
@@ -17,6 +22,9 @@ test.describe('App Shell, Accessibility & Visuals', () => {
     await expect(page.getByRole('heading', { name: 'Storage is blocked' })).toBeVisible();
     await expect(page.getByText('Project Passport runs entirely on your device')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Retry storage check' })).toBeVisible();
+
+    // Axe scan of storage-blocked screen
+    await expectNoSeriousA11y(page);
 
     // Capture screenshot of blocked screen
     await shot(page, 'storage-blocked');
@@ -86,7 +94,7 @@ test.describe('App Shell, Accessibility & Visuals', () => {
     // Press Enter to open dialog
     await page.keyboard.press('Enter');
 
-    const dialog = page.getByRole('dialog', { name: 'New Project' });
+    const dialog = page.getByRole('dialog', { name: 'New project' });
     await expect(dialog).toBeVisible();
 
     // Verify focus is trapped inside dialog
@@ -110,56 +118,103 @@ test.describe('App Shell, Accessibility & Visuals', () => {
     expect(returnedFocusText).toContain('New project');
   });
 
-  test('11. mobile-360 viewport checks: no horizontal scroll and minimum 44x44px touch targets', async ({
+  test('11. Touch target & layout overflow audit across empty state, 3 projects, overview, and all dialogs', async ({
     page,
   }) => {
+    // 1. Empty dashboard audit
     await page.goto('/');
-
-    // Check horizontal scroll
-    const hasHorizontalOverflow = await page.evaluate(() => {
-      return document.documentElement.scrollWidth > window.innerWidth;
-    });
-    expect(hasHorizontalOverflow).toBe(false);
-
-    // Check touch targets on interactive buttons & links
-    const undersizedElements = await page.evaluate(() => {
-      const interactive = Array.from(
-        document.querySelectorAll<HTMLElement>('button, a[href]')
-      );
-      const violations: string[] = [];
-
-      for (const el of interactive) {
-        if (el.offsetParent === null) continue; // skip hidden
-        // Skip screen-reader skip links
-        if (el.classList.contains('sr-only')) continue;
-
-        const rect = el.getBoundingClientRect();
-        // Allow minor sub-pixel rendering tolerance (43.5px)
-        if (rect.width < 43.5 || rect.height < 43.5) {
-          violations.push(
-            `${el.tagName} "${el.innerText || el.getAttribute('aria-label') || ''}" (${Math.round(rect.width)}x${Math.round(rect.height)}px)`
-          );
-        }
+    await page.evaluate(async () => {
+      const dbs = (await window.indexedDB.databases?.()) || [];
+      for (const d of dbs) {
+        if (d.name) window.indexedDB.deleteDatabase(d.name);
       }
-      return violations;
+      localStorage.clear();
     });
+    await page.reload();
+    await expect(page.getByRole('heading', { level: 3, name: 'No projects yet' })).toBeVisible();
+    await auditPageLayoutAndTouchTargets(page, 'empty-dashboard');
 
-    expect(undersizedElements).toEqual([]);
+    // 2. Open New project dialog audit
+    await page.getByRole('button', { name: /^New project$/i }).first().click();
+    const createDialog = page.getByRole('dialog', { name: 'New project' });
+    await expect(createDialog).toBeVisible();
+    await auditPageLayoutAndTouchTargets(page, 'new-project-dialog');
+
+    // 3. Create 3 projects
+    await createDialog.getByLabel('Project name').fill('Project Alpha: Autonomous Agent');
+    await createDialog.getByRole('button', { name: 'Create project' }).click();
+
+    await page.goto('/');
+    await page.getByRole('button', { name: /^New project$/i }).first().click();
+    await createDialog.getByLabel('Project name').fill('Project Beta: Code Review Harness');
+    await createDialog.getByRole('button', { name: 'Create project' }).click();
+
+    await page.goto('/');
+    await page.getByRole('button', { name: /^New project$/i }).first().click();
+    await createDialog.getByLabel('Project name').fill('Project Gamma: Local LLM Engine');
+    await createDialog.getByRole('button', { name: 'Create project' }).click();
+
+    // 4. Project Overview audit (including tab strip)
+    await expect(page.getByRole('heading', { level: 1, name: 'Project Gamma: Local LLM Engine' })).toBeVisible();
+    await auditPageLayoutAndTouchTargets(page, 'project-overview-tabstrip');
+
+    // 5. Dashboard with 3 projects audit
+    await page.goto('/');
+    await expect(page.getByRole('link', { name: /Project Alpha/ })).toBeVisible();
+    await auditPageLayoutAndTouchTargets(page, 'dashboard-3-projects');
+
+    // 6. Open Rename dialog audit
+    await page.getByRole('button', { name: 'Rename Project Alpha: Autonomous Agent' }).click();
+    const renameDialog = page.getByRole('dialog', { name: 'Rename project' });
+    await expect(renameDialog).toBeVisible();
+    await auditPageLayoutAndTouchTargets(page, 'rename-dialog');
+    await renameDialog.getByRole('button', { name: 'Cancel' }).click();
+    await expect(renameDialog).not.toBeVisible();
+
+    // 7. Open Delete dialog audit
+    await page.getByRole('button', { name: 'Delete Project Alpha: Autonomous Agent' }).click();
+    const deleteDialog = page.getByRole('dialog', { name: 'Delete project' });
+    await expect(deleteDialog).toBeVisible();
+    await auditPageLayoutAndTouchTargets(page, 'delete-dialog');
+    await deleteDialog.getByRole('button', { name: 'Cancel' }).click();
+    await expect(deleteDialog).not.toBeVisible();
+
+    // 8. Open Backup & restore dialog audit
+    await page.getByRole('button', { name: 'Backup and restore' }).click();
+    const backupDialog = page.getByRole('dialog', { name: 'Backup & restore' });
+    await expect(backupDialog).toBeVisible();
+    await auditPageLayoutAndTouchTargets(page, 'backup-dialog');
+    await backupDialog.getByRole('button', { name: 'Close dialog' }).click();
+    await expect(backupDialog).not.toBeVisible();
   });
 
   test('12 & 13. Comprehensive axe scans & full screenshot suite', async ({ page }) => {
+    test.slow();
     // 1. Empty dashboard screenshot & a11y scan
     await page.goto('/');
+    await page.evaluate(async () => {
+      const dbs = (await window.indexedDB.databases?.()) || [];
+      for (const d of dbs) {
+        if (d.name) window.indexedDB.deleteDatabase(d.name);
+      }
+      localStorage.clear();
+    });
+    await page.reload();
     await expect(page.getByRole('heading', { level: 3, name: 'No projects yet' })).toBeVisible();
     await expectNoSeriousA11y(page);
-    await shot(page, 'empty-dashboard');
+    await shot(page, 'empty-dashboard', { fullPage: true });
 
-    // 2. Open New Project Dialog screenshot & a11y scan
+    // 2. Open New Project Dialog screenshot & a11y scan (dark & light)
     await page.getByRole('button', { name: /^New project$/i }).first().click();
-    const createDialog = page.getByRole('dialog', { name: 'New Project' });
+    const createDialog = page.getByRole('dialog', { name: 'New project' });
     await expect(createDialog).toBeVisible();
     await expectNoSeriousA11y(page);
     await shot(page, 'open-dialog');
+
+    // Axe scan: New project dialog in light theme
+    await page.locator('html').evaluate((el) => el.setAttribute('data-theme', 'light'));
+    await expectNoSeriousA11y(page);
+    await page.locator('html').evaluate((el) => el.removeAttribute('data-theme'));
 
     // Create 3 projects
     await createDialog.getByLabel('Project name').fill('Project Alpha: Autonomous Agent');
@@ -175,17 +230,57 @@ test.describe('App Shell, Accessibility & Visuals', () => {
     await createDialog.getByLabel('Project name').fill('Project Gamma: Local LLM Engine');
     await createDialog.getByRole('button', { name: 'Create project' }).click();
 
-    // 3. Project overview screenshot & a11y scan
+    // 3. Project overview screenshot & a11y scan (dark & light)
     await expect(page.getByRole('heading', { level: 1, name: 'Project Gamma: Local LLM Engine' })).toBeVisible();
     await expectNoSeriousA11y(page);
-    await shot(page, 'project-overview');
+    await shot(page, 'project-overview', { fullPage: true });
 
-    // 4. Dashboard with 3 projects screenshot & a11y scan
+    // Axe scan: Project overview in light theme
+    await page.locator('html').evaluate((el) => el.setAttribute('data-theme', 'light'));
+    await expectNoSeriousA11y(page);
+    await page.locator('html').evaluate((el) => el.removeAttribute('data-theme'));
+
+    // Axe scan: Placeholder tab
+    await page.getByRole('tab', { name: 'Passport' }).click();
+    await expect(page.getByRole('heading', { name: 'Passport Tab' })).toBeVisible();
+    await expectNoSeriousA11y(page);
+
+    // 4. Dashboard with 3 projects screenshot & a11y scan (dark & light)
     await page.goto('/');
     await expect(page.getByRole('link', { name: /Project Alpha/ })).toBeVisible();
     await expect(page.getByRole('link', { name: /Project Beta/ })).toBeVisible();
     await expect(page.getByRole('link', { name: /Project Gamma/ })).toBeVisible();
     await expectNoSeriousA11y(page);
-    await shot(page, 'dashboard-3-projects');
+    await shot(page, 'dashboard-3-projects', { fullPage: true });
+
+    // Axe scan: Dashboard with 3 projects in light theme
+    await page.locator('html').evaluate((el) => el.setAttribute('data-theme', 'light'));
+    await expectNoSeriousA11y(page);
+    await shot(page, 'light-theme', { fullPage: true });
+    await page.locator('html').evaluate((el) => el.removeAttribute('data-theme'));
+
+    // 5. Axe scan: Rename dialog
+    await page.getByRole('button', { name: 'Rename Project Alpha: Autonomous Agent' }).click();
+    const renameDialog = page.getByRole('dialog', { name: 'Rename project' });
+    await expect(renameDialog).toBeVisible();
+    await expectNoSeriousA11y(page);
+    await renameDialog.getByRole('button', { name: 'Cancel' }).click();
+    await expect(renameDialog).not.toBeVisible();
+
+    // 6. Axe scan: Delete dialog
+    await page.getByRole('button', { name: 'Delete Project Alpha: Autonomous Agent' }).click();
+    const deleteDialog = page.getByRole('dialog', { name: 'Delete project' });
+    await expect(deleteDialog).toBeVisible();
+    await expectNoSeriousA11y(page);
+    await deleteDialog.getByRole('button', { name: 'Cancel' }).click();
+    await expect(deleteDialog).not.toBeVisible();
+
+    // 7. Axe scan: Backup dialog
+    await page.getByRole('button', { name: 'Backup and restore' }).click();
+    const backupDialog = page.getByRole('dialog', { name: 'Backup & restore' });
+    await expect(backupDialog).toBeVisible();
+    await expectNoSeriousA11y(page);
+    await backupDialog.getByRole('button', { name: 'Close dialog' }).click();
+    await expect(backupDialog).not.toBeVisible();
   });
 });

@@ -51,36 +51,43 @@ export function Tabs({
   };
 
   return (
-    <div
-      ref={tabListRef}
-      role="tablist"
-      aria-label={ariaLabel}
-      className={`flex items-center gap-1 border-b border-border-subtle overflow-x-auto no-scrollbar ${className}`}
-    >
-      {tabs.map((tab, idx) => {
-        const isActive = activeTab === tab.id;
-        return (
-          <button
-            key={tab.id}
-            id={`tab-${tab.id}`}
-            role="tab"
-            aria-selected={isActive}
-            aria-controls={`tabpanel-${tab.id}`}
-            tabIndex={isActive ? 0 : -1}
-            onClick={() => onChange(tab.id)}
-            onKeyDown={(e) => handleKeyDown(e, idx)}
-            className={`min-h-[44px] px-3.5 py-2 font-medium text-sm inline-flex items-center gap-2 cursor-pointer transition-colors whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-brass -mb-[1px] ${
-              isActive
-                ? 'border-b-2 border-accent-brass text-text-primary font-semibold'
-                : 'border-b-2 border-transparent text-text-muted hover:text-text-primary hover:border-border-subtle'
-            }`}
-          >
-            {tab.icon && <span className="w-4 h-4" aria-hidden="true">{tab.icon}</span>}
-            <span>{tab.label}</span>
-            {tab.badge && <span>{tab.badge}</span>}
-          </button>
-        );
-      })}
+    <div className={`relative max-w-full overflow-hidden ${className}`}>
+      <div
+        ref={tabListRef}
+        role="tablist"
+        aria-label={ariaLabel}
+        className="flex items-center gap-1 border-b border-border-subtle overflow-x-auto no-scrollbar scroll-smooth w-full"
+      >
+        {tabs.map((tab, idx) => {
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              id={`tab-${tab.id}`}
+              role="tab"
+              aria-selected={isActive}
+              aria-controls={`tabpanel-${tab.id}`}
+              tabIndex={isActive ? 0 : -1}
+              onClick={() => onChange(tab.id)}
+              onKeyDown={(e) => handleKeyDown(e, idx)}
+              className={`min-h-[44px] min-w-[44px] px-3.5 py-2 font-medium text-sm inline-flex items-center justify-center gap-2 cursor-pointer transition-colors whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-brass -mb-[1px] shrink-0 ${
+                isActive
+                  ? 'border-b-2 border-accent-brass text-text-primary font-semibold'
+                  : 'border-b-2 border-transparent text-text-muted hover:text-text-primary hover:border-border-subtle'
+              }`}
+            >
+              {tab.icon && <span className="w-4 h-4" aria-hidden="true">{tab.icon}</span>}
+              <span>{tab.label}</span>
+              {tab.badge && <span>{tab.badge}</span>}
+            </button>
+          );
+        })}
+      </div>
+      {/* Edge fade affordance to visually indicate horizontal scrollability */}
+      <div
+        className="pointer-events-none absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-bg-app to-transparent"
+        aria-hidden="true"
+      />
     </div>
   );
 }

@@ -1,0 +1,5 @@
+{
+  "title": "Invalid Structure Test File",
+  "items": [1, 2, 3],
+  "note": "This file is valid JSON but lacks backupVersion and projects structure"
+}
