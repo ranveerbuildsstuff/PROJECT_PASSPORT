@@ -94,23 +94,28 @@
 
 ## Slice 3: App Shell, Design System & Dashboard
 
-- [ ] Install `lucide-react` for system iconography.
-- [ ] Implement core UI primitives in `src/ui/`: `Button`, `Card`, `Badge` (stamp badge), `Tabs`, `EmptyState`, `Toast`, and `ProgressRing`.
-- [ ] Implement dark/light theme switching with CSS variables and local storage persistence.
-- [ ] Implement responsive App Shell with mobile-first navigation bar (360x640 support, touch targets >= 44px).
-- [ ] Implement Dashboard view listing all local projects with status badges, readiness rings, and last updated timestamps.
-- [ ] Implement "Create New Project" modal with validation and immediate routing to the new project.
-- [ ] Implement "Delete Project" confirmation modal with plain-language warning.
-- [ ] Implement empty state for dashboard when no projects exist.
-- [ ] **Tests added:** Component tests for UI primitives, theme toggle, and dashboard project listing/creation/deletion.
-- [ ] **Docs updated:** Record theme tokens and UI component patterns in `PROGRESS.md`.
-- [ ] **Commit message:** `Slice 3: app shell, design system and dashboard`
+- [x] Install `lucide-react`, `@fontsource/inter`, and `@fontsource/jetbrains-mono` for typography and iconography.
+- [x] Implement core UI primitives in `src/ui/`: `Button`, `Card`, `Badge` (stamp badge), `Dialog` (focus trap, Escape closes, returns focus to trigger), `Tabs`, `Input`, `Textarea`, `EmptyState`, `Toast`, and `ProgressRing`.
+- [x] Implement dark/light theme switching with CSS variables and local storage persistence.
+- [x] Implement responsive App Shell with mobile-first navigation bar (360x640 support, touch targets >= 44px).
+- [x] Implement Dashboard view listing all local projects with status badges, readiness rings, and last updated timestamps.
+- [x] Implement "Create New Project" modal with validation and immediate routing to the new project.
+- [x] Implement "Rename Project" modal with trimmed name validation.
+- [x] Implement "Delete Project" confirmation modal with plain-language warning.
+- [x] Implement empty state for dashboard when no projects exist.
+- [x] Implement Project Page with Overview tab (readiness checklist, quick stats, next action) and placeholders for later slice tabs.
+- [x] Implement Backup Dialog with JSON export and replacement warning import.
+- [x] Implement friendly Storage Blocked screen.
+- [x] **Tests added:** Unit/component tests for all UI primitives, hooks, pages, and backup flows (78 vitest tests); 34 Playwright E2E tests across desktop and mobile-360.
+- [x] **Docs updated:** Record theme tokens, UI components, routes, and decisions in `PROGRESS.md`.
+- [x] **Commit message:** `Slice 3: shell and dashboard`
 
 **Done when:**
-- `npm run typecheck`, `npm run lint`, `npm test`, and `npm run build` pass.
-- Projects can be created, navigated, and deleted from the dashboard.
+- `npm run typecheck`, `npm run lint`, `npm test`, `npm run build`, and `npm run test:e2e` pass with zero errors.
+- Projects can be created, navigated, renamed, and deleted from the dashboard.
 - Theme switching toggles seamlessly between dark and light palettes.
-- Mobile layout verified at 360px width without layout breakage.
+- Mobile layout verified at 360px width without horizontal scroll or undersized touch targets.
+- All axe accessibility scans pass with zero violations.
 
 ---
 

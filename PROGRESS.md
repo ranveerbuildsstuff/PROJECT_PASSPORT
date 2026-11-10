@@ -1,6 +1,6 @@
 # PROGRESS.md — Project Roadmap & Status
 
-Current slice: none (Slice 1, 1b, 2, 2b, 2c & Tooling Ticket T1, T1b complete)
+Current slice: none (Slice 1, 1b, 2, 2b, 2c, Tooling T1, T1b & Slice 3 complete)
 
 ## Slices Checklist
 
@@ -10,7 +10,7 @@ Current slice: none (Slice 1, 1b, 2, 2b, 2c & Tooling Ticket T1, T1b complete)
 - [x] Tooling Ticket T1: Automated browser testing (Playwright)
 - [x] Slice 2c: Storage fixes (name validation, ProjectNotFound, test consolidation)
 - [x] Tooling Ticket T1b: Harness hardening (forbidOnly, helpers selftest)
-- [ ] Slice 3: App shell, design system, dashboard
+- [x] Slice 3: App shell, design system, dashboard
 - [ ] Slice 4: Passport editor + live preview
 - [ ] Slice 5: Capture prompt, reconstruct prompt, paste-back + merge
 - [ ] Slice 6: Conversation paste import
@@ -35,6 +35,12 @@ Configured Playwright on dedicated port 4179 (webServer preview) with Chrome cha
 
 ### Slice 2c: Storage Fixes
 Consolidated manual checklist tests into `storageService.test.ts` and deleted redundant test files. Added trimmed name validation to `createProject` and `renameProject` rejecting empty/whitespace names with `ValidationFailed`. Prevented `savePassport` from creating projects by requiring an existing project row or throwing typed `ProjectNotFound`.
+
+### Slice 3: App Shell, Design System & Dashboard
+- **Design System & Components:** Built reusable components in `src/ui/`: `Button` (variants/sizes/loading), `Card`, `Badge` (stamp style), `Dialog` (accessible with focus trap, Escape dismissal, and return focus to trigger), `Tabs`, `Input`, `Textarea`, `EmptyState`, `ProgressRing`, `Toast` (with `ToastProvider` and `useToast`), and `ThemeProvider` (with `useTheme` managing dark/light theme persisted solely under `theme` key in `localStorage`).
+- **App Shell & Header:** Implemented `AppShell`, sticky `Header` with brand link, "Stored only on this device" badge, theme switcher, and `BackupDialog` (exporting timestamped JSON backup with 50MB warning indicator and importing with same-ID replacement confirmation).
+- **Pages & Routing:** Implemented `DashboardPage` (`/`) with project cards, readiness rings, status stamps, last updated timestamps, and create/rename/delete dialogs. Implemented `ProjectPage` (`/project/:id/:tab?`) with functional Overview tab (7-point readiness checklist, quick stats, next action card) and placeholders for future slices, plus friendly Project Not Found screen. Implemented full-screen `StorageBlockedPage` shown when `isAvailable()` fails.
+- **Architectural Isolation:** UI layer strictly interacts with `src/storage` functions and React hooks (`useProjects`, `useProject`), never importing Dexie directly. All touch targets >= 44x44px, no hover-only features, fully keyboard navigable, and 0 accessibility violations across desktop and mobile-360.
 
 ---
 

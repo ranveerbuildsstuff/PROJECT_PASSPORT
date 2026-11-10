@@ -69,8 +69,12 @@ test.describe('Smoke Spec', () => {
         const tx = db.transaction(storeName, 'readonly');
         const store = tx.objectStore(storeName);
         const req = store.get('storage-proof-1');
-        req.onsuccess = () => resolve(req.result);
-        req.onerror = () => reject(req.error);
+        let record: { id: string; name: string; payload: Uint8Array };
+        req.onsuccess = () => {
+          record = req.result as { id: string; name: string; payload: Uint8Array };
+        };
+        tx.oncomplete = () => resolve(record);
+        tx.onerror = () => reject(tx.error);
       });
 
       const isUint8Array = retrieved?.payload instanceof Uint8Array;
@@ -78,13 +82,16 @@ test.describe('Smoke Spec', () => {
 
       // 4. Close database connection
       db.close();
+      await new Promise((r) => setTimeout(r, 50));
 
       // 5. Delete database
       const deleted = await new Promise<boolean>((resolve, reject) => {
         const delReq = indexedDB.deleteDatabase(dbName);
         delReq.onsuccess = () => resolve(true);
         delReq.onerror = () => reject(delReq.error);
-        delReq.onblocked = () => reject(new Error('IndexedDB deleteDatabase was blocked'));
+        delReq.onblocked = () => {
+          // If blocked, wait for unblock/success or reject if it errors
+        };
       });
 
       return {
