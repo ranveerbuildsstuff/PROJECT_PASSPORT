@@ -46,7 +46,10 @@ export function SidePanel({
     <aside className={`flex flex-col gap-6 h-full ${className}`}>
       {/* Desktop Sticky Header: Autosave Status */}
       {saveStatus && (
-        <div className="sticky top-20 z-20 flex items-center justify-between p-3.5 rounded-lg border border-border-subtle bg-bg-surface shadow-sm">
+        <div
+          className="sticky z-20 flex items-center justify-between p-3.5 rounded-lg border border-border-subtle bg-bg-surface shadow-sm"
+          style={{ top: 'calc(var(--app-header-h) + 1rem)' }}
+        >
           <div className="flex items-center gap-2">
             <span className="text-xs font-semibold text-text-muted">Autosave:</span>
             <AutosaveStatus saveStatus={saveStatus} statusMessage={statusMessage} />

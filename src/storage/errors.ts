@@ -72,3 +72,34 @@ export class ProjectNotFound extends Error {
   }
 }
 
+/**
+ * Maps any storage error to human-readable plain language with no raw IDs or stack traces.
+ */
+export function describeStorageError(err: unknown): string {
+  if (err instanceof ProjectNotFound) {
+    return 'This project was not found. It may have been deleted. Go back to your projects and try again.';
+  }
+
+  if (err instanceof ValidationFailed) {
+    if (err.errors && err.errors.length > 0) {
+      return `Validation failed: ${err.errors[0]}`;
+    }
+    return 'The passport data contains validation errors. Please review and update before saving.';
+  }
+
+  if (err instanceof StorageUnavailable) {
+    return 'Local storage is unavailable or blocked in your browser. Please check your browser settings.';
+  }
+
+  if (err instanceof QuotaExceeded || (err instanceof Error && /quota/i.test(err.message))) {
+    return 'Local storage quota has been exceeded. Please free up space or remove older projects.';
+  }
+
+  if (err instanceof BackupInvalid) {
+    return 'The backup file is invalid or cannot be read.';
+  }
+
+  // Unknown or generic errors - never expose stack traces or raw technical internals
+  return 'An unexpected storage error occurred. Your changes could not be saved.';
+}
+

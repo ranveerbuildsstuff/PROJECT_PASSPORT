@@ -141,9 +141,12 @@ export function PassportEditor({
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Mobile Sticky Bar: Slim bar right below the app header (top-16) */}
+      {/* Mobile Sticky Bar: Slim bar right below the app header */}
       {!isDesktop && (
-        <div className="sticky top-16 z-30 -mx-4 px-4 py-2 border-b border-border-subtle bg-bg-surface flex items-center justify-between shadow-xs">
+        <div
+          className="sticky z-30 -mx-4 px-4 py-2 border-b border-border-subtle bg-bg-surface flex items-center justify-between shadow-xs"
+          style={{ top: 'var(--app-header-h)' }}
+        >
           <AutosaveStatus saveStatus={saveStatus} statusMessage={statusMessage} />
           <Button
             type="button"

@@ -1,4 +1,6 @@
-import { test, type Page } from '@playwright/test';
+import fs from 'node:fs';
+import path from 'node:path';
+import { test, type Page, type Locator } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 
 /**
@@ -6,14 +8,44 @@ import AxeBuilder from '@axe-core/playwright';
  */
 export interface ShotOptions {
   fullPage?: boolean;
+  reviewName?: string;
+  clip?: { x: number; y: number; width: number; height: number };
 }
 
 /**
- * Saves a screenshot to e2e-results/screenshots/<project>-<name>.png
+ * Normalizes ANY CSS color via canvas (fillStyle = computed backgroundColor;
+ * fillRect 1x1; read alpha byte from getImageData), so rgba(), rgb(/), color(srgb),
+ * oklab/oklch all work across browsers.
+ * Returns normalized alpha between 0 and 1.
+ */
+export async function getBackgroundAlpha(locator: Locator): Promise<number> {
+  return await locator.evaluate((el: HTMLElement) => {
+    const computed = window.getComputedStyle(el);
+    const bg = computed.backgroundColor;
+    const canvas = document.createElement('canvas');
+    canvas.width = 1;
+    canvas.height = 1;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx) return 1;
+    ctx.clearRect(0, 0, 1, 1);
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, 1, 1);
+    const imgData = ctx.getImageData(0, 0, 1, 1);
+    return (imgData.data[3] ?? 255) / 255;
+  });
+}
+
+/**
+ * Saves a screenshot to e2e-results/screenshots/<project>-<name>.png.
+ * When options.reviewName is set, COPIES the file into e2e-results/review/<reviewName>.
  * When { fullPage: true }, temporarily makes sticky and fixed elements static
  * (injects a style tag, then removes it) so they appear at their natural position.
  */
-export async function shot(page: Page, name: string, options?: ShotOptions): Promise<string> {
+export async function shot(
+  pageOrLocator: Page | Locator,
+  name: string,
+  options?: ShotOptions
+): Promise<string> {
   let projectName = 'desktop';
   try {
     const info = test.info();
@@ -25,8 +57,14 @@ export async function shot(page: Page, name: string, options?: ShotOptions): Pro
   }
 
   const filePath = `e2e-results/screenshots/${projectName}-${name}.png`;
+  const isLocator = 'page' in pageOrLocator && typeof (pageOrLocator as Locator).screenshot === 'function';
+  const page = isLocator ? (pageOrLocator as Locator).page() : (pageOrLocator as Page);
 
-  if (options?.fullPage) {
+  if (isLocator) {
+    await (pageOrLocator as Locator).screenshot({ path: filePath });
+  } else if (options?.clip) {
+    await page.screenshot({ path: filePath, clip: options.clip });
+  } else if (options?.fullPage) {
     const styleHandle = await page.addStyleTag({
       content: `
         header,
@@ -41,10 +79,18 @@ export async function shot(page: Page, name: string, options?: ShotOptions): Pro
     try {
       await page.screenshot({ path: filePath, fullPage: true });
     } finally {
+      // Documented cleanup: remove temporary fullpage screenshot style tag
       await styleHandle.evaluate((el) => (el as Element).remove()).catch(() => {});
     }
   } else {
     await page.screenshot({ path: filePath, fullPage: false });
+  }
+
+  if (options?.reviewName) {
+    const reviewDir = path.resolve('e2e-results/review');
+    await fs.promises.mkdir(reviewDir, { recursive: true });
+    const reviewPath = path.join(reviewDir, options.reviewName);
+    await fs.promises.copyFile(filePath, reviewPath);
   }
 
   return filePath;
@@ -52,23 +98,16 @@ export async function shot(page: Page, name: string, options?: ShotOptions): Pro
 
 /**
  * Viewport screenshot helper that scrolls to the very top first,
- * saves to e2e-results/screenshots/<project>-<name>-viewport-top.png
+ * saves to e2e-results/screenshots/<project>-<name>-viewport-top.png.
+ * When options.reviewName is set, copies to e2e-results/review/<reviewName>.
  */
-export async function shotViewportTop(page: Page, name: string): Promise<string> {
-  let projectName = 'desktop';
-  try {
-    const info = test.info();
-    if (info?.project?.name) {
-      projectName = info.project.name;
-    }
-  } catch {
-    // Called outside an active test context
-  }
-
+export async function shotViewportTop(
+  page: Page,
+  name: string,
+  options?: ShotOptions
+): Promise<string> {
   await page.evaluate(() => window.scrollTo(0, 0));
-  const filePath = `e2e-results/screenshots/${projectName}-${name}-viewport-top.png`;
-  await page.screenshot({ path: filePath, fullPage: false });
-  return filePath;
+  return await shot(page, `${name}-viewport-top`, { ...options, fullPage: false });
 }
 
 /**

@@ -77,6 +77,13 @@ private/          # Gitignored directory for real user test files and exports
     - Playwright launches its own throwaway headless browser. NEVER use MCP chrome-devtools tools, browser subagents, remote debugging ports, or the user's real Chrome profile (no `launchPersistentContext` with a user data dir, no `--remote-debugging-port`, never close or restart the user's Chrome).
     - Dedicated E2E web server runs strictly on port `4179` (`127.0.0.1:4179`), started and stopped automatically by Playwright's `webServer` configuration.
     - Two projects must be tested: `desktop` (1280x800) and `mobile-360` (viewport 360x640, `isMobile: true`, `hasTouch: true`).
+13. **Test Integrity Rules:**
+    - **No conditional guards around assertions:** Never wrap an assertion in `if (await x.isVisible())` or similar guards; branch strictly on deterministic metadata like `test.info().project.name`.
+    - **No `.catch(() => {})` in specs:** Catch-all error swallowing is strictly forbidden in test specs, except for explicitly documented resource cleanup (e.g. removing temporary style tags injected for screenshots).
+    - **Selftests for parsed/normalized assertions:** Any assertion or helper that parses, normalizes, or transforms a value (such as canvas background alpha extraction or contrast metrics) must include automated selftests in `e2e/helpers.selftest.spec.ts` proving it fails on non-conforming values.
+    - **Exact text assertions on counts:** Text assertions verifying item or restored entity counts must use exact matching (e.g. `getByText('Restored 1 project', { exact: true })`).
+    - **Execution time ceiling:** No individual test may exceed 20 seconds. Heavy tests spanning multiple views or dialogs must be split into dedicated per-screen tests with one accessibility scan each.
+    - **Deterministic state transitions:** Observe state changes and transitions using DOM observers (such as `MutationObserver`) or distinct event listeners rather than loose regexes matching either the starting or ending state (e.g. no `/Saving|Saved/`).
 
 ## 5. Per-Slice Execution Process
 

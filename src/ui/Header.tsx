@@ -16,10 +16,14 @@ export function Header({ onRefreshProjects }: HeaderProps) {
   return (
     <>
       <header
-        className="sticky top-0 z-40 w-full border-b border-border-subtle bg-bg-surface"
-        style={{ backdropFilter: 'none', WebkitBackdropFilter: 'none' }}
+        className="sticky top-0 z-40 w-full border-b border-border-subtle bg-bg-surface box-border"
+        style={{
+          height: 'var(--app-header-h)',
+          backdropFilter: 'none',
+          WebkitBackdropFilter: 'none',
+        }}
       >
-        <div className="max-w-6xl mx-auto px-3 sm:px-6 h-16 flex items-center justify-between gap-1 sm:gap-4">
+        <div className="max-w-6xl mx-auto px-3 sm:px-6 h-full flex items-center justify-between gap-1 sm:gap-4">
           {/* Logo & Product Name */}
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             <h1 className="text-base sm:text-lg font-bold tracking-tight whitespace-nowrap m-0 p-0 leading-none">

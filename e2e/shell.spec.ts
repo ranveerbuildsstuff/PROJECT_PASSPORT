@@ -5,6 +5,7 @@ import {
   collectConsoleErrors,
   auditPageLayoutAndTouchTargets,
   seedProjects,
+  getBackgroundAlpha,
 } from './helpers';
 
 test.describe('App Shell, Accessibility & Visuals', () => {
@@ -194,120 +195,151 @@ test.describe('App Shell, Accessibility & Visuals', () => {
     await expect(backupDialog).not.toBeVisible();
   });
 
-  test('12. Axe scans in dark theme across dashboard, overview, dialogs, and placeholder tab', async ({
-    page,
-  }) => {
-    // 1. Seed 3 projects through UI helper
+  test('12a. Dark theme axe scan: Dashboard with 3 projects', async ({ page }) => {
     await seedProjects(page, 3);
-
-    // 2. Dashboard with 3 projects scan
     await expect(page.getByRole('link', { name: /Project Alpha/ })).toBeVisible();
     await expectNoSeriousA11y(page);
+  });
 
-    // 3. New project dialog scan
+  test('12b. Dark theme axe scan: New project dialog', async ({ page }) => {
+    await page.goto('/');
     await page.getByRole('button', { name: /^New project$/i }).first().click();
     const createDialog = page.getByRole('dialog', { name: 'New project' });
     await expect(createDialog).toBeVisible();
     await expectNoSeriousA11y(page);
-    await createDialog.getByRole('button', { name: 'Cancel' }).click();
-    await expect(createDialog).not.toBeVisible();
+  });
 
-    // 5. Rename dialog scan
-    await page.getByRole('button', { name: 'Rename Project Alpha: Autonomous Agent' }).click();
+  test('12c. Dark theme axe scan: Rename project dialog', async ({ page }) => {
+    await seedProjects(page, 1);
+    await page.getByRole('button', { name: /Rename Project Alpha/i }).click();
     const renameDialog = page.getByRole('dialog', { name: 'Rename project' });
     await expect(renameDialog).toBeVisible();
     await expectNoSeriousA11y(page);
-    await renameDialog.getByRole('button', { name: 'Cancel' }).click();
-    await expect(renameDialog).not.toBeVisible();
+  });
 
-    // 6. Delete dialog scan
-    await page.getByRole('button', { name: 'Delete Project Alpha: Autonomous Agent' }).click();
+  test('12d. Dark theme axe scan: Delete project dialog', async ({ page }) => {
+    await seedProjects(page, 1);
+    await page.getByRole('button', { name: /Delete Project Alpha/i }).click();
     const deleteDialog = page.getByRole('dialog', { name: 'Delete project' });
     await expect(deleteDialog).toBeVisible();
     await expectNoSeriousA11y(page);
-    await deleteDialog.getByRole('button', { name: 'Cancel' }).click();
-    await expect(deleteDialog).not.toBeVisible();
+  });
 
-    // 7. Backup dialog scan
+  test('12e. Dark theme axe scan: Backup & restore dialog', async ({ page }) => {
+    await page.goto('/');
     await page.getByRole('button', { name: 'Backup and restore' }).click();
     const backupDialog = page.getByRole('dialog', { name: 'Backup & restore' });
     await expect(backupDialog).toBeVisible();
     await expectNoSeriousA11y(page);
-    await backupDialog.getByRole('button', { name: 'Close dialog' }).click();
-    await expect(backupDialog).not.toBeVisible();
+  });
 
-    // 8. Project overview scan
-    await page.getByRole('link', { name: 'Project Gamma: Local LLM Engine' }).click();
-    await expect(page.getByRole('heading', { level: 1, name: 'Project Gamma: Local LLM Engine' })).toBeVisible();
+  test('12f. Dark theme axe scan: Project overview', async ({ page }) => {
+    await seedProjects(page, 1);
+    await page.getByRole('link', { name: /Project Alpha/i }).click();
+    await expect(page.getByRole('heading', { level: 1, name: /Project Alpha/i })).toBeVisible();
     await expectNoSeriousA11y(page);
+  });
 
-    // 9. Placeholder tab scan (Conversations is placeholder tab in Slice 4)
+  test('12g. Dark theme axe scan: Placeholder tab', async ({ page }) => {
+    await seedProjects(page, 1);
+    await page.getByRole('link', { name: /Project Alpha/i }).click();
     await page.getByRole('tab', { name: 'Conversations' }).click();
     await expect(page.getByRole('heading', { name: 'Conversations Tab' })).toBeVisible();
     await expectNoSeriousA11y(page);
   });
 
-  test('13. Axe scans in light theme across dashboard, overview, dialogs, and placeholder tab', async ({
-    page,
-  }) => {
-    // Seed 3 projects through UI helper
-    await seedProjects(page, 3);
-
-    // Set light theme in localStorage and on html element
+  test('13a. Light theme axe scan: Dashboard with 3 projects', async ({ page }) => {
+    await page.goto('/');
     await page.evaluate(() => {
       localStorage.setItem('theme', 'light');
       document.documentElement.setAttribute('data-theme', 'light');
     });
-
-    // 1. Dashboard with 3 projects scan in light theme
+    await seedProjects(page, 3);
     await page.goto('/');
     await expect(page.getByRole('link', { name: /Project Alpha/ })).toBeVisible();
     await expectNoSeriousA11y(page);
+  });
 
-    // 2. New project dialog in light theme
+  test('13b. Light theme axe scan: New project dialog', async ({ page }) => {
+    await page.goto('/');
+    await page.evaluate(() => {
+      localStorage.setItem('theme', 'light');
+      document.documentElement.setAttribute('data-theme', 'light');
+    });
+    await page.reload();
     await page.getByRole('button', { name: /^New project$/i }).first().click();
     const createDialog = page.getByRole('dialog', { name: 'New project' });
     await expect(createDialog).toBeVisible();
     await expectNoSeriousA11y(page);
-    await createDialog.getByRole('button', { name: 'Cancel' }).click();
-    await expect(createDialog).not.toBeVisible();
+  });
 
-    // 3. Rename dialog in light theme
-    await page.getByRole('button', { name: 'Rename Project Alpha: Autonomous Agent' }).click();
+  test('13c. Light theme axe scan: Rename project dialog', async ({ page }) => {
+    await page.goto('/');
+    await page.evaluate(() => {
+      localStorage.setItem('theme', 'light');
+      document.documentElement.setAttribute('data-theme', 'light');
+    });
+    await seedProjects(page, 1);
+    await page.getByRole('button', { name: /Rename Project Alpha/i }).click();
     const renameDialog = page.getByRole('dialog', { name: 'Rename project' });
     await expect(renameDialog).toBeVisible();
     await expectNoSeriousA11y(page);
-    await renameDialog.getByRole('button', { name: 'Cancel' }).click();
-    await expect(renameDialog).not.toBeVisible();
+  });
 
-    // 4. Delete dialog in light theme
-    await page.getByRole('button', { name: 'Delete Project Alpha: Autonomous Agent' }).click();
+  test('13d. Light theme axe scan: Delete project dialog', async ({ page }) => {
+    await page.goto('/');
+    await page.evaluate(() => {
+      localStorage.setItem('theme', 'light');
+      document.documentElement.setAttribute('data-theme', 'light');
+    });
+    await seedProjects(page, 1);
+    await page.getByRole('button', { name: /Delete Project Alpha/i }).click();
     const deleteDialog = page.getByRole('dialog', { name: 'Delete project' });
     await expect(deleteDialog).toBeVisible();
     await expectNoSeriousA11y(page);
-    await deleteDialog.getByRole('button', { name: 'Cancel' }).click();
-    await expect(deleteDialog).not.toBeVisible();
+  });
 
-    // 5. Backup dialog in light theme
+  test('13e. Light theme axe scan: Backup & restore dialog', async ({ page }) => {
+    await page.goto('/');
+    await page.evaluate(() => {
+      localStorage.setItem('theme', 'light');
+      document.documentElement.setAttribute('data-theme', 'light');
+    });
+    await page.reload();
     await page.getByRole('button', { name: 'Backup and restore' }).click();
     const backupDialog = page.getByRole('dialog', { name: 'Backup & restore' });
     await expect(backupDialog).toBeVisible();
     await expectNoSeriousA11y(page);
-    await backupDialog.getByRole('button', { name: 'Close dialog' }).click();
-    await expect(backupDialog).not.toBeVisible();
+  });
 
-    // 6. Project overview in light theme
-    await page.getByRole('link', { name: 'Project Gamma: Local LLM Engine' }).click();
-    await expect(page.getByRole('heading', { level: 1, name: 'Project Gamma: Local LLM Engine' })).toBeVisible();
+  test('13f. Light theme axe scan: Project overview', async ({ page }) => {
+    await page.goto('/');
+    await page.evaluate(() => {
+      localStorage.setItem('theme', 'light');
+      document.documentElement.setAttribute('data-theme', 'light');
+    });
+    await seedProjects(page, 1);
+    await page.getByRole('link', { name: /Project Alpha/i }).click();
+    await expect(page.getByRole('heading', { level: 1, name: /Project Alpha/i })).toBeVisible();
     await expectNoSeriousA11y(page);
+  });
 
-    // 7. Placeholder tab in light theme (Conversations is placeholder tab in Slice 4)
+  test('13g. Light theme axe scan: Placeholder tab', async ({ page }) => {
+    await page.goto('/');
+    await page.evaluate(() => {
+      localStorage.setItem('theme', 'light');
+      document.documentElement.setAttribute('data-theme', 'light');
+    });
+    await seedProjects(page, 1);
+    await page.getByRole('link', { name: /Project Alpha/i }).click();
     await page.getByRole('tab', { name: 'Conversations' }).click();
     await expect(page.getByRole('heading', { name: 'Conversations Tab' })).toBeVisible();
     await expectNoSeriousA11y(page);
   });
 
   test('14. Full screenshot suite for visual review', async ({ page }) => {
+    const isMobile = test.info().project.name === 'mobile-360';
+
     // 1. Empty dashboard screenshot
     await page.goto('/');
     await expect(page.getByRole('heading', { level: 3, name: 'No projects yet' })).toBeVisible();
@@ -326,10 +358,10 @@ test.describe('App Shell, Accessibility & Visuals', () => {
 
     // 4. Dashboard with 3 projects screenshot
     await expect(page.getByRole('link', { name: /Project Alpha/ })).toBeVisible();
-    const dashboardShot = await shot(page, 'dashboard-3-projects', { fullPage: true });
-    if (dashboardShot.includes('mobile-360')) {
-      await page.screenshot({ path: 'e2e-results/review/mobile-360-dashboard-3-projects.png', fullPage: true });
-    }
+    await shot(page, 'dashboard-3-projects', {
+      fullPage: true,
+      reviewName: isMobile ? 'mobile-360-dashboard-3-projects.png' : undefined,
+    });
 
     // 5. Light theme dashboard screenshot
     await page.locator('html').evaluate((el) => el.setAttribute('data-theme', 'light'));
@@ -348,65 +380,67 @@ test.describe('App Shell, Accessibility & Visuals', () => {
     collectConsoleErrors(page);
     await page.goto('/');
 
-    const checkHeader = async () => {
-      const header = page.locator('header');
-      await expect(header).toBeVisible();
+    const isMobile = test.info().project.name === 'mobile-360';
+    const header = page.locator('header');
+    await expect(header).toBeVisible();
 
-      const { bgAlpha, backdropFilter, scrollWidth, clientWidth } = await header.evaluate((el) => {
+    const assertHeaderOpaqueAndContained = async () => {
+      const alpha = await getBackgroundAlpha(header);
+      expect(alpha).toBe(1);
+
+      const { opacity, backdropFilter, scrollWidth, clientWidth } = await header.evaluate((el) => {
         const computed = window.getComputedStyle(el);
-        const bg = computed.backgroundColor;
-        let alpha = 1;
-        if (bg.startsWith('rgba')) {
-          const match = bg.match(/rgba\(\s*\d+\s*,\s*\d+\s*,\s*([\d.]+)\s*\)/);
-          alpha = match && match[1] ? parseFloat(match[1]) : 1;
-        }
         const bf =
           computed.backdropFilter ||
           (computed as unknown as Record<string, string>)['webkitBackdropFilter'] ||
           'none';
         return {
-          bgAlpha: alpha,
+          opacity: computed.opacity,
           backdropFilter: bf,
           scrollWidth: el.scrollWidth,
           clientWidth: el.clientWidth,
         };
       });
 
-      expect(bgAlpha).toBe(1);
+      expect(opacity).toBe('1');
       expect(backdropFilter).toBe('none');
       expect(scrollWidth).toBeLessThanOrEqual(clientWidth);
     };
 
-    // 1. Dark theme check
-    await checkHeader();
+    // 1. Dark theme check on both projects
+    await assertHeaderOpaqueAndContained();
 
-    // 2. Light theme check
-    const themeBtn = page.getByRole('button', { name: /Switch to light theme/i });
-    if (await themeBtn.isVisible()) {
-      await themeBtn.click();
-      await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
-      await checkHeader();
-      // Restore dark theme
-      const darkBtn = page.getByRole('button', { name: /Switch to dark theme/i });
-      if (await darkBtn.isVisible()) {
-        await darkBtn.click();
-      }
-    }
+    // 2. Light theme check on both projects (no if condition around assertions)
+    const themeBtn = page.getByRole('button', { name: 'Switch to light theme' });
+    await themeBtn.click();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+    await assertHeaderOpaqueAndContained();
 
-    // 3. Check ON DEVICE badge on mobile-360
-    const onDeviceBadge = page.getByLabel('Stored only on this device');
-    if (await onDeviceBadge.isVisible()) {
+    // Restore dark theme
+    const darkBtn = page.getByRole('button', { name: 'Switch to dark theme' });
+    await darkBtn.click();
+    await expect(page.locator('html')).not.toHaveAttribute('data-theme', 'light');
+
+    // 3. Mobile-360 project specific assertions (branching on test.info().project.name)
+    if (isMobile) {
+      const onDeviceBadge = page.getByLabel('Stored only on this device');
+      await expect(onDeviceBadge).toBeVisible();
+
       const badgeBox = await onDeviceBadge.boundingBox();
       expect(badgeBox).not.toBeNull();
       // Single line height <= 32px
       expect(badgeBox!.height).toBeLessThanOrEqual(32);
-      // Header does not overflow at 360px
-      const header = page.locator('header');
+
+      // Header width equals viewport width (360px) and no horizontal overflow
+      const headerBox = await header.boundingBox();
+      expect(headerBox).not.toBeNull();
+      expect(headerBox!.width).toBe(360);
+
       const headerOverflow = await header.evaluate((el) => el.scrollWidth > el.clientWidth);
       expect(headerOverflow).toBe(false);
 
-      // Clip screenshot of just the header on mobile-360
-      await header.screenshot({ path: 'e2e-results/review/mobile-360-header-badge.png' });
+      // Screenshot review image using shot() with reviewName (no raw page.screenshot)
+      await shot(header, 'header-badge', { reviewName: 'mobile-360-header-badge.png' });
     }
   });
 });

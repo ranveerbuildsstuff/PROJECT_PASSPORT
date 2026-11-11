@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { expectNoSeriousA11y, collectConsoleErrors } from './helpers';
+import { expectNoSeriousA11y, collectConsoleErrors, getBackgroundAlpha } from './helpers';
 
 test.describe('E2E Helpers Selftest', () => {
   test('expectNoSeriousA11y rejects on inaccessible page and mentions image-alt and color-contrast', async ({
@@ -76,4 +76,115 @@ test.describe('E2E Helpers Selftest', () => {
     expect(consoleErrors.some((e) => e.includes('Deliberate test console error message'))).toBe(true);
     expect(consoleErrors.some((e) => e.includes('Deliberate uncaught error'))).toBe(true);
   });
+
+  test('getBackgroundAlpha normalizer correctly detects transparency and fails assertion for rgba(0,0,0,.5)', async ({
+    page,
+  }) => {
+    await page.setContent(`
+      <!DOCTYPE html>
+      <html>
+        <body>
+          <div id="target" style="background-color: rgba(0, 0, 0, 0.5); width: 50px; height: 50px;"></div>
+        </body>
+      </html>
+    `);
+
+    const alpha = await getBackgroundAlpha(page.locator('#target'));
+    expect(alpha).toBeCloseTo(0.5, 2);
+
+    let threw = false;
+    try {
+      expect(alpha).toBe(1);
+    } catch {
+      threw = true;
+    }
+    expect(threw).toBe(true);
+  });
+
+  test('getBackgroundAlpha normalizer detects transparency and fails assertion for color-mix(in srgb,#000 50%,transparent)', async ({
+    page,
+  }) => {
+    await page.setContent(`
+      <!DOCTYPE html>
+      <html>
+        <body>
+          <div id="target" style="background-color: color-mix(in srgb, #000 50%, transparent); width: 50px; height: 50px;"></div>
+        </body>
+      </html>
+    `);
+
+    const alpha = await getBackgroundAlpha(page.locator('#target'));
+    expect(alpha).toBeCloseTo(0.5, 2);
+
+    let threw = false;
+    try {
+      expect(alpha).toBe(1);
+    } catch {
+      threw = true;
+    }
+    expect(threw).toBe(true);
+  });
+
+  test('backdrop-filter check fails assertion when element has backdrop-filter: blur(4px)', async ({
+    page,
+  }) => {
+    await page.setContent(`
+      <!DOCTYPE html>
+      <html>
+        <body>
+          <div id="target" style="backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); width: 50px; height: 50px;"></div>
+        </body>
+      </html>
+    `);
+
+    const backdropFilter = await page.locator('#target').evaluate((el) => {
+      const computed = window.getComputedStyle(el);
+      return (
+        computed.backdropFilter ||
+        (computed as unknown as Record<string, string>)['webkitBackdropFilter'] ||
+        'none'
+      );
+    });
+
+    expect(backdropFilter).not.toBe('none');
+
+    let threw = false;
+    try {
+      expect(backdropFilter).toBe('none');
+    } catch {
+      threw = true;
+    }
+    expect(threw).toBe(true);
+  });
+
+  test('getBackgroundAlpha passes alpha === 1, opacity === "1", and backdrop-filter === "none" for an opaque colour', async ({
+    page,
+  }) => {
+    await page.setContent(`
+      <!DOCTYPE html>
+      <html>
+        <body>
+          <div id="target" style="background-color: #161b22; opacity: 1; backdrop-filter: none; -webkit-backdrop-filter: none; width: 50px; height: 50px;"></div>
+        </body>
+      </html>
+    `);
+
+    const target = page.locator('#target');
+    const alpha = await getBackgroundAlpha(target);
+    const { opacity, backdropFilter } = await target.evaluate((el) => {
+      const computed = window.getComputedStyle(el);
+      return {
+        opacity: computed.opacity,
+        backdropFilter:
+          computed.backdropFilter ||
+          (computed as unknown as Record<string, string>)['webkitBackdropFilter'] ||
+          'none',
+      };
+    });
+
+    expect(alpha).toBe(1);
+    expect(opacity).toBe('1');
+    expect(backdropFilter).toBe('none');
+  });
 });
+

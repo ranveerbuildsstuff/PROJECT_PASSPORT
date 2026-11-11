@@ -168,7 +168,7 @@
 
 ---
 
-## Slice 4b: Editor UX Fixes & Review Hygiene [CURRENT]
+## Slice 4b: Editor UX Fixes & Review Hygiene
 
 - [x] Header: Solid, opaque background in both dark and light themes (`bg-bg-surface`, alpha = 1, `backdrop-filter: none`). E2E assertions for both viewports and themes.
 - [x] "ON DEVICE" badge: Never wraps (`whitespace-nowrap`), single line at 360px (height <= 32px), header does not overflow at 360px.
@@ -227,6 +227,7 @@
 - `npm run typecheck`, `npm run lint`, `npm test`, and `npm run build` pass.
 - Pasted transcripts from ChatGPT, Claude, and Gemini parse cleanly into structured message lists.
 - Users can correct speaker roles and split/merge turns in the UI.
+- npm run test:e2e, a Playwright spec per UI flow, and an axe scan per new screen
 
 ---
 
@@ -248,6 +249,7 @@
 - `npm run typecheck`, `npm run lint`, `npm test`, and `npm run build` pass.
 - ChatGPT and Claude export files import correctly through a Web Worker.
 - Corrupted or unrecognized files trigger the diagnostics view without crashing the app.
+- npm run test:e2e, a Playwright spec per UI flow, and an axe scan per new screen
 
 ---
 
@@ -269,6 +271,7 @@
 - Prohibited files are unconditionally blocked with clear explanation.
 - Secret scanner detects all specified patterns with masked outputs.
 - Redaction scrubs secrets from stored copies before packaging.
+- npm run test:e2e, a Playwright spec per UI flow, and an axe scan per new screen
 
 ---
 
@@ -289,6 +292,7 @@
 - Checkpoints capture exact snapshots of passport, file hashes, and conversation links.
 - Diff viewer accurately highlights additions, modifications, and deletions.
 - Restoring a checkpoint creates the safety checkpoint automatically.
+- npm run test:e2e, a Playwright spec per UI flow, and an axe scan per new screen
 
 ---
 
@@ -311,6 +315,7 @@
 - Full zip generates complete valid handoff bundle.
 - Round-trip test (export zip -> import zip) produces an identical passport data structure.
 - Secret gate blocks unconfirmed secret exports.
+- npm run test:e2e, a Playwright spec per UI flow, and an axe scan per new screen
 
 ---
 
@@ -332,6 +337,7 @@
 - App works fully offline as an installable PWA.
 - All accessibility and mobile responsiveness criteria are satisfied.
 - Deployment instructions verified.
+- npm run test:e2e, a Playwright spec per UI flow, and an axe scan per new screen
 
 ---
 

@@ -1,6 +1,6 @@
 # PROGRESS.md — Project Roadmap & Status
 
-Current slice: none (Slice 1, 1b, 2, 2b, 2c, Tooling T1, T1b, Slice 3 & Slice 3b complete)
+Current slice: none (Slice 4b & Ticket T2 complete)
 
 ## Slices Checklist
 
@@ -14,7 +14,8 @@ Current slice: none (Slice 1, 1b, 2, 2b, 2c, Tooling T1, T1b, Slice 3 & Slice 3b
 - [x] Slice 3b: UI polish and test gaps
 - [x] Slice 3c: Polish and test hygiene
 - [x] Slice 4: Passport editor + live preview
-- [x] Slice 4b: Editor UX fixes & review hygiene [CURRENT]
+- [x] Slice 4b: Editor UX fixes & review hygiene
+- [x] Tooling Ticket T2: Test integrity + autosave hardening
 - [ ] Slice 5: Capture prompt, reconstruct prompt, paste-back + merge
 - [ ] Slice 6: Conversation paste import
 - [ ] Slice 7: ChatGPT / Claude export import
@@ -123,6 +124,21 @@ Consolidated manual checklist tests into `storageService.test.ts` and deleted re
   - Enhanced `shot()` helper to temporarily set sticky/fixed elements to `position: static !important` during full-page captures, ensuring elements render at their natural document positions.
   - Added `shotViewportTop()` helper capturing viewport-only tops of screens.
   - Configured `playwright.config.ts` with `timeout: 60000` to provide adequate headroom for tests running multiple full-page axe-core audits on Windows environments.
+
+### Tooling Ticket T2: Test Integrity + Autosave Hardening
+- **Alpha Normalization & Opaque Header:** Added canvas-based `getBackgroundAlpha(locator)` to `e2e/helpers.ts` normalizing any computed color format (`rgba`, `color(srgb)`, `oklab`, etc.) via 1x1 canvas fill and reading the alpha byte. Added selftests in `e2e/helpers.selftest.spec.ts` proving failure for `rgba(0,0,0,.5)`, `color-mix(in srgb, #000 50%, transparent)`, and `backdrop-filter: blur(4px)`, and passing for opaque colors. Header test 15 verifies `alpha === 1`, computed `opacity === '1'`, and `backdrop-filter === 'none'`.
+- **Elimination of Silent Skips:** Rewrote shell test 15 eliminating all `if (await x.isVisible())` conditional guards; branched explicitly on `test.info().project.name`. Both themes asserted on desktop and mobile-360; badge asserted visible and <= 32px on mobile-360; header `scrollWidth <= clientWidth` on both.
+- **Sticky Offsets via Single CSS Variable:** Introduced `--app-header-h: 64px` in `src/index.css` used directly by `<header>` height and every sticky offset (mobile autosave bar at `top: var(--app-header-h)`, desktop side-panel header at `top: calc(var(--app-header-h) + 1rem)`). E2E verifies that with the page scrolled on mobile-360, autosave bar top equals header bottom (±1px), on desktop panel header top >= header bottom, and header width equals viewport width (360px).
+- **Screenshot Review Hygiene:** Enhanced `shot()` to accept `reviewName?: string`, copying output into `e2e-results/review/` via `fs.promises.copyFile`. Removed all raw `page.screenshot` and `header.screenshot` calls across `passport.spec.ts` and `shell.spec.ts`.
+- **Deterministic Transition Verification:** In passport test 13, installed a pre-edit `MutationObserver` on the autosave status indicator to verify "Saving" is followed later by "Saved". Removed `scrollIntoViewIfNeeded` as `fill()` automatically scrolls into view. Verified `toBeInViewport` throughout.
+- **Restore Count Toast Precision:** Updated restore count assertions to use `getByText('Restored 1 project', { exact: true })`.
+- **Speed & Per-Screen Axe Scans:** Restored Playwright default timeout (removed 60s override). Split all multi-scan tests over 20s (`shell.spec.ts` tests 12 and 13, `passport.spec.ts` test 10) into discrete per-screen tests with 1 axe scan each, preserving 100% scan coverage without timeout risk.
+- **Single-Flight Autosave Hardening:**
+  - Serialized saves through a single-flight promise chain (`chainRef`); any save started while another is in flight executes using the latest draft at execution time.
+  - Hardened `flushSave()` to resolve only when the chain is idle and the draft is either saved or invalid.
+  - Derived displayed status from `(saveStatus, isDirty, isDraftValid)` ensuring "Saved" can never render while dirty.
+  - Added `describeStorageError(err)` in `src/storage/errors.ts` mapping typed errors (`ProjectNotFound`, `ValidationFailed`, `StorageUnavailable`, `QuotaExceeded`, `BackupInvalid`, unknown) to human-readable plain language without internal IDs or stack traces. Added comprehensive fake-timer Vitest tests.
+- **Housekeeping & Test Integrity Rules:** Added section 13 ("Test Integrity Rules") to `AGENTS.md`. Updated `TASKS.md` removing stale `[CURRENT]` marker and appending E2E/axe requirements to Slices 6–11.
 
 ---
 

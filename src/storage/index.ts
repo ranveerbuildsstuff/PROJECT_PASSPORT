@@ -32,6 +32,7 @@ export {
   QuotaExceeded,
   BackupInvalid,
   ProjectNotFound,
+  describeStorageError,
 } from './errors';
 
 export type {

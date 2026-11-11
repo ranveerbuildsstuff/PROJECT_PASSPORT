@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import type { PassportV1 } from '../../domain';
 import { applyEditorFields, validatePassportDetailed } from '../../domain';
-import { getPassport, savePassport } from '../../storage';
+import { getPassport, savePassport, describeStorageError, ProjectNotFound } from '../../storage';
 
 export type SaveStatus = 'saved' | 'saving' | 'not_saved' | 'error';
 
@@ -33,13 +33,15 @@ export function useAutosave({
   onSaved,
 }: UseAutosaveOptions): UseAutosaveReturn {
   const [draft, setDraft] = useState<PassportV1>(initialPassport);
-  const [saveStatus, setSaveStatus] = useState<SaveStatus>('saved');
-  const [statusMessage, setStatusMessage] = useState<string>('Saved');
+  const [rawSaveStatus, setRawSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('saved');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Track the last successfully saved serialized snapshot to detect dirty state
   const lastSavedSnapshotRef = useRef<string>(JSON.stringify(initialPassport));
-  const isDirtyRef = useRef<boolean>(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const chainRef = useRef<Promise<void>>(Promise.resolve());
+  const inFlightRef = useRef<boolean>(false);
+
   const draftRef = useRef<PassportV1>(draft);
   draftRef.current = draft;
 
@@ -49,56 +51,93 @@ export function useAutosave({
   // Run validation on the current draft
   const validation = validatePassportDetailed(draft);
   const isDraftValid = validation.success;
-  const validationErrorKey = validation.errors.join('; ');
 
   // Compute dirty flag
   const currentSnapshot = JSON.stringify(draft);
   const isDirty = currentSnapshot !== lastSavedSnapshotRef.current;
-  isDirtyRef.current = isDirty;
+
+  // (c) Displayed status is derived from (saveStatus, isDirty, isDraftValid) so "Saved" can never show while dirty.
+  const saveStatus: SaveStatus = (() => {
+    if (rawSaveStatus === 'error') return 'error';
+    if (!isDraftValid) return 'not_saved';
+    if (isDirty || rawSaveStatus === 'saving') return 'saving';
+    return 'saved';
+  })();
+
+  const statusMessage: string = (() => {
+    if (saveStatus === 'error') {
+      return errorMessage || 'Failed to save changes.';
+    }
+    if (saveStatus === 'not_saved') {
+      const firstError = validation.errors[0] || 'Validation error';
+      return `Not saved: ${firstError}`;
+    }
+    if (saveStatus === 'saving') {
+      return 'Saving...';
+    }
+    return 'Saved';
+  })();
 
   /**
-   * Persists valid draft to storage after merging with fresh latest passport from Dexie.
+   * (a) Serialize saves through one promise chain (single-flight).
+   * A save started while another is in flight uses the latest draft at execution time.
    */
-  const performSave = useCallback(
-    async (targetDraft: PassportV1): Promise<boolean> => {
-      const targetValidation = validatePassportDetailed(targetDraft);
-      if (!targetValidation.success) {
-        setSaveStatus('not_saved');
-        setStatusMessage(`Not saved: ${targetValidation.errors[0] || 'Validation failed'}`);
-        return false;
-      }
+  const runSavePass = useCallback(async (): Promise<void> => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
 
-      setSaveStatus('saving');
-      setStatusMessage('Saving...');
+    chainRef.current = chainRef.current
+      .catch(() => {}) // preserve chain on error
+      .then(async () => {
+        // Read latest draft at execution time
+        const targetDraft = draftRef.current;
+        const targetSnapshot = JSON.stringify(targetDraft);
 
-      try {
-        const latest = await getPassport(projectId);
-        if (!latest) {
-          throw new Error(`Project "${projectId}" was not found.`);
+        // If target already matches what was saved, nothing to do
+        if (targetSnapshot === lastSavedSnapshotRef.current) {
+          return;
         }
 
-        const merged = applyEditorFields(latest, targetDraft);
-        await savePassport(merged);
+        // Check validity at execution time
+        const targetValidation = validatePassportDetailed(targetDraft);
+        if (!targetValidation.success) {
+          setRawSaveStatus('idle');
+          return;
+        }
 
-        lastSavedSnapshotRef.current = JSON.stringify(targetDraft);
-        isDirtyRef.current = false;
-        setSaveStatus('saved');
-        setStatusMessage('Saved');
+        setRawSaveStatus('saving');
+        inFlightRef.current = true;
+        try {
+          const latest = await getPassport(projectId);
+          if (!latest) {
+            throw new ProjectNotFound(projectId);
+          }
 
-        window.dispatchEvent(new CustomEvent('project-storage-updated'));
-        onSavedRef.current?.(merged);
-        return true;
-      } catch (err) {
-        setSaveStatus('error');
-        setStatusMessage(err instanceof Error ? err.message : 'Failed to save changes.');
-        return false;
-      }
-    },
-    [projectId]
-  );
+          const merged = applyEditorFields(latest, targetDraft);
+          await savePassport(merged);
+
+          lastSavedSnapshotRef.current = targetSnapshot;
+          setRawSaveStatus('saved');
+          setErrorMessage(null);
+
+          window.dispatchEvent(new CustomEvent('project-storage-updated'));
+          onSavedRef.current?.(merged);
+        } catch (err) {
+          const message = describeStorageError(err);
+          setRawSaveStatus('error');
+          setErrorMessage(message);
+        } finally {
+          inFlightRef.current = false;
+        }
+      });
+
+    return chainRef.current;
+  }, [projectId]);
 
   /**
-   * Flushes any pending debounced save immediately.
+   * (b) flushSave() resolves only when the chain is idle and the draft is saved or invalid.
    */
   const flushSave = useCallback(async (): Promise<void> => {
     if (timerRef.current) {
@@ -106,46 +145,55 @@ export function useAutosave({
       timerRef.current = null;
     }
 
-    if (isDirtyRef.current) {
-      await performSave(draftRef.current);
+    // If currently dirty and valid, enqueue a save pass
+    if (
+      JSON.stringify(draftRef.current) !== lastSavedSnapshotRef.current &&
+      validatePassportDetailed(draftRef.current).success
+    ) {
+      void runSavePass();
     }
-  }, [performSave]);
+
+    // Await the chain
+    await chainRef.current;
+
+    // Loop until completely idle and the current draft is either saved or invalid
+    while (
+      JSON.stringify(draftRef.current) !== lastSavedSnapshotRef.current &&
+      validatePassportDetailed(draftRef.current).success
+    ) {
+      void runSavePass();
+      await chainRef.current;
+    }
+  }, [runSavePass]);
 
   // Handle draft edits and schedule debounced save
   useEffect(() => {
-    // If not dirty, keep saved status
+    // If not dirty, nothing to schedule
     if (!isDirty) {
       if (timerRef.current) {
         clearTimeout(timerRef.current);
         timerRef.current = null;
       }
-      setSaveStatus('saved');
-      setStatusMessage('Saved');
       return;
     }
 
-    // If draft is invalid: do NOT save, show "Not saved", keep in memory
+    // If invalid, clear timer: do not auto-save invalid drafts
     if (!isDraftValid) {
       if (timerRef.current) {
         clearTimeout(timerRef.current);
         timerRef.current = null;
       }
-      setSaveStatus('not_saved');
-      setStatusMessage(`Not saved: ${validationErrorKey.split('; ')[0] || 'Validation error'}`);
       return;
     }
 
-    // Draft is dirty and valid: schedule debounced save
-    setSaveStatus('saving');
-    setStatusMessage('Saving...');
-
+    // Draft is dirty and valid: schedule debounced save pass
     if (timerRef.current) {
       clearTimeout(timerRef.current);
     }
 
     timerRef.current = setTimeout(() => {
       timerRef.current = null;
-      void performSave(draftRef.current);
+      void runSavePass();
     }, debounceMs);
 
     return () => {
@@ -154,7 +202,7 @@ export function useAutosave({
         timerRef.current = null;
       }
     };
-  }, [draft, isDirty, isDraftValid, validationErrorKey, debounceMs, performSave]);
+  }, [draft, isDirty, isDraftValid, debounceMs, runSavePass]);
 
   // Flush on unmount
   useEffect(() => {
@@ -163,24 +211,23 @@ export function useAutosave({
         clearTimeout(timerRef.current);
         timerRef.current = null;
       }
-      if (isDirtyRef.current) {
-        const val = validatePassportDetailed(draftRef.current);
-        if (val.success) {
-          performSave(draftRef.current);
-        }
+      if (
+        JSON.stringify(draftRef.current) !== lastSavedSnapshotRef.current &&
+        validatePassportDetailed(draftRef.current).success
+      ) {
+        void runSavePass();
       }
     };
-  }, [performSave]);
+  }, [runSavePass]);
 
   // Flush on pagehide / beforeunload
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (isDirtyRef.current) {
+      if (JSON.stringify(draftRef.current) !== lastSavedSnapshotRef.current) {
         const val = validatePassportDetailed(draftRef.current);
         if (val.success) {
-          performSave(draftRef.current);
+          void runSavePass();
         } else {
-          // Alert user before losing invalid edits
           e.preventDefault();
           e.returnValue = '';
         }
@@ -188,10 +235,10 @@ export function useAutosave({
     };
 
     const handlePageHide = () => {
-      if (isDirtyRef.current) {
+      if (JSON.stringify(draftRef.current) !== lastSavedSnapshotRef.current) {
         const val = validatePassportDetailed(draftRef.current);
         if (val.success) {
-          performSave(draftRef.current);
+          void runSavePass();
         }
       }
     };
@@ -203,7 +250,7 @@ export function useAutosave({
       window.removeEventListener('beforeunload', handleBeforeUnload);
       window.removeEventListener('pagehide', handlePageHide);
     };
-  }, [performSave]);
+  }, [runSavePass]);
 
   const updateDraft = useCallback((updater: (prev: PassportV1) => PassportV1) => {
     setDraft((prev) => updater(prev));
@@ -215,10 +262,10 @@ export function useAutosave({
       timerRef.current = null;
     }
     lastSavedSnapshotRef.current = JSON.stringify(newPassport);
-    isDirtyRef.current = false;
+    draftRef.current = newPassport;
     setDraft(newPassport);
-    setSaveStatus('saved');
-    setStatusMessage('Saved');
+    setRawSaveStatus('saved');
+    setErrorMessage(null);
   }, []);
 
   return {

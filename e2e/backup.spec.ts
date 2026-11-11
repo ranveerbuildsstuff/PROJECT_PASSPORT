@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import { test, expect } from '@playwright/test';
 import { collectConsoleErrors } from './helpers';
 
@@ -44,14 +45,10 @@ test.describe('Backup and Restore E2E Flow', () => {
     const downloadedName = download.suggestedFilename();
     expect(downloadedName).toMatch(/^project-passport-backup-\d{4}-\d{2}-\d{2}\.json$/);
 
-    // Read and parse downloaded backup JSON without node Buffer
-    const readStream = await download.createReadStream();
-    let backupContent = '';
-    if (readStream) {
-      for await (const chunk of readStream) {
-        backupContent += typeof chunk === 'string' ? chunk : new TextDecoder().decode(chunk as Uint8Array);
-      }
-    }
+    // Read and parse downloaded backup JSON
+    const downloadedPath = await download.path();
+    expect(downloadedPath).not.toBeNull();
+    const backupContent = fs.readFileSync(downloadedPath!, 'utf8');
     const parsedBackup = JSON.parse(backupContent);
 
     expect(parsedBackup.backupVersion).toBe(1);
@@ -93,8 +90,6 @@ test.describe('Backup and Restore E2E Flow', () => {
     await expect(backupDialog.getByText(/Unsupported backup version: 99/)).toBeVisible();
 
     // 6. Test valid import with replacement confirmation
-    const downloadedPath = await download.path();
-    expect(downloadedPath).not.toBeNull();
     await fileInput.setInputFiles(downloadedPath!);
 
     // Verify replacement confirmation appears and explicitly mentions replacement
@@ -109,7 +104,7 @@ test.describe('Backup and Restore E2E Flow', () => {
     await expect(backupDialog).not.toBeVisible();
 
     // Assert toast shows count of restored projects
-    await expect(page.getByText('Restored 1 project')).toBeVisible();
+    await expect(page.getByText('Restored 1 project', { exact: true })).toBeVisible();
 
     // 7. Verify the project is restored on the dashboard
     await expect(page.getByRole('link', { name: /Archival Preservation Project/ })).toBeVisible();
@@ -171,7 +166,7 @@ test.describe('Backup and Restore E2E Flow', () => {
     await expect(backupDialog).not.toBeVisible();
 
     // Assert success toast shows restored count
-    await expect(page.getByText('Restored 1 project')).toBeVisible();
+    await expect(page.getByText('Restored 1 project', { exact: true })).toBeVisible();
 
     // 5. Verify the project name reverted to "Original Project Name"
     await expect(page.getByRole('link', { name: 'Original Project Name' })).toBeVisible();

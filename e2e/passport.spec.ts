@@ -322,7 +322,7 @@ test.describe('Passport Editor E2E Tests', () => {
     // Confirm restore
     await backupDialog.getByRole('button', { name: 'Confirm and restore' }).click();
     await expect(backupDialog).not.toBeVisible();
-    await expect(page.getByText('Restored 1 project')).toBeVisible();
+    await expect(page.getByText('Restored 1 project', { exact: true })).toBeVisible();
 
     // Open the restored project
     await page.getByRole('link', { name: /Readiness Live Test/ }).first().click();
@@ -403,8 +403,10 @@ test.describe('Passport Editor E2E Tests', () => {
     await expect(page.getByRole('status', { name: 'Autosave status' })).toContainText('Saved');
 
     // On mobile viewport, ensure preview is expanded
-    const togglePreviewBtn = page.getByRole('button', { name: 'Toggle markdown preview' });
-    if (await togglePreviewBtn.isVisible()) {
+    const isMobile = test.info().project.name === 'mobile-360';
+    if (isMobile) {
+      const togglePreviewBtn = page.getByRole('button', { name: 'Toggle markdown preview' });
+      await expect(togglePreviewBtn).toBeVisible();
       const isExpanded = await togglePreviewBtn.getAttribute('aria-expanded');
       if (isExpanded === 'false') {
         await togglePreviewBtn.click();
@@ -477,9 +479,9 @@ test.describe('Passport Editor E2E Tests', () => {
     await expect(dec1.getByRole('textbox', { name: 'Decision' })).toHaveValue('Deprecated REST API v1');
   });
 
-  test('10. Layout/touch-target audit helper and axe scan (dark and light) on editor with all sections expanded; no overflow at 360px', async ({ page }) => {
+  test('10a. Dark theme: layout/touch-target audit and axe scan on editor with all sections expanded; no overflow at 360px', async ({ page }) => {
     collectConsoleErrors(page);
-    await createAndOpenPassport(page, 'A11y and Touch Target Project');
+    await createAndOpenPassport(page, 'A11y Dark Project');
 
     // Expand all sections
     await page.getByRole('button', { name: /Expand all/i }).click();
@@ -489,19 +491,25 @@ test.describe('Passport Editor E2E Tests', () => {
 
     // Run Axe scan in dark theme
     await expectNoSeriousA11y(page);
+  });
+
+  test('10b. Light theme: layout/touch-target audit and axe scan on editor with all sections expanded; no overflow at 360px', async ({ page }) => {
+    collectConsoleErrors(page);
+    await createAndOpenPassport(page, 'A11y Light Project');
 
     // Switch to light theme
-    const themeBtn = page.getByRole('button', { name: /Switch to light theme/i });
-    if (await themeBtn.isVisible()) {
-      await themeBtn.click();
-      await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+    const themeBtn = page.getByRole('button', { name: 'Switch to light theme' });
+    await themeBtn.click();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
 
-      // Run touch-target and layout audit in light theme
-      await auditPageLayoutAndTouchTargets(page, 'passport-editor-expanded-light');
+    // Expand all sections
+    await page.getByRole('button', { name: /Expand all/i }).click();
 
-      // Run Axe scan in light theme
-      await expectNoSeriousA11y(page);
-    }
+    // Run touch-target and layout audit in light theme
+    await auditPageLayoutAndTouchTargets(page, 'passport-editor-expanded-light');
+
+    // Run Axe scan in light theme
+    await expectNoSeriousA11y(page);
   });
 
   test('11. Screenshots: editor populated on desktop and mobile-360', async ({ page }) => {
@@ -549,41 +557,38 @@ test.describe('Passport Editor E2E Tests', () => {
     await expect(page.getByRole('status', { name: 'Autosave status' })).toContainText('Saved');
 
     // On mobile, expand markdown preview so screenshot captures everything
-    const togglePreviewBtn = page.getByRole('button', { name: 'Toggle markdown preview' });
-    if (await togglePreviewBtn.isVisible()) {
+    const isDesktop = test.info().project.name === 'desktop';
+    if (!isDesktop) {
+      const togglePreviewBtn = page.getByRole('button', { name: 'Toggle markdown preview' });
       const isExpanded = await togglePreviewBtn.getAttribute('aria-expanded');
       if (isExpanded === 'false') {
         await togglePreviewBtn.click();
       }
     }
 
-    // Capture viewport-only top screenshot using shotViewportTop helper: *-viewport-top.png
-    const topShotPath = await shotViewportTop(page, 'passport-editor');
+    // Capture viewport-only top screenshot with review copy via shotViewportTop
+    await shotViewportTop(page, 'passport-editor', {
+      reviewName: isDesktop ? 'desktop-passport-editor-viewport-top.png' : 'mobile-360-passport-editor-viewport-top.png',
+    });
 
-    // Capture full-page screenshot: *-populated.png
-    await shot(page, 'passport-editor-populated', { fullPage: true });
+    // Capture full-page screenshot with review copy via shot()
+    await shot(page, 'passport-editor-populated', {
+      fullPage: true,
+      reviewName: isDesktop ? 'desktop-passport-editor-populated.png' : 'mobile-360-passport-editor-populated.png',
+    });
 
-    // Save review copies directly using Playwright screenshot
-    if (topShotPath.includes('desktop')) {
-      await page.screenshot({ path: 'e2e-results/review/desktop-passport-editor-viewport-top.png', fullPage: false });
-      await page.screenshot({ path: 'e2e-results/review/desktop-passport-editor-populated.png', fullPage: true });
-    } else if (topShotPath.includes('mobile-360')) {
-      await page.screenshot({ path: 'e2e-results/review/mobile-360-passport-editor-viewport-top.png', fullPage: false });
-      await page.screenshot({ path: 'e2e-results/review/mobile-360-passport-editor-populated.png', fullPage: true });
-
-      // If mobile page height exceeds 6000px, also produce part1 and part2
+    // On mobile, if height > 6000px, capture part1 and part2 via shot() with clip and reviewName
+    if (!isDesktop) {
       const fullHeight = await page.evaluate(() => document.body.scrollHeight);
       if (fullHeight > 6000) {
         const halfHeight = Math.ceil(fullHeight / 2);
-        // Part 1: Top half
-        await page.screenshot({
-          path: 'e2e-results/review/mobile-360-passport-editor-populated-part1.png',
+        await shot(page, 'passport-editor-populated-part1', {
           clip: { x: 0, y: 0, width: 360, height: halfHeight },
+          reviewName: 'mobile-360-passport-editor-populated-part1.png',
         });
-        // Part 2: Bottom half
-        await page.screenshot({
-          path: 'e2e-results/review/mobile-360-passport-editor-populated-part2.png',
+        await shot(page, 'passport-editor-populated-part2', {
           clip: { x: 0, y: halfHeight, width: 360, height: fullHeight - halfHeight },
+          reviewName: 'mobile-360-passport-editor-populated-part2.png',
         });
       }
     }
@@ -649,19 +654,67 @@ test.describe('Passport Editor E2E Tests', () => {
     // Scroll to the very bottom of the long editor
     await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
 
-    // Locate the visible Autosave status indicator
+    // Locate the visible Autosave status indicator and assert in viewport
     const autosaveStatus = page.getByRole('status', { name: 'Autosave status' });
     await expect(autosaveStatus).toBeInViewport();
 
-    // Edit a field near the bottom: Immediate next action
+    // Sticky offsets verification (Ticket T2 Item 3)
+    const header = page.locator('header');
+    const headerBox = await header.boundingBox();
+    expect(headerBox).not.toBeNull();
+    const isMobile = test.info().project.name === 'mobile-360';
+
+    if (isMobile) {
+      // Confirm header width equals viewport width at 360px
+      expect(headerBox!.width).toBe(360);
+
+      // On mobile-360 with page scrolled, autosave bar top === header bottom (±1px)
+      const bar = page.locator('div.sticky').filter({ has: autosaveStatus });
+      const barBox = await bar.boundingBox();
+      expect(barBox).not.toBeNull();
+      const headerBottom = headerBox!.y + headerBox!.height;
+      expect(Math.abs(barBox!.y - headerBottom)).toBeLessThanOrEqual(1);
+    } else {
+      // On desktop the panel header top >= header bottom
+      const panelHeader = page.locator('div.sticky').filter({ has: autosaveStatus });
+      const panelHeaderBox = await panelHeader.boundingBox();
+      expect(panelHeaderBox).not.toBeNull();
+      const headerBottom = headerBox!.y + headerBox!.height;
+      expect(panelHeaderBox!.y).toBeGreaterThanOrEqual(headerBottom);
+    }
+
+    // Install MutationObserver on autosave status BEFORE editing (Ticket T2 Item 5)
+    await autosaveStatus.evaluate((el) => {
+      (window as unknown as { __autosaveLog: string[] }).__autosaveLog = [el.textContent?.trim() || ''];
+      const observer = new MutationObserver(() => {
+        (window as unknown as { __autosaveLog: string[] }).__autosaveLog.push(el.textContent?.trim() || '');
+      });
+      observer.observe(el, { childList: true, subtree: true, characterData: true });
+    });
+
+    // Edit a field near the bottom: fill() already scrolls into view
     const nextActionField = page.getByRole('textbox', { name: 'Immediate next action' });
-    await nextActionField.scrollIntoViewIfNeeded();
     await nextActionField.fill('Verify sticky autosave status while scrolled to bottom');
 
-    // Assert status stays in viewport and shows Saving then Saved
+    // Assert status stays in viewport throughout and settles on Saved
     await expect(autosaveStatus).toBeInViewport();
-    await expect(autosaveStatus).toContainText(/Saving|Saved/);
     await expect(autosaveStatus).toContainText('Saved');
     await expect(autosaveStatus).toBeInViewport();
+
+    // Verify recorded MutationObserver sequence contains "Saving" followed later by "Saved"
+    const log: string[] = await page.evaluate(
+      () => (window as unknown as { __autosaveLog?: string[] }).__autosaveLog || []
+    );
+    const savingIndex = log.findIndex((text: string) => text.includes('Saving'));
+    let savedIndex = -1;
+    for (let i = log.length - 1; i >= 0; i--) {
+      const entry = log[i];
+      if (entry && entry.includes('Saved')) {
+        savedIndex = i;
+        break;
+      }
+    }
+    expect(savingIndex).toBeGreaterThanOrEqual(0);
+    expect(savedIndex).toBeGreaterThan(savingIndex);
   });
 });
