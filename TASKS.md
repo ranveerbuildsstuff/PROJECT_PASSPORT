@@ -146,7 +146,7 @@
 
 ---
 
-## Slice 4: Passport Editor & Live Preview
+## Slice 4: Passport Editor & Live Preview [CURRENT]
 
 - [ ] Implement form controls in `src/ui/`: `Input`, `Textarea`, select dropdowns, and key-value item lists.
 - [ ] Create multi-section Passport Editor tabbed or stepped layout (Project info, Stack, Decisions, Tasks, Bugs, Instructions).

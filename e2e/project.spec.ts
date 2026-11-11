@@ -92,7 +92,7 @@ test.describe('Project Page E2E Flows', () => {
 
     await expect(page.getByRole('heading', { name: 'Project not found' })).toBeVisible();
     await expect(
-      page.getByText(/Project "non-existent-uuid-99999" was not found\. It may have been deleted\. Go back to your projects and try again\./)
+      page.getByText('This project was not found. It may have been deleted. Go back to your projects and try again.')
     ).toBeVisible();
 
     const returnBtn = page.getByRole('button', { name: 'Return to projects' });

@@ -20,6 +20,7 @@ The UI is **dark-first** with a first-class **light theme**. All color tokens mu
 | **Text Primary** | `#E6EDF3` | `text-primary` | Headings, primary readable content |
 | **Text Muted** | `#8B949E` | `text-muted` | Secondary details, timestamps, helper text |
 | **Accent (Brass)** | `#C9A227` | `accent-brass` | Used sparingly: primary CTA, active tabs, readiness ring |
+| **Accent Contrast** | `#000000` | `accent-brass-contrast` | Text/icon contrast color on brass CTA backgrounds (black in dark) |
 | **Success** | `#3FB950` | `color-success` | Validated states, completed tasks, readiness pass |
 | **Warning** | `#D29922` | `color-warning` | Scanner alerts, token limit warnings, review notices |
 | **Danger** | `#F85149` | `color-danger` | Hard-blocked files, active bugs, destructive actions |
@@ -33,7 +34,8 @@ The UI is **dark-first** with a first-class **light theme**. All color tokens mu
 | **Border** | `#D0D7DE` | `border-subtle` | Structural 1px separation lines |
 | **Text Primary** | `#1F2328` | `text-primary` | Headings, primary body text |
 | **Text Muted** | `#656D76` | `text-muted` | Labels, timestamps, secondary notes |
-| **Accent (Brass)** | `#9A7B1C` | `accent-brass` | Primary CTA, active tabs, readiness ring |
+| **Accent (Brass)** | `#745706` | `accent-brass` | Primary CTA, active tabs, readiness ring (tuned for WCAG AA contrast) |
+| **Accent Contrast** | `#FFFFFF` | `accent-brass-contrast` | Text/icon contrast color on brass CTA backgrounds (white in light) |
 | **Success** | `#1A7F37` | `color-success` | Validated badges, successful checks |
 | **Warning** | `#9A6700` | `color-warning` | Budget warnings, warnings needing review |
 | **Danger** | `#CF222E` | `color-danger` | Unresolved secrets, errors, destructive alerts |
@@ -65,7 +67,8 @@ The UI is **dark-first** with a first-class **light theme**. All color tokens mu
 
 - Checkpoints, statuses, and handoff destinations are rendered as **"stamp" badges**.
 - **Style:** Small, compact, monospace text, rounded rectangle with a subtle 1px border.
-- **Example:** `[v1.0.4 • CKPT]`, `[STATUS: IN_PROGRESS]`, `[DEST: CLAUDE]`.
+- **Example:** `[v1.0.4 • CKPT]`, `In progress`, `[DEST: CLAUDE]`.
+- Status stamps use sentence-case human labels without prefixes or underscores (e.g. `Idea`, `In progress`, `Paused`, `Done`), while system stamps use compact uppercase badges.
 - Conveys archival precision and system provenance.
 
 ## 6. Forbidden Aesthetic Patterns

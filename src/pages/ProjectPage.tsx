@@ -57,7 +57,7 @@ export function ProjectPage() {
         <EmptyState
           icon={<HelpCircle className="w-8 h-8" aria-hidden="true" />}
           title="Project not found"
-          description={`Project "${id}" was not found. It may have been deleted. Go back to your projects and try again.`}
+          description="This project was not found. It may have been deleted. Go back to your projects and try again."
           actionLabel="Return to projects"
           onAction={() => navigate('/')}
         />

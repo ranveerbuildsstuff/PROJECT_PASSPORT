@@ -71,7 +71,8 @@ export function BackupDialog({ isOpen, onClose, onRestoreComplete }: BackupDialo
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
 
-      showToast(`Exported ${backup.projects.length} project(s) (${sizeStr})`, 'success');
+      const count = backup.projects.length;
+      showToast(`Exported ${count} ${count === 1 ? 'project' : 'projects'} (${sizeStr})`, 'success');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to export backup.';
       setImportError(message);
@@ -151,7 +152,8 @@ export function BackupDialog({ isOpen, onClose, onRestoreComplete }: BackupDialo
 
     try {
       const result = await importBackup(pendingBackup.data);
-      showToast(`Restored ${result.projectsImported} project(s) successfully.`, 'success');
+      const count = result.projectsImported;
+      showToast(`Restored ${count} ${count === 1 ? 'project' : 'projects'}`, 'success');
       window.dispatchEvent(new CustomEvent('project-storage-updated'));
       onRestoreComplete?.();
       handleClose();

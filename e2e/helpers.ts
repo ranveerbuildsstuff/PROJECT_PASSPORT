@@ -73,6 +73,37 @@ export function collectConsoleErrors(page: Page): string[] {
 }
 
 /**
+ * Seeds n projects through the UI, starting from the dashboard.
+ * Navigates back to the dashboard when done if n > 0.
+ * Returns the names of the created projects.
+ */
+export async function seedProjects(page: Page, count = 3): Promise<string[]> {
+  const projectNames = [
+    'Project Alpha: Autonomous Agent',
+    'Project Beta: Code Review Harness',
+    'Project Gamma: Local LLM Engine',
+    'Project Delta: Distributed Cache',
+    'Project Epsilon: Mobile Client',
+  ];
+
+  const created: string[] = [];
+
+  for (let i = 0; i < count; i++) {
+    const name = projectNames[i] || `Project ${i + 1}: Automated Task`;
+    await page.goto('/');
+    await page.getByRole('button', { name: /^New project$/i }).first().click();
+    const createDialog = page.getByRole('dialog', { name: 'New project' });
+    await createDialog.getByLabel('Project name').fill(name);
+    await createDialog.getByRole('button', { name: 'Create project' }).click();
+    await page.getByRole('heading', { level: 1, name }).waitFor({ state: 'visible' });
+    created.push(name);
+  }
+
+  await page.goto('/');
+  return created;
+}
+
+/**
  * Verifies that the page has no horizontal overflow and that every visible
  * button, link, [role=tab], input and textarea satisfies the minimum 44x44px
  * touch target requirement (with 43.5px tolerance for subpixel rendering).

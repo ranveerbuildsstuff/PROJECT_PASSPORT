@@ -12,7 +12,8 @@ Current slice: none (Slice 1, 1b, 2, 2b, 2c, Tooling T1, T1b, Slice 3 & Slice 3b
 - [x] Tooling Ticket T1b: Harness hardening (forbidOnly, helpers selftest)
 - [x] Slice 3: App shell, design system, dashboard
 - [x] Slice 3b: UI polish and test gaps
-- [ ] Slice 4: Passport editor + live preview
+- [x] Slice 3c: Polish and test hygiene
+- [ ] Slice 4: Passport editor + live preview [CURRENT]
 - [ ] Slice 5: Capture prompt, reconstruct prompt, paste-back + merge
 - [ ] Slice 6: Conversation paste import
 - [ ] Slice 7: ChatGPT / Claude export import
@@ -55,6 +56,14 @@ Consolidated manual checklist tests into `storageService.test.ts` and deleted re
 - **Light Theme Contrast & Axe Audits:** Added comprehensive serious/critical axe scans in light and dark themes across dashboard with 3 projects, project overview, all dialogs, storage blocked page, and placeholder tabs. Tuned light mode `--accent-brass` to `#745706` and introduced `--accent-brass-contrast` CSS token (`#000000` in dark mode, `#ffffff` in light mode) ensuring WCAG AA contrast (> 6.3:1) without changing DESIGN.md token names.
 - **Backup Tests & Synthetic Fixtures:** Added `tests/fixtures/invalid-structure-backup.json` and `tests/fixtures/unknown-version-backup.json`. Added same-ID replacement test (create -> export -> rename -> import restores original name and maintains exactly 1 project), invalid structure test, unknown backup version test, and restored project count assertion to `e2e/backup.spec.ts`.
 - **Full-Page Screenshots & Visual Self-Review:** Enhanced `shot()` helper to accept `{ fullPage?: boolean }`, capturing complete full-height snapshots of the dashboard and project overview screens.
+
+### Slice 3c: Polish and Test Hygiene
+- **DESIGN.md & Design Tokens:** Updated light mode accent token to `#745706` matching the WCAG AA contrast value used, documented `--accent-brass-contrast` (`#000000` in dark mode, `#ffffff` in light mode), and documented that status stamps use human-readable sentence-case labels. Verified `src/index.css` matches `DESIGN.md` token for token with zero drift.
+- **E2E Test Architecture & Performance:** Created `seedProjects(page, n)` helper in `e2e/helpers.ts` to create projects via UI without duplicating setup code. Split long `shell.spec.ts` test 12 & 13 into three independent tests: dark theme axe scans (test 12), light theme axe scans (test 13), and full screenshot suite (test 14). Removed `test.slow()`.
+- **Storage-Blocked Screen Axe Scans:** Added light theme and dark theme serious/critical axe accessibility scans for the full-screen storage blocked error view on both desktop and mobile-360 viewports.
+- **Pluralization & Toast Copy:** Updated restore toast in `src/ui/BackupDialog.tsx` to "Restored 1 project" / "Restored {n} projects" (proper singular/plural without "project(s)") and updated `e2e/backup.spec.ts`.
+- **Project Not Found UI Copy:** Updated `src/pages/ProjectPage.tsx` empty state description to avoid displaying the raw internal project ID to the user: "This project was not found. It may have been deleted. Go back to your projects and try again." Updated both unit and E2E tests.
+- **Playwright Workers:** Tested raising workers to 4 in `playwright.config.ts`. With 4 concurrent Chrome instances running axe evaluation trees, heavy CPU starvation produced test timeouts (>30s on desktop test 12). Reverted workers to 2, where all 40 tests execute stably and pass in 2.9m.
 
 ---
 

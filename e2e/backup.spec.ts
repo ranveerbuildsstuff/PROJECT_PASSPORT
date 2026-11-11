@@ -25,6 +25,7 @@ test.describe('Backup and Restore E2E Flow', () => {
     const createDialog = page.getByRole('dialog', { name: 'New project' });
     await createDialog.getByLabel('Project name').fill('Archival Preservation Project');
     await createDialog.getByRole('button', { name: 'Create project' }).click();
+    await expect(page.getByRole('heading', { level: 1, name: 'Archival Preservation Project' })).toBeVisible();
 
     await page.goto('/');
     await expect(page.getByRole('link', { name: /Archival Preservation Project/ })).toBeVisible();
@@ -108,7 +109,7 @@ test.describe('Backup and Restore E2E Flow', () => {
     await expect(backupDialog).not.toBeVisible();
 
     // Assert toast shows count of restored projects
-    await expect(page.getByText(/Restored 1 project\(s\) successfully\./)).toBeVisible();
+    await expect(page.getByText('Restored 1 project')).toBeVisible();
 
     // 7. Verify the project is restored on the dashboard
     await expect(page.getByRole('link', { name: /Archival Preservation Project/ })).toBeVisible();
@@ -127,6 +128,7 @@ test.describe('Backup and Restore E2E Flow', () => {
     const createDialog = page.getByRole('dialog', { name: 'New project' });
     await createDialog.getByLabel('Project name').fill('Original Project Name');
     await createDialog.getByRole('button', { name: 'Create project' }).click();
+    await expect(page.getByRole('heading', { level: 1, name: 'Original Project Name' })).toBeVisible();
 
     await page.goto('/');
     await expect(page.getByRole('link', { name: 'Original Project Name' })).toBeVisible();
@@ -169,7 +171,7 @@ test.describe('Backup and Restore E2E Flow', () => {
     await expect(backupDialog).not.toBeVisible();
 
     // Assert success toast shows restored count
-    await expect(page.getByText(/Restored 1 project\(s\) successfully\./)).toBeVisible();
+    await expect(page.getByText('Restored 1 project')).toBeVisible();
 
     // 5. Verify the project name reverted to "Original Project Name"
     await expect(page.getByRole('link', { name: 'Original Project Name' })).toBeVisible();
