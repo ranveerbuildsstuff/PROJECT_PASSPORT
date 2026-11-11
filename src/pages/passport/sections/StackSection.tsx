@@ -1,8 +1,8 @@
 import React from 'react';
-import { ArrowUp, ArrowDown, Trash2, Plus, Layers } from 'lucide-react';
+import { ArrowUp, ArrowDown, Trash2, Plus } from 'lucide-react';
 import type { PassportV1, StackItem } from '../../../domain';
 import { moveItem } from '../../../domain';
-import { Input, Button, useToast, EmptyState } from '../../../ui';
+import { Input, Button, useToast, CompactEmptyState, Textarea } from '../../../ui';
 
 export interface StackSectionProps {
   draft: PassportV1;
@@ -70,10 +70,8 @@ export function StackSection({
 
   if (stack.length === 0) {
     return (
-      <EmptyState
-        icon={<Layers className="w-6 h-6 text-accent-brass" aria-hidden="true" />}
-        title="No tech stack items recorded"
-        description="List frameworks, runtimes, database tools, or deployment targets."
+      <CompactEmptyState
+        message="No tech stack items yet"
         actionLabel="Add stack item"
         onAction={handleAddItem}
       />
@@ -85,7 +83,7 @@ export function StackSection({
       <div className="flex justify-end">
         <Button
           type="button"
-          variant="outline"
+          variant="secondary"
           size="sm"
           onClick={handleAddItem}
           className="gap-1.5"
@@ -103,6 +101,8 @@ export function StackSection({
           return (
             <div
               key={index}
+              role="group"
+              aria-label={`Stack item ${itemNum}`}
               className="p-3.5 rounded-lg border border-border-subtle bg-bg-app flex flex-col gap-3"
             >
               <div className="flex items-center justify-between border-b border-border-subtle/50 pb-2 flex-wrap gap-2">
@@ -145,29 +145,29 @@ export function StackSection({
                   required
                   value={item.name}
                   onChange={(e) => handleChangeItem(index, 'name', e.target.value)}
-                  placeholder="e.g. React, PostgreSQL"
+                  placeholder="React, PostgreSQL"
                   error={itemError}
                 />
                 <Input
                   label="Role"
                   value={item.role || ''}
                   onChange={(e) => handleChangeItem(index, 'role', e.target.value)}
-                  placeholder="e.g. Frontend UI"
+                  placeholder="Frontend UI"
                 />
                 <Input
                   label="Version"
                   value={item.version || ''}
                   onChange={(e) => handleChangeItem(index, 'version', e.target.value)}
-                  placeholder="e.g. 18.2.0"
+                  placeholder="18.2.0"
                   isMonospace
                 />
               </div>
 
-              <Input
+              <Textarea
                 label="Notes"
                 value={item.notes || ''}
                 onChange={(e) => handleChangeItem(index, 'notes', e.target.value)}
-                placeholder="e.g. Using strict mode and server components"
+                placeholder="Using strict mode and server components"
               />
             </div>
           );

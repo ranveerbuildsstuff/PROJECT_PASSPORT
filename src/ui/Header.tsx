@@ -15,14 +15,17 @@ export function Header({ onRefreshProjects }: HeaderProps) {
 
   return (
     <>
-      <header className="sticky top-0 z-40 w-full border-b border-border-subtle bg-bg-surface/95 backdrop-blur-none">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-2 sm:gap-4">
+      <header
+        className="sticky top-0 z-40 w-full border-b border-border-subtle bg-bg-surface"
+        style={{ backdropFilter: 'none', WebkitBackdropFilter: 'none' }}
+      >
+        <div className="max-w-6xl mx-auto px-3 sm:px-6 h-16 flex items-center justify-between gap-1 sm:gap-4">
           {/* Logo & Product Name */}
-          <div className="flex items-center gap-3">
-            <h1 className="text-lg font-bold tracking-tight whitespace-nowrap m-0 p-0 leading-none">
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+            <h1 className="text-base sm:text-lg font-bold tracking-tight whitespace-nowrap m-0 p-0 leading-none">
               <Link
                 to="/"
-                className="flex items-center gap-2 text-text-primary hover:text-accent-brass transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-brass rounded px-1 min-h-[44px]"
+                className="flex items-center gap-1.5 sm:gap-2 text-text-primary hover:text-accent-brass transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-brass rounded px-1 min-h-[44px]"
                 aria-label="Project Passport Home"
               >
                 <span>Project Passport</span>
@@ -31,24 +34,24 @@ export function Header({ onRefreshProjects }: HeaderProps) {
 
             {/* Offline / Local device badge */}
             <div className="hidden sm:inline-flex">
-              <Badge variant="default" className="text-[11px] gap-1.5 py-1">
-                <ShieldCheck className="w-3.5 h-3.5 text-accent-brass" aria-hidden="true" />
-                <span>Stored only on this device</span>
+              <Badge variant="default" className="text-[11px] gap-1.5 py-1 whitespace-nowrap">
+                <ShieldCheck className="w-3.5 h-3.5 text-accent-brass shrink-0" aria-hidden="true" />
+                <span className="whitespace-nowrap">Stored only on this device</span>
               </Badge>
             </div>
           </div>
 
           {/* Controls: Device indicator on mobile, Backup Dialog, Theme Toggle */}
-          <div className="flex items-center gap-1 sm:gap-2">
-            <div className="sm:hidden">
+          <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+            <div className="sm:hidden flex items-center">
               <Badge
                 variant="default"
-                className="text-[10px] px-1.5 py-0.5"
+                className="text-[10px] px-1.5 py-0.5 whitespace-nowrap inline-flex items-center gap-1 shrink-0"
                 title="Stored only on this device"
                 aria-label="Stored only on this device"
               >
-                <ShieldCheck className="w-3 h-3 text-accent-brass" aria-hidden="true" />
-                <span>ON DEVICE</span>
+                <ShieldCheck className="w-3 h-3 text-accent-brass shrink-0" aria-hidden="true" />
+                <span className="whitespace-nowrap">ON DEVICE</span>
               </Badge>
             </div>
 

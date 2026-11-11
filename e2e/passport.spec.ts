@@ -1,6 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import {
   shot,
+  shotViewportTop,
   expectNoSeriousA11y,
   auditPageLayoutAndTouchTargets,
   collectConsoleErrors,
@@ -90,42 +91,50 @@ test.describe('Passport Editor E2E Tests', () => {
 
     // 1. Stack
     await page.getByRole('button', { name: /Add stack item/i }).first().click();
-    await page.getByPlaceholder('e.g. React, PostgreSQL').fill('React');
-    await page.getByPlaceholder('e.g. Frontend UI').fill('Frontend framework');
-    await page.getByPlaceholder('e.g. 18.2.0').fill('18.3.1');
-    await page.getByPlaceholder('e.g. Using strict mode and server components').fill('Strict mode enabled');
+    const stack1 = page.getByRole('group', { name: 'Stack item 1' });
+    await stack1.getByRole('textbox', { name: 'Name' }).fill('React');
+    await stack1.getByRole('textbox', { name: 'Role' }).fill('Frontend framework');
+    await stack1.getByRole('textbox', { name: 'Version' }).fill('18.3.1');
+    await stack1.getByRole('textbox', { name: 'Notes' }).fill('Strict mode enabled');
 
     // 2. Requirements
     await page.getByRole('button', { name: /Add requirement/i }).first().click();
-    await page.getByPlaceholder('e.g. Must support offline editing').fill('Zero outbound telemetry');
+    const req1 = page.getByRole('group', { name: 'Requirement 1' });
+    await req1.getByRole('textbox', { name: 'Description' }).fill('Zero outbound telemetry');
 
     // 3. Decisions
     await page.getByRole('button', { name: /Add decision/i }).first().click();
-    await page.getByPlaceholder('e.g. Use Dexie for local storage').fill('Use Dexie for IndexedDB');
-    await page.getByPlaceholder('e.g. Provides clean transaction support over IndexedDB').fill('Robust typed client storage');
+    const dec1 = page.getByRole('group', { name: 'Decision 1' });
+    await dec1.getByRole('textbox', { name: 'Decision' }).fill('Use PostgreSQL for order data');
+    await dec1.getByRole('textbox', { name: 'Reason' }).fill('Provides strict ACID guarantees for transaction data');
 
     // 4. Completed
     await page.getByRole('button', { name: /Add completed item/i }).first().click();
-    await page.getByPlaceholder('e.g. Set up Dexie IndexedDB service layer').fill('Completed initial scaffold');
+    const comp1 = page.getByRole('group', { name: 'Completed item 1' });
+    await comp1.getByRole('textbox', { name: 'Description' }).fill('Completed initial scaffold');
 
     // 5. Tasks
     await page.getByRole('button', { name: /Add task/i }).first().click();
-    await page.getByPlaceholder('e.g. Implement passport live preview').fill('Implement passport editor test suite');
+    const task1 = page.getByRole('group', { name: 'Task 1' });
+    await task1.getByRole('textbox', { name: 'Description' }).fill('Implement passport editor test suite');
 
     // 6. Bugs
     await page.getByRole('button', { name: /Add bug/i }).first().click();
-    await page.getByPlaceholder('e.g. Session expires unexpectedly on refresh').fill('Windows file path backslash normalization');
+    const bug1 = page.getByRole('group', { name: 'Bug 1' });
+    await bug1.getByRole('textbox', { name: 'Description' }).fill('Windows file path backslash normalization');
 
     // 7. Instructions
     await page.getByRole('button', { name: /Add instruction/i }).first().click();
-    await page.getByPlaceholder('e.g. Always write automated tests before committing').fill('Always use TypeScript strict mode');
+    const inst1 = page.getByRole('group', { name: 'Instruction 1' });
+    await inst1.getByRole('textbox', { name: 'Rule / Instruction' }).fill('Always use TypeScript strict mode');
 
     // 8. Next Action
-    await page.getByPlaceholder('What should the recipient AI do next when continuing this project?').fill('Run E2E test verification');
+    await page.getByRole('textbox', { name: 'Immediate next action' }).fill('Run E2E test verification');
 
     // 9. Open Questions
     await page.getByRole('button', { name: /Add open question/i }).first().click();
-    await page.getByPlaceholder('e.g. Which LLM provider has best streaming latency for our use case?').fill('What cloud sync options should be considered?');
+    const q1 = page.getByRole('group', { name: 'Question 1' });
+    await q1.getByRole('textbox', { name: 'Question' }).fill('What cloud sync options should be considered?');
 
     // Wait for Saved
     await expect(page.getByRole('status', { name: 'Autosave status' })).toContainText('Saved');
@@ -135,19 +144,35 @@ test.describe('Passport Editor E2E Tests', () => {
     await page.getByRole('button', { name: /Expand all/i }).click();
 
     // Verify all fields persisted
-    await expect(page.getByPlaceholder('e.g. React, PostgreSQL')).toHaveValue('React');
-    await expect(page.getByPlaceholder('e.g. Frontend UI')).toHaveValue('Frontend framework');
-    await expect(page.getByPlaceholder('e.g. 18.2.0')).toHaveValue('18.3.1');
-    await expect(page.getByPlaceholder('e.g. Using strict mode and server components')).toHaveValue('Strict mode enabled');
-    await expect(page.getByPlaceholder('e.g. Must support offline editing')).toHaveValue('Zero outbound telemetry');
-    await expect(page.getByPlaceholder('e.g. Use Dexie for local storage')).toHaveValue('Use Dexie for IndexedDB');
-    await expect(page.getByPlaceholder('e.g. Provides clean transaction support over IndexedDB')).toHaveValue('Robust typed client storage');
-    await expect(page.getByPlaceholder('e.g. Set up Dexie IndexedDB service layer')).toHaveValue('Completed initial scaffold');
-    await expect(page.getByPlaceholder('e.g. Implement passport live preview')).toHaveValue('Implement passport editor test suite');
-    await expect(page.getByPlaceholder('e.g. Session expires unexpectedly on refresh')).toHaveValue('Windows file path backslash normalization');
-    await expect(page.getByPlaceholder('e.g. Always write automated tests before committing')).toHaveValue('Always use TypeScript strict mode');
-    await expect(page.getByPlaceholder('What should the recipient AI do next when continuing this project?')).toHaveValue('Run E2E test verification');
-    await expect(page.getByPlaceholder('e.g. Which LLM provider has best streaming latency for our use case?')).toHaveValue('What cloud sync options should be considered?');
+    const stack1Reloaded = page.getByRole('group', { name: 'Stack item 1' });
+    await expect(stack1Reloaded.getByRole('textbox', { name: 'Name' })).toHaveValue('React');
+    await expect(stack1Reloaded.getByRole('textbox', { name: 'Role' })).toHaveValue('Frontend framework');
+    await expect(stack1Reloaded.getByRole('textbox', { name: 'Version' })).toHaveValue('18.3.1');
+    await expect(stack1Reloaded.getByRole('textbox', { name: 'Notes' })).toHaveValue('Strict mode enabled');
+
+    const req1Reloaded = page.getByRole('group', { name: 'Requirement 1' });
+    await expect(req1Reloaded.getByRole('textbox', { name: 'Description' })).toHaveValue('Zero outbound telemetry');
+
+    const dec1Reloaded = page.getByRole('group', { name: 'Decision 1' });
+    await expect(dec1Reloaded.getByRole('textbox', { name: 'Decision' })).toHaveValue('Use PostgreSQL for order data');
+    await expect(dec1Reloaded.getByRole('textbox', { name: 'Reason' })).toHaveValue('Provides strict ACID guarantees for transaction data');
+
+    const comp1Reloaded = page.getByRole('group', { name: 'Completed item 1' });
+    await expect(comp1Reloaded.getByRole('textbox', { name: 'Description' })).toHaveValue('Completed initial scaffold');
+
+    const task1Reloaded = page.getByRole('group', { name: 'Task 1' });
+    await expect(task1Reloaded.getByRole('textbox', { name: 'Description' })).toHaveValue('Implement passport editor test suite');
+
+    const bug1Reloaded = page.getByRole('group', { name: 'Bug 1' });
+    await expect(bug1Reloaded.getByRole('textbox', { name: 'Description' })).toHaveValue('Windows file path backslash normalization');
+
+    const inst1Reloaded = page.getByRole('group', { name: 'Instruction 1' });
+    await expect(inst1Reloaded.getByRole('textbox', { name: 'Rule / Instruction' })).toHaveValue('Always use TypeScript strict mode');
+
+    await expect(page.getByRole('textbox', { name: 'Immediate next action' })).toHaveValue('Run E2E test verification');
+
+    const q1Reloaded = page.getByRole('group', { name: 'Question 1' });
+    await expect(q1Reloaded.getByRole('textbox', { name: 'Question' })).toHaveValue('What cloud sync options should be considered?');
   });
 
   test('3. Reorder with the keyboard buttons; reload; order persists', async ({ page }) => {
@@ -159,11 +184,13 @@ test.describe('Passport Editor E2E Tests', () => {
 
     // Add Task 1
     await page.getByRole('button', { name: /Add task/i }).first().click();
-    await page.getByPlaceholder('e.g. Implement passport live preview').first().fill('Task Alpha (First)');
+    const task1 = page.getByRole('group', { name: 'Task 1' });
+    await task1.getByRole('textbox', { name: 'Description' }).fill('Task Alpha (First)');
 
     // Add Task 2
     await page.getByRole('button', { name: /Add task/i }).first().click();
-    await page.getByPlaceholder('e.g. Implement passport live preview').nth(1).fill('Task Beta (Second)');
+    const task2 = page.getByRole('group', { name: 'Task 2' });
+    await task2.getByRole('textbox', { name: 'Description' }).fill('Task Beta (Second)');
 
     await expect(page.getByRole('status', { name: 'Autosave status' })).toContainText('Saved');
 
@@ -173,8 +200,8 @@ test.describe('Passport Editor E2E Tests', () => {
     await moveUpBtn.click();
 
     // Verify visual order swapped
-    await expect(page.getByPlaceholder('e.g. Implement passport live preview').first()).toHaveValue('Task Beta (Second)');
-    await expect(page.getByPlaceholder('e.g. Implement passport live preview').nth(1)).toHaveValue('Task Alpha (First)');
+    await expect(page.getByRole('group', { name: 'Task 1' }).getByRole('textbox', { name: 'Description' })).toHaveValue('Task Beta (Second)');
+    await expect(page.getByRole('group', { name: 'Task 2' }).getByRole('textbox', { name: 'Description' })).toHaveValue('Task Alpha (First)');
 
     await expect(page.getByRole('status', { name: 'Autosave status' })).toContainText('Saved');
 
@@ -182,8 +209,8 @@ test.describe('Passport Editor E2E Tests', () => {
     await page.reload();
     await page.getByRole('button', { name: /Expand all/i }).click();
 
-    await expect(page.getByPlaceholder('e.g. Implement passport live preview').first()).toHaveValue('Task Beta (Second)');
-    await expect(page.getByPlaceholder('e.g. Implement passport live preview').nth(1)).toHaveValue('Task Alpha (First)');
+    await expect(page.getByRole('group', { name: 'Task 1' }).getByRole('textbox', { name: 'Description' })).toHaveValue('Task Beta (Second)');
+    await expect(page.getByRole('group', { name: 'Task 2' }).getByRole('textbox', { name: 'Description' })).toHaveValue('Task Alpha (First)');
   });
 
   test('4. Delete an item, then Undo restores it; delete without undo persists after reload', async ({ page }) => {
@@ -195,10 +222,12 @@ test.describe('Passport Editor E2E Tests', () => {
 
     // Add two completed items
     await page.getByRole('button', { name: /Add completed item/i }).first().click();
-    await page.getByPlaceholder('e.g. Set up Dexie IndexedDB service layer').first().fill('Milestone One');
+    const comp1 = page.getByRole('group', { name: 'Completed item 1' });
+    await comp1.getByRole('textbox', { name: 'Description' }).fill('Milestone One');
 
     await page.getByRole('button', { name: /Add completed item/i }).first().click();
-    await page.getByPlaceholder('e.g. Set up Dexie IndexedDB service layer').nth(1).fill('Milestone Two');
+    const comp2 = page.getByRole('group', { name: 'Completed item 2' });
+    await comp2.getByRole('textbox', { name: 'Description' }).fill('Milestone Two');
 
     await expect(page.getByRole('status', { name: 'Autosave status' })).toContainText('Saved');
 
@@ -206,8 +235,8 @@ test.describe('Passport Editor E2E Tests', () => {
     await page.getByRole('button', { name: 'Delete completed item 1' }).click();
 
     // Item 1 deleted immediately, toast with Undo appears
-    await expect(page.getByPlaceholder('e.g. Set up Dexie IndexedDB service layer')).toHaveCount(1);
-    await expect(page.getByPlaceholder('e.g. Set up Dexie IndexedDB service layer').first()).toHaveValue('Milestone Two');
+    await expect(page.getByRole('group', { name: /^Completed item \d+$/ })).toHaveCount(1);
+    await expect(page.getByRole('group', { name: 'Completed item 1' }).getByRole('textbox', { name: 'Description' })).toHaveValue('Milestone Two');
 
     const undoButton = page.getByRole('button', { name: 'Undo' });
     await expect(undoButton).toBeVisible();
@@ -216,15 +245,16 @@ test.describe('Passport Editor E2E Tests', () => {
     await undoButton.click();
 
     // Both items present again!
-    await expect(page.getByPlaceholder('e.g. Set up Dexie IndexedDB service layer')).toHaveCount(2);
-    await expect(page.getByPlaceholder('e.g. Set up Dexie IndexedDB service layer').first()).toHaveValue('Milestone One');
+    await expect(page.getByRole('group', { name: /^Completed item \d+$/ })).toHaveCount(2);
+    await expect(page.getByRole('group', { name: 'Completed item 1' }).getByRole('textbox', { name: 'Description' })).toHaveValue('Milestone One');
+    await expect(page.getByRole('group', { name: 'Completed item 2' }).getByRole('textbox', { name: 'Description' })).toHaveValue('Milestone Two');
 
     await expect(page.getByRole('status', { name: 'Autosave status' })).toContainText('Saved');
 
     // Now delete item 1 again without undo
     await page.getByRole('button', { name: 'Delete completed item 1' }).click();
-    await expect(page.getByPlaceholder('e.g. Set up Dexie IndexedDB service layer')).toHaveCount(1);
-    await expect(page.getByPlaceholder('e.g. Set up Dexie IndexedDB service layer').first()).toHaveValue('Milestone Two');
+    await expect(page.getByRole('group', { name: /^Completed item \d+$/ })).toHaveCount(1);
+    await expect(page.getByRole('group', { name: 'Completed item 1' }).getByRole('textbox', { name: 'Description' })).toHaveValue('Milestone Two');
 
     await expect(page.getByRole('status', { name: 'Autosave status' })).toContainText('Saved');
 
@@ -232,8 +262,8 @@ test.describe('Passport Editor E2E Tests', () => {
     await page.reload();
     await page.getByRole('button', { name: /Expand all/i }).click();
 
-    await expect(page.getByPlaceholder('e.g. Set up Dexie IndexedDB service layer')).toHaveCount(1);
-    await expect(page.getByPlaceholder('e.g. Set up Dexie IndexedDB service layer').first()).toHaveValue('Milestone Two');
+    await expect(page.getByRole('group', { name: /^Completed item \d+$/ })).toHaveCount(1);
+    await expect(page.getByRole('group', { name: 'Completed item 1' }).getByRole('textbox', { name: 'Description' })).toHaveValue('Milestone Two');
   });
 
   test('5. Validation: empty task text shows plain-language error and Not saved; fixing saves; navigating away asks confirmation', async ({ page }) => {
@@ -264,7 +294,8 @@ test.describe('Passport Editor E2E Tests', () => {
     await expect(page).toHaveURL(new RegExp(`/project/${projectId}/passport`));
 
     // Fix the error by entering valid task text
-    await page.getByPlaceholder('e.g. Implement passport live preview').first().fill('Write comprehensive E2E specs');
+    const task1 = page.getByRole('group', { name: 'Task 1' });
+    await task1.getByRole('textbox', { name: 'Description' }).fill('Write comprehensive E2E specs');
 
     // Error clears and status becomes Saved
     await expect(page.getByRole('alert').filter({ hasText: 'Task 1 needs some text' })).not.toBeVisible();
@@ -306,7 +337,7 @@ test.describe('Passport Editor E2E Tests', () => {
     await expect(sidePanel.getByText('Context attached')).toBeVisible();
 
     // 1. Fill Objective
-    await page.getByLabel('Project goal').fill('Build full-featured offline assistant');
+    await page.getByRole('textbox', { name: 'Project goal' }).fill('Build full-featured offline assistant');
     await expect(sidePanel.getByText('Objective defined')).toBeVisible();
 
     // Expand all sections
@@ -314,23 +345,26 @@ test.describe('Passport Editor E2E Tests', () => {
 
     // 2. Add Stack
     await page.getByRole('button', { name: /Add stack item/i }).first().click();
-    await page.getByPlaceholder('e.g. React, PostgreSQL').fill('TypeScript');
+    const stack1 = page.getByRole('group', { name: 'Stack item 1' });
+    await stack1.getByRole('textbox', { name: 'Name' }).fill('TypeScript');
 
     // 3. Add Active Decision
     await page.getByRole('button', { name: /Add decision/i }).first().click();
-    await page.getByPlaceholder('e.g. Use Dexie for local storage').fill('Zero network calls');
-    await page.getByPlaceholder('e.g. Provides clean transaction support over IndexedDB').fill('Security and privacy');
+    const dec1 = page.getByRole('group', { name: 'Decision 1' });
+    await dec1.getByRole('textbox', { name: 'Decision' }).fill('Zero network calls');
+    await dec1.getByRole('textbox', { name: 'Reason' }).fill('Security and privacy');
 
     // 4. Add Task
     await page.getByRole('button', { name: /Add task/i }).first().click();
-    await page.getByPlaceholder('e.g. Implement passport live preview').fill('Initial migration');
+    const task1 = page.getByRole('group', { name: 'Task 1' });
+    await task1.getByRole('textbox', { name: 'Description' }).fill('Initial migration');
 
     // 5. Test the bugsReviewed toggle alone passes the bugs check
     const bugsToggle = page.getByLabel('I reviewed bugs and there are none');
     await bugsToggle.check();
 
     // 6. Fill Next Action
-    await page.getByPlaceholder('What should the recipient AI do next when continuing this project?').fill('Publish release v1');
+    await page.getByRole('textbox', { name: 'Immediate next action' }).fill('Publish release v1');
 
     // Wait for autosave to complete
     await expect(page.getByRole('status', { name: 'Autosave status' })).toContainText('Saved');
@@ -365,7 +399,7 @@ test.describe('Passport Editor E2E Tests', () => {
     await createAndOpenPassport(page, 'Markdown Live Preview App');
 
     // Set goal
-    await page.getByLabel('Project goal').fill('Verify markdown preview and copy functionality');
+    await page.getByRole('textbox', { name: 'Project goal' }).fill('Verify markdown preview and copy functionality');
     await expect(page.getByRole('status', { name: 'Autosave status' })).toContainText('Saved');
 
     // On mobile viewport, ensure preview is expanded
@@ -403,7 +437,7 @@ test.describe('Passport Editor E2E Tests', () => {
     const { projectId } = await createAndOpenPassport(page, 'Immediate Switch Project');
 
     // Edit project summary and IMMEDIATELY click Overview tab without waiting for debounce
-    const summaryInput = page.getByLabel('Executive summary');
+    const summaryInput = page.getByRole('textbox', { name: 'Executive summary' });
     await summaryInput.fill('Instant save on tab switch verification');
 
     // Click Overview immediately
@@ -415,7 +449,7 @@ test.describe('Passport Editor E2E Tests', () => {
     await expect(page).toHaveURL(new RegExp(`/project/${projectId}/passport`));
 
     // Value must be fully intact
-    await expect(page.getByLabel('Executive summary')).toHaveValue('Instant save on tab switch verification');
+    await expect(page.getByRole('textbox', { name: 'Executive summary' })).toHaveValue('Instant save on tab switch verification');
   });
 
   test('9. Superseded decision renders dimmed but remains listed', async ({ page }) => {
@@ -427,22 +461,20 @@ test.describe('Passport Editor E2E Tests', () => {
 
     // Add decision
     await page.getByRole('button', { name: /Add decision/i }).first().click();
-    await page.getByPlaceholder('e.g. Use Dexie for local storage').fill('Deprecated REST API v1');
-    await page.getByPlaceholder('e.g. Provides clean transaction support over IndexedDB').fill('Migrated to local Dexie engine');
+    const dec1 = page.getByRole('group', { name: 'Decision 1' });
+    await dec1.getByRole('textbox', { name: 'Decision' }).fill('Deprecated REST API v1');
+    await dec1.getByRole('textbox', { name: 'Reason' }).fill('Migrated to local storage engine');
 
     // Change status to superseded
-    const statusSelect = page.getByLabel('Decision status').first();
+    const statusSelect = dec1.getByRole('combobox', { name: 'Decision status' });
     await statusSelect.selectOption('superseded');
 
     await expect(page.getByRole('status', { name: 'Autosave status' })).toContainText('Saved');
 
     // Verify superseded card has dimmed opacity and "Superseded" badge
-    const decisionCard = page.locator('.opacity-60');
-    await expect(decisionCard).toBeVisible();
-    await expect(decisionCard.locator('span').filter({ hasText: /^Superseded$/ })).toBeVisible();
-    await expect(decisionCard.getByPlaceholder('e.g. Use Dexie for local storage')).toHaveValue(
-      'Deprecated REST API v1'
-    );
+    await expect(dec1).toHaveClass(/opacity-60/);
+    await expect(dec1.locator('span').filter({ hasText: /^Superseded$/ })).toBeVisible();
+    await expect(dec1.getByRole('textbox', { name: 'Decision' })).toHaveValue('Deprecated REST API v1');
   });
 
   test('10. Layout/touch-target audit helper and axe scan (dark and light) on editor with all sections expanded; no overflow at 360px', async ({ page }) => {
@@ -476,38 +508,43 @@ test.describe('Passport Editor E2E Tests', () => {
     collectConsoleErrors(page);
     await createAndOpenPassport(page, 'Project Passport Platform');
 
-    // Populate realistic data across sections
-    await page.getByLabel('Project goal').fill('Build a resilient local-first developer handoff platform');
-    await page.getByLabel('Executive summary').fill('Project Passport preserves full architectural intent across AI context switches.');
-    await page.getByLabel('Project status').selectOption('in_progress');
+    // Populate realistic data across sections using group and label locators
+    await page.getByRole('textbox', { name: 'Project goal' }).fill('Build a resilient local-first developer handoff platform');
+    await page.getByRole('textbox', { name: 'Executive summary' }).fill('Project Passport preserves full architectural intent across AI context switches.');
+    await page.getByRole('combobox', { name: 'Project status' }).selectOption('in_progress');
 
     // Expand all
     await page.getByRole('button', { name: /Expand all/i }).click();
 
     // Stack
     await page.getByRole('button', { name: /Add stack item/i }).first().click();
-    await page.getByPlaceholder('e.g. React, PostgreSQL').fill('Vite + React');
-    await page.getByPlaceholder('e.g. Frontend UI').fill('Application shell');
-    await page.getByPlaceholder('e.g. 18.2.0').fill('5.4.0');
+    const stack1 = page.getByRole('group', { name: 'Stack item 1' });
+    await stack1.getByRole('textbox', { name: 'Name' }).fill('Vite + React');
+    await stack1.getByRole('textbox', { name: 'Role' }).fill('Frontend framework');
+    await stack1.getByRole('textbox', { name: 'Version' }).fill('5.4.0');
+    await stack1.getByRole('textbox', { name: 'Notes' }).fill('Strict mode enabled');
 
     // Requirement
     await page.getByRole('button', { name: /Add requirement/i }).first().click();
-    await page.getByPlaceholder('e.g. Must support offline editing').fill('Zero outbound telemetry; fully offline functional');
+    const req1 = page.getByRole('group', { name: 'Requirement 1' });
+    await req1.getByRole('textbox', { name: 'Description' }).fill('Zero outbound telemetry; fully offline functional');
 
     // Decision
     await page.getByRole('button', { name: /Add decision/i }).first().click();
-    await page.getByPlaceholder('e.g. Use Dexie for local storage').fill('Dexie client storage with schema versioning');
-    await page.getByPlaceholder('e.g. Provides clean transaction support over IndexedDB').fill('IndexedDB abstraction with zero dependencies on external servers');
+    const dec1 = page.getByRole('group', { name: 'Decision 1' });
+    await dec1.getByRole('textbox', { name: 'Decision' }).fill('PostgreSQL for order data');
+    await dec1.getByRole('textbox', { name: 'Reason' }).fill('Provides strict ACID guarantees for transaction data');
 
     // Task
     await page.getByRole('button', { name: /Add task/i }).first().click();
-    await page.getByPlaceholder('e.g. Implement passport live preview').fill('Finalize Slice 4 passport editor verification');
+    const task1 = page.getByRole('group', { name: 'Task 1' });
+    await task1.getByRole('textbox', { name: 'Description' }).fill('Finalize Slice 4b passport editor verification');
 
     // Bug toggle
     await page.getByLabel('I reviewed bugs and there are none').check();
 
     // Next action
-    await page.getByPlaceholder('What should the recipient AI do next when continuing this project?').fill('Complete Slice 4 report and commit');
+    await page.getByRole('textbox', { name: 'Immediate next action' }).fill('Complete Slice 4b report and commit');
 
     await expect(page.getByRole('status', { name: 'Autosave status' })).toContainText('Saved');
 
@@ -520,10 +557,111 @@ test.describe('Passport Editor E2E Tests', () => {
       }
     }
 
-    // Capture viewport-only screenshot: passport-editor-top
-    await shot(page, 'passport-editor-top', { fullPage: false });
+    // Capture viewport-only top screenshot using shotViewportTop helper: *-viewport-top.png
+    const topShotPath = await shotViewportTop(page, 'passport-editor');
 
-    // Capture full-page screenshot: passport-editor-populated
+    // Capture full-page screenshot: *-populated.png
     await shot(page, 'passport-editor-populated', { fullPage: true });
+
+    // Save review copies directly using Playwright screenshot
+    if (topShotPath.includes('desktop')) {
+      await page.screenshot({ path: 'e2e-results/review/desktop-passport-editor-viewport-top.png', fullPage: false });
+      await page.screenshot({ path: 'e2e-results/review/desktop-passport-editor-populated.png', fullPage: true });
+    } else if (topShotPath.includes('mobile-360')) {
+      await page.screenshot({ path: 'e2e-results/review/mobile-360-passport-editor-viewport-top.png', fullPage: false });
+      await page.screenshot({ path: 'e2e-results/review/mobile-360-passport-editor-populated.png', fullPage: true });
+
+      // If mobile page height exceeds 6000px, also produce part1 and part2
+      const fullHeight = await page.evaluate(() => document.body.scrollHeight);
+      if (fullHeight > 6000) {
+        const halfHeight = Math.ceil(fullHeight / 2);
+        // Part 1: Top half
+        await page.screenshot({
+          path: 'e2e-results/review/mobile-360-passport-editor-populated-part1.png',
+          clip: { x: 0, y: 0, width: 360, height: halfHeight },
+        });
+        // Part 2: Bottom half
+        await page.screenshot({
+          path: 'e2e-results/review/mobile-360-passport-editor-populated-part2.png',
+          clip: { x: 0, y: halfHeight, width: 360, height: fullHeight - halfHeight },
+        });
+      }
+    }
+  });
+
+  test('12. Auto-growing textareas: 140-char decision and reason expand visibly without scrollbar or horizontal overflow', async ({ page }) => {
+    collectConsoleErrors(page);
+    await createAndOpenPassport(page, 'AutoGrow Test Project');
+
+    // Expand all sections
+    await page.getByRole('button', { name: /Expand all/i }).click();
+
+    // Add decision
+    await page.getByRole('button', { name: /Add decision/i }).first().click();
+    const decisionGroup = page.getByRole('group', { name: 'Decision 1' });
+    await expect(decisionGroup).toBeVisible();
+
+    const decisionTextarea = decisionGroup.getByRole('textbox', { name: 'Decision' });
+    const reasonTextarea = decisionGroup.getByRole('textbox', { name: 'Reason' });
+
+    // Exactly 140 characters each
+    const text140Decision =
+      'Adopt PostgreSQL with JSONB columns for flexible, resilient, ACID-compliant persistence across all microservices and local execution runtime';
+    const text140Reason =
+      'Provides structured transactional integrity while retaining schema evolution flexibility needed when orchestrating state transitions locally';
+    expect(text140Decision.length).toBe(140);
+    expect(text140Reason.length).toBe(140);
+
+    await decisionTextarea.fill(text140Decision);
+    await reasonTextarea.fill(text140Reason);
+
+    // Verify textarea expanded such that full text is visible without scrollbar (scrollHeight <= clientHeight + 1)
+    // and no horizontal overflow (scrollWidth <= clientWidth)
+    const decisionMetrics = await decisionTextarea.evaluate((el: HTMLTextAreaElement) => ({
+      scrollHeight: el.scrollHeight,
+      clientHeight: el.clientHeight,
+      scrollWidth: el.scrollWidth,
+      clientWidth: el.clientWidth,
+    }));
+    expect(decisionMetrics.scrollHeight).toBeLessThanOrEqual(decisionMetrics.clientHeight + 1);
+    expect(decisionMetrics.scrollWidth).toBeLessThanOrEqual(decisionMetrics.clientWidth);
+
+    const reasonMetrics = await reasonTextarea.evaluate((el: HTMLTextAreaElement) => ({
+      scrollHeight: el.scrollHeight,
+      clientHeight: el.clientHeight,
+      scrollWidth: el.scrollWidth,
+      clientWidth: el.clientWidth,
+    }));
+    expect(reasonMetrics.scrollHeight).toBeLessThanOrEqual(reasonMetrics.clientHeight + 1);
+    expect(reasonMetrics.scrollWidth).toBeLessThanOrEqual(reasonMetrics.clientWidth);
+
+    // Layout audit still passes
+    await auditPageLayoutAndTouchTargets(page, 'passport-editor-140char-textareas');
+  });
+
+  test('13. Autosave status is sticky and stays visible in viewport while scrolled to bottom, transitioning Saving to Saved', async ({ page }) => {
+    collectConsoleErrors(page);
+    await createAndOpenPassport(page, 'Sticky Autosave Project');
+
+    // Expand all sections so the page is long
+    await page.getByRole('button', { name: /Expand all/i }).click();
+
+    // Scroll to the very bottom of the long editor
+    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+
+    // Locate the visible Autosave status indicator
+    const autosaveStatus = page.getByRole('status', { name: 'Autosave status' });
+    await expect(autosaveStatus).toBeInViewport();
+
+    // Edit a field near the bottom: Immediate next action
+    const nextActionField = page.getByRole('textbox', { name: 'Immediate next action' });
+    await nextActionField.scrollIntoViewIfNeeded();
+    await nextActionField.fill('Verify sticky autosave status while scrolled to bottom');
+
+    // Assert status stays in viewport and shows Saving then Saved
+    await expect(autosaveStatus).toBeInViewport();
+    await expect(autosaveStatus).toContainText(/Saving|Saved/);
+    await expect(autosaveStatus).toContainText('Saved');
+    await expect(autosaveStatus).toBeInViewport();
   });
 });

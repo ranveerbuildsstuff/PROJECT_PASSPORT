@@ -326,7 +326,10 @@ test.describe('App Shell, Accessibility & Visuals', () => {
 
     // 4. Dashboard with 3 projects screenshot
     await expect(page.getByRole('link', { name: /Project Alpha/ })).toBeVisible();
-    await shot(page, 'dashboard-3-projects', { fullPage: true });
+    const dashboardShot = await shot(page, 'dashboard-3-projects', { fullPage: true });
+    if (dashboardShot.includes('mobile-360')) {
+      await page.screenshot({ path: 'e2e-results/review/mobile-360-dashboard-3-projects.png', fullPage: true });
+    }
 
     // 5. Light theme dashboard screenshot
     await page.locator('html').evaluate((el) => el.setAttribute('data-theme', 'light'));
@@ -337,5 +340,73 @@ test.describe('App Shell, Accessibility & Visuals', () => {
     await page.getByRole('link', { name: 'Project Gamma: Local LLM Engine' }).click();
     await expect(page.getByRole('heading', { level: 1, name: 'Project Gamma: Local LLM Engine' })).toBeVisible();
     await shot(page, 'project-overview', { fullPage: true });
+  });
+
+  test('15. Header background opacity is 1 and backdrop-filter is none in both themes, ON DEVICE badge single line without header overflow at 360px', async ({
+    page,
+  }) => {
+    collectConsoleErrors(page);
+    await page.goto('/');
+
+    const checkHeader = async () => {
+      const header = page.locator('header');
+      await expect(header).toBeVisible();
+
+      const { bgAlpha, backdropFilter, scrollWidth, clientWidth } = await header.evaluate((el) => {
+        const computed = window.getComputedStyle(el);
+        const bg = computed.backgroundColor;
+        let alpha = 1;
+        if (bg.startsWith('rgba')) {
+          const match = bg.match(/rgba\(\s*\d+\s*,\s*\d+\s*,\s*([\d.]+)\s*\)/);
+          alpha = match && match[1] ? parseFloat(match[1]) : 1;
+        }
+        const bf =
+          computed.backdropFilter ||
+          (computed as unknown as Record<string, string>)['webkitBackdropFilter'] ||
+          'none';
+        return {
+          bgAlpha: alpha,
+          backdropFilter: bf,
+          scrollWidth: el.scrollWidth,
+          clientWidth: el.clientWidth,
+        };
+      });
+
+      expect(bgAlpha).toBe(1);
+      expect(backdropFilter).toBe('none');
+      expect(scrollWidth).toBeLessThanOrEqual(clientWidth);
+    };
+
+    // 1. Dark theme check
+    await checkHeader();
+
+    // 2. Light theme check
+    const themeBtn = page.getByRole('button', { name: /Switch to light theme/i });
+    if (await themeBtn.isVisible()) {
+      await themeBtn.click();
+      await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+      await checkHeader();
+      // Restore dark theme
+      const darkBtn = page.getByRole('button', { name: /Switch to dark theme/i });
+      if (await darkBtn.isVisible()) {
+        await darkBtn.click();
+      }
+    }
+
+    // 3. Check ON DEVICE badge on mobile-360
+    const onDeviceBadge = page.getByLabel('Stored only on this device');
+    if (await onDeviceBadge.isVisible()) {
+      const badgeBox = await onDeviceBadge.boundingBox();
+      expect(badgeBox).not.toBeNull();
+      // Single line height <= 32px
+      expect(badgeBox!.height).toBeLessThanOrEqual(32);
+      // Header does not overflow at 360px
+      const header = page.locator('header');
+      const headerOverflow = await header.evaluate((el) => el.scrollWidth > el.clientWidth);
+      expect(headerOverflow).toBe(false);
+
+      // Clip screenshot of just the header on mobile-360
+      await header.screenshot({ path: 'e2e-results/review/mobile-360-header-badge.png' });
+    }
   });
 });

@@ -10,6 +10,8 @@ export interface ShotOptions {
 
 /**
  * Saves a screenshot to e2e-results/screenshots/<project>-<name>.png
+ * When { fullPage: true }, temporarily makes sticky and fixed elements static
+ * (injects a style tag, then removes it) so they appear at their natural position.
  */
 export async function shot(page: Page, name: string, options?: ShotOptions): Promise<string> {
   let projectName = 'desktop';
@@ -23,7 +25,49 @@ export async function shot(page: Page, name: string, options?: ShotOptions): Pro
   }
 
   const filePath = `e2e-results/screenshots/${projectName}-${name}.png`;
-  await page.screenshot({ path: filePath, fullPage: options?.fullPage ?? false });
+
+  if (options?.fullPage) {
+    const styleHandle = await page.addStyleTag({
+      content: `
+        header,
+        [class*="sticky"],
+        [class*="fixed"],
+        [style*="position: sticky"],
+        [style*="position: fixed"] {
+          position: static !important;
+        }
+      `,
+    });
+    try {
+      await page.screenshot({ path: filePath, fullPage: true });
+    } finally {
+      await styleHandle.evaluate((el) => (el as Element).remove()).catch(() => {});
+    }
+  } else {
+    await page.screenshot({ path: filePath, fullPage: false });
+  }
+
+  return filePath;
+}
+
+/**
+ * Viewport screenshot helper that scrolls to the very top first,
+ * saves to e2e-results/screenshots/<project>-<name>-viewport-top.png
+ */
+export async function shotViewportTop(page: Page, name: string): Promise<string> {
+  let projectName = 'desktop';
+  try {
+    const info = test.info();
+    if (info?.project?.name) {
+      projectName = info.project.name;
+    }
+  } catch {
+    // Called outside an active test context
+  }
+
+  await page.evaluate(() => window.scrollTo(0, 0));
+  const filePath = `e2e-results/screenshots/${projectName}-${name}-viewport-top.png`;
+  await page.screenshot({ path: filePath, fullPage: false });
   return filePath;
 }
 

@@ -1,10 +1,11 @@
-import React, { forwardRef, useId } from 'react';
+import React, { forwardRef, useId, useRef, useEffect, useCallback } from 'react';
 
 export interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
   label?: string;
   error?: string;
   helperText?: string;
   isMonospace?: boolean;
+  autoGrow?: boolean;
 }
 
 export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function Textarea(
@@ -13,10 +14,12 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
     error,
     helperText,
     isMonospace = false,
+    autoGrow = true,
     id: customId,
     className = '',
     required,
-    rows = 3,
+    rows = 1,
+    onChange,
     ...props
   },
   ref
@@ -25,6 +28,48 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
   const textareaId = customId || generatedId;
   const errorId = `${textareaId}-error`;
   const helperId = `${textareaId}-helper`;
+
+  const internalRef = useRef<HTMLTextAreaElement | null>(null);
+
+  const setRef = useCallback(
+    (node: HTMLTextAreaElement | null) => {
+      internalRef.current = node;
+      if (typeof ref === 'function') {
+        ref(node);
+      } else if (ref) {
+        (ref as React.MutableRefObject<HTMLTextAreaElement | null>).current = node;
+      }
+    },
+    [ref]
+  );
+
+  const adjustHeight = useCallback(() => {
+    const el = internalRef.current;
+    if (!el || !autoGrow) return;
+    el.style.height = 'auto';
+    const computed = window.getComputedStyle(el);
+    const borderTop = parseFloat(computed.borderTopWidth) || 0;
+    const borderBottom = parseFloat(computed.borderBottomWidth) || 0;
+    const targetHeight = Math.max(44, el.scrollHeight + borderTop + borderBottom);
+    el.style.height = `${targetHeight}px`;
+  }, [autoGrow]);
+
+  useEffect(() => {
+    adjustHeight();
+  }, [adjustHeight, props.value]);
+
+  useEffect(() => {
+    if (!autoGrow) return;
+    window.addEventListener('resize', adjustHeight);
+    return () => window.removeEventListener('resize', adjustHeight);
+  }, [adjustHeight, autoGrow]);
+
+  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    if (autoGrow) {
+      adjustHeight();
+    }
+    onChange?.(e);
+  };
 
   const describedBy = error
     ? errorId
@@ -46,13 +91,16 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
         </label>
       )}
       <textarea
-        ref={ref}
+        ref={setRef}
         id={textareaId}
         rows={rows}
         required={required}
         aria-invalid={!!error}
         aria-describedby={describedBy}
-        className={`w-full min-h-[88px] px-3.5 py-2.5 rounded-lg border bg-bg-surface text-text-primary text-sm transition-colors placeholder:text-text-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-brass resize-y ${
+        onChange={handleChange}
+        className={`w-full min-h-[44px] px-3.5 py-2.5 rounded-lg border bg-bg-surface text-text-primary text-sm transition-colors placeholder:text-text-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-brass break-words ${
+          autoGrow ? 'resize-none overflow-hidden' : 'resize-y'
+        } ${
           isMonospace ? 'font-mono' : 'font-sans'
         } ${
           error

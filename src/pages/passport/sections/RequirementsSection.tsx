@@ -1,8 +1,8 @@
 import React from 'react';
-import { ArrowUp, ArrowDown, Trash2, Plus, ListChecks } from 'lucide-react';
+import { ArrowUp, ArrowDown, Trash2, Plus } from 'lucide-react';
 import type { PassportV1, RequirementPriority } from '../../../domain';
 import { newId, moveItem } from '../../../domain';
-import { Input, Select, Button, useToast, EmptyState } from '../../../ui';
+import { Select, Button, useToast, CompactEmptyState, Textarea } from '../../../ui';
 
 export interface RequirementsSectionProps {
   draft: PassportV1;
@@ -83,10 +83,8 @@ export function RequirementsSection({
 
   if (requirements.length === 0) {
     return (
-      <EmptyState
-        icon={<ListChecks className="w-6 h-6 text-accent-brass" aria-hidden="true" />}
-        title="No requirements added"
-        description="Capture functional, technical, and architectural requirements."
+      <CompactEmptyState
+        message="No requirements yet"
         actionLabel="Add requirement"
         onAction={handleAddItem}
       />
@@ -98,7 +96,7 @@ export function RequirementsSection({
       <div className="flex justify-end">
         <Button
           type="button"
-          variant="outline"
+          variant="secondary"
           size="sm"
           onClick={handleAddItem}
           className="gap-1.5"
@@ -117,6 +115,8 @@ export function RequirementsSection({
           return (
             <div
               key={item.id}
+              role="group"
+              aria-label={`Requirement ${itemNum}`}
               className="p-3.5 rounded-lg border border-border-subtle bg-bg-app flex flex-col gap-3"
             >
               <div className="flex items-center justify-between border-b border-border-subtle/50 pb-2 flex-wrap gap-2">
@@ -155,12 +155,12 @@ export function RequirementsSection({
 
               <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                 <div className="sm:col-span-3">
-                  <Input
+                  <Textarea
                     label="Description"
                     required
                     value={item.text}
                     onChange={(e) => handleChangeText(index, e.target.value)}
-                    placeholder="e.g. Must support offline editing"
+                    placeholder="Must support offline editing"
                     error={itemError}
                   />
                 </div>

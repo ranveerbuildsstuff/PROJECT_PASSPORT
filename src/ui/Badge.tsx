@@ -23,7 +23,7 @@ export function Badge({
 
   return (
     <span
-      className={`font-mono text-xs tracking-wider px-2 py-0.5 rounded-sm border inline-flex items-center gap-1 font-medium select-none ${variantClasses} ${className}`}
+      className={`font-mono text-xs tracking-wider px-2 py-0.5 rounded-sm border inline-flex items-center gap-1 font-medium select-none whitespace-nowrap ${variantClasses} ${className}`}
       {...props}
     >
       {children}

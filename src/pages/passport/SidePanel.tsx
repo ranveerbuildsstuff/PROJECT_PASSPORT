@@ -3,13 +3,21 @@ import { Copy, Check, FileText, ChevronDown } from 'lucide-react';
 import type { PassportV1 } from '../../domain';
 import { computeReadiness, passportToMarkdown, estimateTokens } from '../../domain';
 import { ProgressRing, Badge, Button, useToast, Card } from '../../ui';
+import { AutosaveStatus } from './AutosaveStatus';
 
 export interface SidePanelProps {
   draft: PassportV1;
+  saveStatus?: 'saved' | 'saving' | 'not_saved' | 'error';
+  statusMessage?: string;
   className?: string;
 }
 
-export function SidePanel({ draft, className = '' }: SidePanelProps): React.ReactElement {
+export function SidePanel({
+  draft,
+  saveStatus,
+  statusMessage,
+  className = '',
+}: SidePanelProps): React.ReactElement {
   const { showToast } = useToast();
   const [copied, setCopied] = useState(false);
   const [isReadinessOpenMobile, setIsReadinessOpenMobile] = useState(true);
@@ -35,7 +43,17 @@ export function SidePanel({ draft, className = '' }: SidePanelProps): React.Reac
   };
 
   return (
-    <aside className={`flex flex-col gap-6 ${className}`}>
+    <aside className={`flex flex-col gap-6 h-full ${className}`}>
+      {/* Desktop Sticky Header: Autosave Status */}
+      {saveStatus && (
+        <div className="sticky top-20 z-20 flex items-center justify-between p-3.5 rounded-lg border border-border-subtle bg-bg-surface shadow-sm">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold text-text-muted">Autosave:</span>
+            <AutosaveStatus saveStatus={saveStatus} statusMessage={statusMessage} />
+          </div>
+        </div>
+      )}
+
       {/* 1. Readiness Card */}
       <Card className="p-4 sm:p-5 flex flex-col gap-4">
         <div className="flex items-center justify-between">

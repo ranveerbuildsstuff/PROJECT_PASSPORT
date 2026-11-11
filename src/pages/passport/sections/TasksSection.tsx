@@ -1,8 +1,8 @@
 import React from 'react';
-import { ArrowUp, ArrowDown, Trash2, Plus, CheckSquare } from 'lucide-react';
+import { ArrowUp, ArrowDown, Trash2, Plus } from 'lucide-react';
 import type { PassportV1, Task, TaskStatus, TaskPriority } from '../../../domain';
 import { newId, moveItem } from '../../../domain';
-import { Input, Select, Button, useToast, EmptyState } from '../../../ui';
+import { Select, Button, useToast, CompactEmptyState, Textarea } from '../../../ui';
 
 export interface TasksSectionProps {
   draft: PassportV1;
@@ -78,10 +78,8 @@ export function TasksSection({
 
   if (tasks.length === 0) {
     return (
-      <EmptyState
-        icon={<CheckSquare className="w-6 h-6 text-accent-brass" aria-hidden="true" />}
-        title="No tasks recorded"
-        description="Track active, planned, or blocked tasks for your project."
+      <CompactEmptyState
+        message="No tasks yet"
         actionLabel="Add task"
         onAction={handleAddItem}
       />
@@ -93,7 +91,7 @@ export function TasksSection({
       <div className="flex justify-end">
         <Button
           type="button"
-          variant="outline"
+          variant="secondary"
           size="sm"
           onClick={handleAddItem}
           className="gap-1.5"
@@ -112,6 +110,8 @@ export function TasksSection({
           return (
             <div
               key={item.id}
+              role="group"
+              aria-label={`Task ${itemNum}`}
               className="p-3.5 rounded-lg border border-border-subtle bg-bg-app flex flex-col gap-3"
             >
               <div className="flex items-center justify-between border-b border-border-subtle/50 pb-2 flex-wrap gap-2">
@@ -151,12 +151,12 @@ export function TasksSection({
 
               <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
                 <div className="sm:col-span-3">
-                  <Input
+                  <Textarea
                     label="Description"
                     required
                     value={item.text}
                     onChange={(e) => handleChangeField(index, 'text', e.target.value)}
-                    placeholder="e.g. Implement passport live preview"
+                    placeholder="Implement checkout payment flow"
                     error={textError}
                   />
                 </div>

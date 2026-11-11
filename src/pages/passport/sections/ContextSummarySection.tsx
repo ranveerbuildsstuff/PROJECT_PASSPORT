@@ -1,5 +1,5 @@
 import React from 'react';
-import { Files, MessageSquare, ExternalLink } from 'lucide-react';
+import { Files, MessageSquare, ArrowRight } from 'lucide-react';
 import type { PassportV1 } from '../../../domain';
 import { Card } from '../../../ui';
 
@@ -36,7 +36,7 @@ export function ContextSummarySection({
             className="inline-flex items-center gap-1.5 text-xs font-semibold text-accent-brass hover:underline min-h-[44px] cursor-pointer"
           >
             <span>Open Files tab</span>
-            <ExternalLink className="w-3.5 h-3.5" aria-hidden="true" />
+            <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
           </button>
         </Card>
 
@@ -60,7 +60,7 @@ export function ContextSummarySection({
             className="inline-flex items-center gap-1.5 text-xs font-semibold text-accent-brass hover:underline min-h-[44px] cursor-pointer"
           >
             <span>Open Conversations tab</span>
-            <ExternalLink className="w-3.5 h-3.5" aria-hidden="true" />
+            <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
           </button>
         </Card>
       </div>

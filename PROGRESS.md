@@ -13,7 +13,8 @@ Current slice: none (Slice 1, 1b, 2, 2b, 2c, Tooling T1, T1b, Slice 3 & Slice 3b
 - [x] Slice 3: App shell, design system, dashboard
 - [x] Slice 3b: UI polish and test gaps
 - [x] Slice 3c: Polish and test hygiene
-- [x] Slice 4: Passport editor + live preview [CURRENT]
+- [x] Slice 4: Passport editor + live preview
+- [x] Slice 4b: Editor UX fixes & review hygiene [CURRENT]
 - [ ] Slice 5: Capture prompt, reconstruct prompt, paste-back + merge
 - [ ] Slice 6: Conversation paste import
 - [ ] Slice 7: ChatGPT / Claude export import
@@ -101,6 +102,27 @@ Consolidated manual checklist tests into `storageService.test.ts` and deleted re
   - One-click "Copy markdown" button with clipboard fallback and toast feedback.
 - **Background Fetch Refinement (`hooks.ts`):**
   - Updated `useProject` to accept `isBackground = true` on storage event updates, preventing `isLoading` state from unmounting `PassportEditor` during background autosave notifications.
+
+### Slice 4b: Editor UX Fixes & Review Hygiene
+- **Opaque Header & Badge Stability:**
+  - Set app header background to solid `bg-bg-surface` with explicit inline `backdropFilter: 'none'`, ensuring 100% opacity (alpha = 1) across dark and light themes without glassmorphism or content showing through.
+  - Tuned header title and badge spacing to ensure the `"ON DEVICE"` badge never wraps (`whitespace-nowrap shrink-0`) and remains single-line (height <= 32px) without header horizontal overflow at 360px.
+- **Auto-Growing Textareas:**
+  - Upgraded `src/ui/Textarea.tsx` with dynamic auto-grow logic (`autoGrow = true`, default `rows = 1`, `min-h-[44px]`, `resize-none overflow-hidden break-words`), calculating `scrollHeight + borderTop + borderBottom` on input, value change, and window resize.
+  - Converted multi-line text fields (requirement description, decision, reason, completed text, task description, bug description, instruction rule, open question, and stack notes) to auto-growing textareas while keeping short single-line inputs (name, role, version, date, selects).
+- **Compact Empty States & Button Restraint:**
+  - Implemented `CompactEmptyState` displaying a single line of text with a small secondary action button, removing large dashed cards and oversized icons.
+  - Updated `DESIGN.md` establishing the button hierarchy restraint rule: at most one brass primary button per screen region (reserved for Basics); all list add actions use secondary or outline styling.
+- **Sticky Autosave Status:**
+  - On mobile (<1024px), rendered a slim sticky bar below the app header at `top-16 z-30` displaying live autosave status and an "Expand all / Collapse all" toggle button.
+  - On desktop (>=1024px), rendered a dedicated sticky header above the side panel at `top-20 z-20` keeping autosave status continuously visible in the viewport (`toBeInViewport()`) across the entire scroll length.
+- **Navigation Affordances & Accessible Locators:**
+  - Replaced `ExternalLink` icon with `ArrowRight` on internal context links ("Open Files tab" / "Open Conversations tab") with min-height 44px targets.
+  - Assigned `role="group"` with accessible names ("Decision 1", "Task 2", etc.) to every list card, with unique label associations. Eliminated `getByPlaceholder` from all test suites. Replaced developer-specific placeholders with domain-neutral examples.
+- **Screenshot Hygiene & Test Harness:**
+  - Enhanced `shot()` helper to temporarily set sticky/fixed elements to `position: static !important` during full-page captures, ensuring elements render at their natural document positions.
+  - Added `shotViewportTop()` helper capturing viewport-only tops of screens.
+  - Configured `playwright.config.ts` with `timeout: 60000` to provide adequate headroom for tests running multiple full-page axe-core audits on Windows environments.
 
 ---
 

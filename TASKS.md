@@ -146,7 +146,7 @@
 
 ---
 
-## Slice 4: Passport Editor & Live Preview [CURRENT]
+## Slice 4: Passport Editor & Live Preview
 
 - [x] Implement form controls in `src/ui/`: `Input`, `Textarea`, `Select`, and keyboard-accessible item list controls.
 - [x] Create multi-section Passport Editor accordion layout (Basics, Tech stack, Requirements, Decisions, Completed, Tasks, Bugs, Instructions, Next action, Open questions, Attached context summary).
@@ -165,6 +165,28 @@
 - All passport schema fields can be edited and are persisted to IndexedDB.
 - Readiness ring updates immediately when editing required fields.
 - Form displays clear plain-language errors on invalid inputs.
+
+---
+
+## Slice 4b: Editor UX Fixes & Review Hygiene [CURRENT]
+
+- [x] Header: Solid, opaque background in both dark and light themes (`bg-bg-surface`, alpha = 1, `backdrop-filter: none`). E2E assertions for both viewports and themes.
+- [x] "ON DEVICE" badge: Never wraps (`whitespace-nowrap`), single line at 360px (height <= 32px), header does not overflow at 360px.
+- [x] Free-text fields become auto-growing textareas (`min-h-[44px]`, `rows=1`, expanding with scrollHeight): requirement, decision, reason, completed, task, bug, instruction, open question, and stack notes. Short fields stay single-line. E2E on mobile-360 verifies 140-char decision and reason visible without scrollbar or horizontal overflow and layout audit passes.
+- [x] Empty states in editor become compact: single line of text with small secondary action button; only Basics sections keep brass primary button; list Add buttons use secondary/outline style (at most one brass primary action per screen region). Updated `DESIGN.md`.
+- [x] Sticky Autosave status: Stays visible while scrolling (inside sticky side panel header on desktop; slim sticky bar below app header at `top-16` on mobile). E2E verifies scrolling to bottom of long editor and editing a field keeps status in viewport (`toBeInViewport`) transitioning Saving to Saved.
+- [x] Internal links "Open Files tab" / "Open Conversations tab" remove external-link icon; use `ArrowRight` (min-height 44px).
+- [x] Test locators: Each list item card has `role="group"` with accessible name ("Decision 1", "Task 2", etc.) and unique labels within its group. `e2e/passport.spec.ts` rewritten to use group/label/role locators; zero `getByPlaceholder` in `e2e/`. Placeholders changed to domain-neutral examples without developer-specific wording.
+- [x] Review screenshots hygiene: In `shot()`, sticky/fixed elements temporarily become static during `fullPage: true`. Added `shotViewportTop` helper (`*-viewport-top.png`). Regenerated and refreshed `e2e-results/review/` with 6 clean files.
+- [x] **Tests added:** 4 new E2E tests (tests 12 and 13 in `passport.spec.ts`, test 15 in `shell.spec.ts`) bringing total to 68 Playwright tests (100% passing across desktop and mobile-360) and 103 Vitest unit tests.
+- [x] **Docs updated:** Update `DESIGN.md`, `PROGRESS.md`, and write `e2e-results/review/slice-4b-report.md`.
+- [x] **Commit message:** `Slice 4b: editor UX fixes`
+
+**Done when:**
+- `npm run typecheck`, `npm run lint`, `npm test`, `npm run build`, and `npm run test:e2e` pass with zero errors.
+- Zero forbidden patterns in `e2e/`.
+- Review folder populated and opened in Explorer.
+- Port 4179 confirmed free.
 
 ---
 

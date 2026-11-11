@@ -1,8 +1,8 @@
 import React from 'react';
-import { ArrowUp, ArrowDown, Trash2, Plus, Terminal } from 'lucide-react';
+import { ArrowUp, ArrowDown, Trash2, Plus } from 'lucide-react';
 import type { PassportV1 } from '../../../domain';
 import { moveItem } from '../../../domain';
-import { Input, Button, useToast, EmptyState } from '../../../ui';
+import { Button, useToast, CompactEmptyState, Textarea } from '../../../ui';
 
 export interface InstructionsSectionProps {
   draft: PassportV1;
@@ -69,10 +69,8 @@ export function InstructionsSection({
 
   if (instructions.length === 0) {
     return (
-      <EmptyState
-        icon={<Terminal className="w-6 h-6 text-accent-brass" aria-hidden="true" />}
-        title="No AI instructions specified"
-        description="Provide guidelines, rules, conventions, or constraints for recipient AI models."
+      <CompactEmptyState
+        message="No instructions yet"
         actionLabel="Add instruction"
         onAction={handleAddItem}
       />
@@ -84,7 +82,7 @@ export function InstructionsSection({
       <div className="flex justify-end">
         <Button
           type="button"
-          variant="outline"
+          variant="secondary"
           size="sm"
           onClick={handleAddItem}
           className="gap-1.5"
@@ -103,6 +101,8 @@ export function InstructionsSection({
           return (
             <div
               key={index}
+              role="group"
+              aria-label={`Instruction ${itemNum}`}
               className="p-3.5 rounded-lg border border-border-subtle bg-bg-app flex flex-col gap-3"
             >
               <div className="flex items-center justify-between border-b border-border-subtle/50 pb-2 flex-wrap gap-2">
@@ -140,11 +140,11 @@ export function InstructionsSection({
                 </div>
               </div>
 
-              <Input
+              <Textarea
                 label="Rule / Instruction"
                 value={item}
                 onChange={(e) => handleChangeText(index, e.target.value)}
-                placeholder="e.g. Always write automated tests before committing"
+                placeholder="Always write automated tests before committing"
                 error={itemError}
               />
             </div>

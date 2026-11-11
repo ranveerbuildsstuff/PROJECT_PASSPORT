@@ -1,8 +1,8 @@
 import React from 'react';
-import { ArrowUp, ArrowDown, Trash2, Plus, CheckCircle2 } from 'lucide-react';
+import { ArrowUp, ArrowDown, Trash2, Plus } from 'lucide-react';
 import type { PassportV1 } from '../../../domain';
 import { newId, moveItem } from '../../../domain';
-import { Input, Button, useToast, EmptyState } from '../../../ui';
+import { Button, useToast, CompactEmptyState, Textarea } from '../../../ui';
 
 export interface CompletedSectionProps {
   draft: PassportV1;
@@ -70,10 +70,8 @@ export function CompletedSection({
 
   if (completed.length === 0) {
     return (
-      <EmptyState
-        icon={<CheckCircle2 className="w-6 h-6 text-color-success" aria-hidden="true" />}
-        title="No completed milestones yet"
-        description="Record completed tasks, shipped features, or architectural phases."
+      <CompactEmptyState
+        message="No completed items yet"
         actionLabel="Add completed item"
         onAction={handleAddItem}
       />
@@ -85,7 +83,7 @@ export function CompletedSection({
       <div className="flex justify-end">
         <Button
           type="button"
-          variant="outline"
+          variant="secondary"
           size="sm"
           onClick={handleAddItem}
           className="gap-1.5"
@@ -104,6 +102,8 @@ export function CompletedSection({
           return (
             <div
               key={item.id}
+              role="group"
+              aria-label={`Completed item ${itemNum}`}
               className="p-3.5 rounded-lg border border-border-subtle bg-bg-app flex flex-col gap-3"
             >
               <div className="flex items-center justify-between border-b border-border-subtle/50 pb-2 flex-wrap gap-2">
@@ -140,12 +140,12 @@ export function CompletedSection({
                 </div>
               </div>
 
-              <Input
+              <Textarea
                 label="Description"
                 required
                 value={item.text}
                 onChange={(e) => handleChangeText(index, e.target.value)}
-                placeholder="e.g. Set up Dexie IndexedDB service layer"
+                placeholder="Set up the checkout flow"
                 error={itemError}
               />
             </div>

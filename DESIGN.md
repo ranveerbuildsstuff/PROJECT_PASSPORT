@@ -40,7 +40,7 @@ The UI is **dark-first** with a first-class **light theme**. All color tokens mu
 | **Warning** | `#9A6700` | `color-warning` | Budget warnings, warnings needing review |
 | **Danger** | `#CF222E` | `color-danger` | Unresolved secrets, errors, destructive alerts |
 
-*Strict Rule:* The brass accent must be used with restraint. It should denote focus or completion—never painted across wide decorative surfaces.
+*Strict Rule:* The brass accent must be used with restraint. It should denote focus or completion—never painted across wide decorative surfaces. At most one brass primary action should be visible per screen region; list "Add" buttons, filters, and standard secondary actions must use secondary or outline button styles so user attention remains focused on the primary intent.
 
 ## 3. Typography & Scale
 
@@ -92,6 +92,7 @@ Components must be designed once as pure, reusable UI primitives in `src/ui/`:
 - **Input & Textarea:** Monospace or sans based on context, clear focus rings, integrated field errors.
 - **Badge:** Stamp badge styling with semantic color variants.
 - **EmptyState:** Clean icon, concise statement of missing data, and primary action button.
+- **Compact Empty State:** In dense list sections and editor item groups, empty states use a compact single-line pattern: one line of muted text (e.g. "No completed items yet") paired with a small secondary "Add..." button. No large dashed cards or big icons.
 - **Toast:** Non-intrusive notifications for copy-to-clipboard, saves, and non-blocking warnings.
 - **ProgressRing:** SVG-based circular indicator representing the 0–100 Readiness Score.
 - **No Hover-Only UI:** Critical actions, tooltips, or details must never rely on mouse hover. All interactive details must be accessible via keyboard focus or explicit taps.

@@ -1,14 +1,12 @@
 import React, { useState, useCallback } from 'react';
 import {
-  Check,
-  Loader2,
-  AlertTriangle,
-  AlertCircle,
   ChevronsUpDown,
 } from 'lucide-react';
 import type { PassportV1 } from '../../domain';
 import { useAutosave } from './useAutosave';
 import { SidePanel } from './SidePanel';
+import { AutosaveStatus } from './AutosaveStatus';
+import { useMediaQuery } from '../../ui';
 import { AccordionSection } from '../../ui/Accordion';
 import { Button, Dialog } from '../../ui';
 import { BasicsSection } from './sections/BasicsSection';
@@ -48,6 +46,8 @@ export function PassportEditor({
     projectId,
     initialPassport,
   });
+
+  const isDesktop = useMediaQuery('(min-width: 1024px)');
 
   // Accordion open/close state: Basics open by default
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
@@ -141,61 +141,46 @@ export function PassportEditor({
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Top Bar: Autosave Indicator and Expand/Collapse All */}
-      <div className="flex items-center justify-between flex-wrap gap-3 p-3.5 rounded-lg border border-border-subtle bg-bg-surface">
-        <div
-          role="status"
-          aria-live="polite"
-          aria-label="Autosave status"
-          className="flex items-center gap-2 text-xs font-mono font-medium"
-        >
-          {saveStatus === 'saved' && (
-            <span className="flex items-center gap-1.5 text-color-success">
-              <Check className="w-4 h-4" aria-hidden="true" />
-              <span>Saved</span>
-            </span>
-          )}
-
-          {saveStatus === 'saving' && (
-            <span className="flex items-center gap-1.5 text-accent-brass">
-              <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
-              <span>Saving...</span>
-            </span>
-          )}
-
-          {saveStatus === 'not_saved' && (
-            <span className="flex items-center gap-1.5 text-color-warning">
-              <AlertTriangle className="w-4 h-4" aria-hidden="true" />
-              <span>{statusMessage}</span>
-            </span>
-          )}
-
-          {saveStatus === 'error' && (
-            <span className="flex items-center gap-1.5 text-color-danger">
-              <AlertCircle className="w-4 h-4" aria-hidden="true" />
-              <span>{statusMessage}</span>
-            </span>
-          )}
-        </div>
-
-        <div className="flex items-center gap-2">
+      {/* Mobile Sticky Bar: Slim bar right below the app header (top-16) */}
+      {!isDesktop && (
+        <div className="sticky top-16 z-30 -mx-4 px-4 py-2 border-b border-border-subtle bg-bg-surface flex items-center justify-between shadow-xs">
+          <AutosaveStatus saveStatus={saveStatus} statusMessage={statusMessage} />
           <Button
             type="button"
             variant="ghost"
             size="sm"
             onClick={() => toggleAllSections(!allExpanded)}
-            className="text-xs text-text-muted hover:text-text-primary gap-1.5 min-h-[44px]"
+            className="text-xs text-text-muted hover:text-text-primary gap-1 min-h-[36px] py-1 px-2.5"
           >
             <ChevronsUpDown className="w-3.5 h-3.5" aria-hidden="true" />
             <span>{allExpanded ? 'Collapse all' : 'Expand all'}</span>
           </Button>
         </div>
-      </div>
+      )}
 
       {/* Main Layout: Left Editor Accordions, Right Sticky Side Panel */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left Column: Editor Sections */}
         <div className="lg:col-span-7 xl:col-span-8 flex flex-col gap-3 min-w-0">
+          {/* Desktop header with Expand/Collapse button */}
+          {isDesktop && (
+            <div className="flex items-center justify-between pb-1">
+              <span className="text-xs font-semibold text-text-muted uppercase tracking-wider">
+                Passport Sections
+              </span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => toggleAllSections(!allExpanded)}
+                className="text-xs text-text-muted hover:text-text-primary gap-1.5 min-h-[44px]"
+              >
+                <ChevronsUpDown className="w-3.5 h-3.5" aria-hidden="true" />
+                <span>{allExpanded ? 'Collapse all' : 'Expand all'}</span>
+              </Button>
+            </div>
+          )}
+
           {/* 1. Basics */}
           <AccordionSection
             title="Basics"
@@ -349,9 +334,13 @@ export function PassportEditor({
           </AccordionSection>
         </div>
 
-        {/* Right Column: Sticky Side Panel */}
-        <div className="lg:col-span-5 xl:col-span-4 lg:sticky lg:top-20">
-          <SidePanel draft={draft} />
+        {/* Right Column: Side Panel with Sticky Header */}
+        <div className="lg:col-span-5 xl:col-span-4 min-w-0">
+          <SidePanel
+            draft={draft}
+            saveStatus={isDesktop ? saveStatus : undefined}
+            statusMessage={isDesktop ? statusMessage : undefined}
+          />
         </div>
       </div>
 

@@ -1,8 +1,8 @@
 import React from 'react';
-import { ArrowUp, ArrowDown, Trash2, Plus, HelpCircle } from 'lucide-react';
+import { ArrowUp, ArrowDown, Trash2, Plus } from 'lucide-react';
 import type { PassportV1 } from '../../../domain';
 import { moveItem } from '../../../domain';
-import { Input, Button, useToast, EmptyState } from '../../../ui';
+import { Button, useToast, CompactEmptyState, Textarea } from '../../../ui';
 
 export interface OpenQuestionsSectionProps {
   draft: PassportV1;
@@ -69,10 +69,8 @@ export function OpenQuestionsSection({
 
   if (openQuestions.length === 0) {
     return (
-      <EmptyState
-        icon={<HelpCircle className="w-6 h-6 text-accent-brass" aria-hidden="true" />}
-        title="No open questions recorded"
-        description="List unresolved architectural questions, ambiguous requirements, or design dilemmas."
+      <CompactEmptyState
+        message="No open questions yet"
         actionLabel="Add open question"
         onAction={handleAddItem}
       />
@@ -84,7 +82,7 @@ export function OpenQuestionsSection({
       <div className="flex justify-end">
         <Button
           type="button"
-          variant="outline"
+          variant="secondary"
           size="sm"
           onClick={handleAddItem}
           className="gap-1.5"
@@ -103,6 +101,8 @@ export function OpenQuestionsSection({
           return (
             <div
               key={index}
+              role="group"
+              aria-label={`Question ${itemNum}`}
               className="p-3.5 rounded-lg border border-border-subtle bg-bg-app flex flex-col gap-3"
             >
               <div className="flex items-center justify-between border-b border-border-subtle/50 pb-2 flex-wrap gap-2">
@@ -140,11 +140,11 @@ export function OpenQuestionsSection({
                 </div>
               </div>
 
-              <Input
+              <Textarea
                 label="Question"
                 value={item}
                 onChange={(e) => handleChangeText(index, e.target.value)}
-                placeholder="e.g. Which LLM provider has best streaming latency for our use case?"
+                placeholder="Which cloud sync provider meets our data locality requirements?"
                 error={itemError}
               />
             </div>

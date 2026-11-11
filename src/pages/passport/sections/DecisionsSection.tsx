@@ -1,8 +1,8 @@
 import React from 'react';
-import { ArrowUp, ArrowDown, Trash2, Plus, GitCommit } from 'lucide-react';
+import { ArrowUp, ArrowDown, Trash2, Plus } from 'lucide-react';
 import type { PassportV1, Decision, DecisionStatus } from '../../../domain';
 import { newId, moveItem } from '../../../domain';
-import { Input, Select, Button, useToast, EmptyState, Badge } from '../../../ui';
+import { Input, Select, Button, useToast, CompactEmptyState, Badge, Textarea } from '../../../ui';
 
 export interface DecisionsSectionProps {
   draft: PassportV1;
@@ -79,10 +79,8 @@ export function DecisionsSection({
 
   if (decisions.length === 0) {
     return (
-      <EmptyState
-        icon={<GitCommit className="w-6 h-6 text-accent-brass" aria-hidden="true" />}
-        title="No architectural decisions recorded"
-        description="Document key technical decisions and their underlying rationale for future AI context."
+      <CompactEmptyState
+        message="No decisions yet"
         actionLabel="Add decision"
         onAction={handleAddItem}
       />
@@ -94,7 +92,7 @@ export function DecisionsSection({
       <div className="flex justify-end">
         <Button
           type="button"
-          variant="outline"
+          variant="secondary"
           size="sm"
           onClick={handleAddItem}
           className="gap-1.5"
@@ -115,6 +113,8 @@ export function DecisionsSection({
           return (
             <div
               key={item.id}
+              role="group"
+              aria-label={`Decision ${itemNum}`}
               className={`p-3.5 rounded-lg border transition-opacity flex flex-col gap-3 ${
                 isSuperseded
                   ? 'opacity-60 bg-bg-app/40 border-border-subtle/50'
@@ -165,12 +165,12 @@ export function DecisionsSection({
 
               <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                 <div className="sm:col-span-3">
-                  <Input
+                  <Textarea
                     label="Decision"
                     required
                     value={item.decision}
                     onChange={(e) => handleChangeField(index, 'decision', e.target.value)}
-                    placeholder="e.g. Use Dexie for local storage"
+                    placeholder="Use PostgreSQL for order data"
                     error={decisionError}
                   />
                 </div>
@@ -189,12 +189,12 @@ export function DecisionsSection({
 
               <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                 <div className="sm:col-span-3">
-                  <Input
+                  <Textarea
                     label="Reason"
                     required
                     value={item.reason}
                     onChange={(e) => handleChangeField(index, 'reason', e.target.value)}
-                    placeholder="e.g. Provides clean transaction support over IndexedDB"
+                    placeholder="Provides strict ACID guarantees for transaction data"
                     error={reasonError}
                   />
                 </div>

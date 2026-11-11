@@ -1,8 +1,8 @@
 import React from 'react';
-import { ArrowUp, ArrowDown, Trash2, Plus, Bug as BugIcon } from 'lucide-react';
+import { ArrowUp, ArrowDown, Trash2, Plus } from 'lucide-react';
 import type { PassportV1, Bug, BugSeverity, BugStatus } from '../../../domain';
 import { newId, moveItem } from '../../../domain';
-import { Input, Select, Button, useToast, EmptyState } from '../../../ui';
+import { Select, Button, useToast, CompactEmptyState, Textarea } from '../../../ui';
 
 export interface BugsSectionProps {
   draft: PassportV1;
@@ -105,10 +105,8 @@ export function BugsSection({
       </label>
 
       {bugs.length === 0 ? (
-        <EmptyState
-          icon={<BugIcon className="w-6 h-6 text-color-danger" aria-hidden="true" />}
-          title="No open bugs recorded"
-          description="Log known issues, edge case defects, or test failures."
+        <CompactEmptyState
+          message="No bugs yet"
           actionLabel="Add bug"
           onAction={handleAddItem}
         />
@@ -117,7 +115,7 @@ export function BugsSection({
           <div className="flex justify-end">
             <Button
               type="button"
-              variant="outline"
+              variant="secondary"
               size="sm"
               onClick={handleAddItem}
               className="gap-1.5"
@@ -136,6 +134,8 @@ export function BugsSection({
               return (
                 <div
                   key={item.id}
+                  role="group"
+                  aria-label={`Bug ${itemNum}`}
                   className="p-3.5 rounded-lg border border-border-subtle bg-bg-app flex flex-col gap-3"
                 >
                   <div className="flex items-center justify-between border-b border-border-subtle/50 pb-2 flex-wrap gap-2">
@@ -175,12 +175,12 @@ export function BugsSection({
 
                   <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
                     <div className="sm:col-span-3">
-                      <Input
+                      <Textarea
                         label="Description"
                         required
                         value={item.text}
                         onChange={(e) => handleChangeField(index, 'text', e.target.value)}
-                        placeholder="e.g. Session expires unexpectedly on refresh"
+                        placeholder="Session expires unexpectedly on refresh"
                         error={textError}
                       />
                     </div>
