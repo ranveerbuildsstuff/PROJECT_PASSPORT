@@ -1,0 +1,20 @@
+{
+  "posts": [
+    {
+      "date": "2026-11-11",
+      "type": "introductory-announcement",
+      "contentAngle": "product-introduction",
+      "pillar": "problem-and-solution",
+      "hookType": "personal-story",
+      "ctaType": "question",
+      "topicsCovered": ["project-introduction", "ai-context-portability", "build-in-public-announcement", "local-first-architecture", "privacy-absolute"],
+      "linkedinFile": "daily-posts/2026-11-11/linkedin.md",
+      "xFile": "daily-posts/2026-11-11/x.md",
+      "visualFile": "daily-posts/2026-11-11/visual/announcement.jpg"
+    }
+  ],
+  "lastUpdated": "2026-11-11T18:30:00+05:30",
+  "topicsCovered": ["project-introduction", "ai-context-portability", "build-in-public-announcement", "local-first-architecture", "privacy-absolute"],
+  "hookTypesUsed": ["personal-story"],
+  "ctaTypesUsed": ["question"]
+}

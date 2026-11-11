@@ -1,0 +1,50 @@
+{
+  "date": "2026-11-11",
+  "type": "introductory-architecture-post",
+  "publishing_engine": "composio_mcp",
+  "linkedin": {
+    "status": "ready_for_review",
+    "toolkit": "linkedin",
+    "account_id": "linkedin_matra-taler",
+    "author_urn": "urn:li:person:EFi4Y6e1mo",
+    "account_name": "Ranveer Singh Rajput",
+    "tool_slug": "LINKEDIN_CREATE_LINKED_IN_POST",
+    "connection_status": "ACTIVE",
+    "publishedAt": null,
+    "postUrl": null,
+    "error": null
+  },
+  "x": {
+    "status": "ready_for_review",
+    "toolkit": "twitter",
+    "account_id": "twitter_fip-yearly",
+    "account_name": "Ranveer Singh Rajput (@ranveerbuilds)",
+    "tool_slug": "TWITTER_CREATION_OF_A_POST",
+    "connection_status": "ACTIVE",
+    "setup_url": null,
+    "publishedAt": null,
+    "postUrl": null,
+    "threadIds": [],
+    "error": null
+  },
+  "visual": {
+    "generated": true,
+    "path": "visual/announcement.jpg",
+    "altText": "Project Passport technical announcement graphic in dark palette (#0E1116) showing 'Project Passport' and tagline 'The AI is replaceable; the project is not.' Features a clean architecture diagram mapping structured project context (Architecture, Decisions, Tasks, Stack) to interchangeable AI models (ChatGPT, Claude, Gemini)."
+  },
+  "contentAngle": "architecture-context-drift",
+  "pillar": "problem-and-solution",
+  "hookType": "technical-problem-thesis",
+  "ctaType": "engineering-workflow-question",
+  "tone_audit": {
+    "anti_ai_compliant": true,
+    "banned_tropes_found": false,
+    "emoji_count": 0,
+    "technical_depth_score": "high"
+  },
+  "duplicateCheck": {
+    "checked": true,
+    "isDuplicate": false,
+    "reason": "Inaugural post"
+  }
+}
