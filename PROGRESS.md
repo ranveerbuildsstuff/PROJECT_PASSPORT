@@ -13,7 +13,7 @@ Current slice: none (Slice 1, 1b, 2, 2b, 2c, Tooling T1, T1b, Slice 3 & Slice 3b
 - [x] Slice 3: App shell, design system, dashboard
 - [x] Slice 3b: UI polish and test gaps
 - [x] Slice 3c: Polish and test hygiene
-- [ ] Slice 4: Passport editor + live preview [CURRENT]
+- [x] Slice 4: Passport editor + live preview [CURRENT]
 - [ ] Slice 5: Capture prompt, reconstruct prompt, paste-back + merge
 - [ ] Slice 6: Conversation paste import
 - [ ] Slice 7: ChatGPT / Claude export import
@@ -64,6 +64,43 @@ Consolidated manual checklist tests into `storageService.test.ts` and deleted re
 - **Pluralization & Toast Copy:** Updated restore toast in `src/ui/BackupDialog.tsx` to "Restored 1 project" / "Restored {n} projects" (proper singular/plural without "project(s)") and updated `e2e/backup.spec.ts`.
 - **Project Not Found UI Copy:** Updated `src/pages/ProjectPage.tsx` empty state description to avoid displaying the raw internal project ID to the user: "This project was not found. It may have been deleted. Go back to your projects and try again." Updated both unit and E2E tests.
 - **Playwright Workers:** Tested raising workers to 4 in `playwright.config.ts`. With 4 concurrent Chrome instances running axe evaluation trees, heavy CPU starvation produced test timeouts (>30s on desktop test 12). Reverted workers to 2, where all 40 tests execute stably and pass in 2.9m.
+
+### Slice 4: Passport Editor & Live Preview
+- **Route & Layout Architecture:** Implemented `/project/:id/passport` replacing the placeholder tab. Built a responsive layout with an accordion-based editor on the left and a sticky `SidePanel` on the right (desktop); on mobile (360x640), the panel stacks below the editor with collapsible sections, maintaining zero horizontal overflow.
+- **Domain Utilities (`src/domain/editor.ts`):**
+  - `newId()`: Generates unique string IDs using `crypto.randomUUID()` with fallback.
+  - `moveItem(list, from, to)`: Pure immutable array reordering (out-of-range is a no-op).
+  - `applyEditorFields(latest, draft)`: Merges editor-owned fields (`project`, `stack`, `requirements`, `decisions`, `completed`, `tasks`, `bugs`, `bugsReviewed`, `instructions`, `nextAction`, `openQuestions`) into `latest` while strictly preserving storage-managed arrays (`files`, `conversations`) and metadata (`id`, `createdAt`).
+  - `validatePassportDetailed(draft)`: Produces plain-language field-level errors (e.g. "Task 1 needs some text") and maps them to input keys.
+- **Accessible UI Primitives:**
+  - `src/ui/Select.tsx`: Accessible dropdown component with associated label, error message, helper text, and 44px min-height target.
+  - `src/ui/Accordion.tsx`: Accessible accordion section container with `aria-expanded`, item count badges, and smooth state toggling.
+  - `Toast` Actions: Enhanced `Toast` with action buttons, powering instant item deletion with accessible Undo toasts.
+- **Editor Sections:** Implemented 11 modular sections under `src/pages/passport/sections/`:
+  1. `BasicsSection`: Project name, status select, project goal, and executive summary.
+  2. `StackSection`: Name, role, version, notes with add, edit, delete (Undo), and keyboard reordering.
+  3. `RequirementsSection`: Text, priority (`must`/`should`/`could`) with list controls.
+  4. `DecisionsSection`: Architectural decision, reason, date, and status (`active`/`superseded`). Superseded decisions render with dimmed opacity (60%) and explicit "Superseded" badge.
+  5. `CompletedSection`: Shipped milestones and completed tasks with list controls.
+  6. `TasksSection`: Task description, status (`todo`/`doing`/`blocked`/`done`), and priority (`low`/`medium`/`high`).
+  7. `BugsSection`: Bug description, severity (`low`/`medium`/`high`), status (`open`/`fixed`), and an explicit "I reviewed bugs and there are none" checkbox bound to `bugsReviewed`.
+  8. `InstructionsSection`: Rule/instruction strings for AI assistants.
+  9. `NextActionSection`: Immediate next action textarea providing instant orientation.
+  10. `OpenQuestionsSection`: Outstanding technical and product questions.
+  11. `ContextSummarySection`: Read-only summary cards showing count of attached files and conversations, with links to their respective tabs.
+- **Autosave & Concurrency Hardening (`useAutosave.ts`):**
+  - 600ms debounce timer with accessible live status indicator: `Saved`, `Saving...`, `Not saved: <reason>`, and `Error: <reason>`.
+  - Transitions immediately to `Saving...` when draft is dirty and valid; resets to `Saved` if an edit is undone back to the last saved snapshot.
+  - Before saving, re-reads latest passport from storage and merges via `applyEditorFields` to prevent clobbering files/conversations.
+  - Flushes pending edits synchronously on unmount and listens to `pagehide` and `beforeunload`.
+  - Blocks autosave while draft has validation errors, keeping draft safely in memory.
+- **Navigation Guard:** Implemented an in-app navigation interceptor in `ProjectPage.tsx` and `PassportEditor.tsx`. Attempting to navigate to another tab or back to dashboard while the draft contains validation errors triggers an accessible confirmation dialog ("Discard unsaved changes?"). Clicking "Keep editing" retains the invalid draft; clicking "Discard changes" discards and navigates.
+- **Side Panel & Live Metrics (`SidePanel.tsx`):**
+  - Dynamic Handoff Readiness ring and 7-check checklist updated on every keystroke.
+  - Live preview of `PROJECT_STATE.md` generated via `passportToMarkdown` with token estimation (`~N tokens (estimate)`).
+  - One-click "Copy markdown" button with clipboard fallback and toast feedback.
+- **Background Fetch Refinement (`hooks.ts`):**
+  - Updated `useProject` to accept `isBackground = true` on storage event updates, preventing `isLoading` state from unmounting `PassportEditor` during background autosave notifications.
 
 ---
 

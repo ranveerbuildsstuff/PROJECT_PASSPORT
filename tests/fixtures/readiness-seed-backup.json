@@ -1,0 +1,48 @@
+{
+  "backupVersion": 1,
+  "exportedAt": "2026-03-31T00:00:00.000Z",
+  "projects": [
+    {
+      "project": {
+        "id": "22222222-2222-4222-8222-222222222222",
+        "name": "Readiness Live Test",
+        "status": "in_progress",
+        "updatedAt": "2026-03-31T00:00:00.000Z"
+      },
+      "passport": {
+        "schemaVersion": 1,
+        "project": {
+          "id": "22222222-2222-4222-8222-222222222222",
+          "name": "Readiness Live Test",
+          "goal": "",
+          "summary": "",
+          "status": "in_progress",
+          "createdAt": "2026-03-31T00:00:00.000Z",
+          "updatedAt": "2026-03-31T00:00:00.000Z"
+        },
+        "stack": [],
+        "requirements": [],
+        "decisions": [],
+        "completed": [],
+        "tasks": [],
+        "bugs": [],
+        "bugsReviewed": false,
+        "instructions": [],
+        "files": [
+          {
+            "path": "src/main.ts",
+            "purpose": "Application entry point",
+            "included": true,
+            "sizeBytes": 512
+          }
+        ],
+        "conversations": [],
+        "nextAction": "",
+        "openQuestions": []
+      },
+      "files": [],
+      "conversations": [],
+      "checkpoints": []
+    }
+  ]
+}

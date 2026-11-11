@@ -241,9 +241,9 @@ test.describe('App Shell, Accessibility & Visuals', () => {
     await expect(page.getByRole('heading', { level: 1, name: 'Project Gamma: Local LLM Engine' })).toBeVisible();
     await expectNoSeriousA11y(page);
 
-    // 9. Placeholder tab scan
-    await page.getByRole('tab', { name: 'Passport' }).click();
-    await expect(page.getByRole('heading', { name: 'Passport Tab' })).toBeVisible();
+    // 9. Placeholder tab scan (Conversations is placeholder tab in Slice 4)
+    await page.getByRole('tab', { name: 'Conversations' }).click();
+    await expect(page.getByRole('heading', { name: 'Conversations Tab' })).toBeVisible();
     await expectNoSeriousA11y(page);
   });
 
@@ -301,9 +301,9 @@ test.describe('App Shell, Accessibility & Visuals', () => {
     await expect(page.getByRole('heading', { level: 1, name: 'Project Gamma: Local LLM Engine' })).toBeVisible();
     await expectNoSeriousA11y(page);
 
-    // 7. Placeholder tab in light theme
-    await page.getByRole('tab', { name: 'Passport' }).click();
-    await expect(page.getByRole('heading', { name: 'Passport Tab' })).toBeVisible();
+    // 7. Placeholder tab in light theme (Conversations is placeholder tab in Slice 4)
+    await page.getByRole('tab', { name: 'Conversations' }).click();
+    await expect(page.getByRole('heading', { name: 'Conversations Tab' })).toBeVisible();
     await expectNoSeriousA11y(page);
   });
 

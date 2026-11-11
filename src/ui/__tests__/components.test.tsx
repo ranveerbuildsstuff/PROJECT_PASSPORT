@@ -148,6 +148,34 @@ describe('UI Primitives and Design System', () => {
     expect(toast).toHaveTextContent(/Saved/i);
   });
 
+  it('renders action button in Toast and invokes callback on click', () => {
+    const handleUndo = vi.fn();
+    function TestToastActionConsumer() {
+      const { showToast } = useToast();
+      return (
+        <button
+          onClick={() =>
+            showToast('Item deleted', 'info', undefined, { label: 'Undo', onClick: handleUndo })
+          }
+        >
+          Trigger Undo Toast
+        </button>
+      );
+    }
+
+    render(
+      <ToastProvider>
+        <TestToastActionConsumer />
+      </ToastProvider>
+    );
+
+    fireEvent.click(screen.getByText('Trigger Undo Toast'));
+    const undoBtn = screen.getByRole('button', { name: 'Undo' });
+    expect(undoBtn).toBeInTheDocument();
+    fireEvent.click(undoBtn);
+    expect(handleUndo).toHaveBeenCalledTimes(1);
+  });
+
   it('manages theme toggle in ThemeProvider', () => {
     function TestThemeConsumer() {
       const { theme, toggleTheme } = useTheme();

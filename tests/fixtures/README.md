@@ -32,3 +32,6 @@ This directory contains strictly synthetic, non-sensitive mock datasets designed
 
 ### 4. `unknown-version-backup.json`
 - **Description:** Valid JSON backup archive with an unsupported `backupVersion` (99), used to verify that version mismatch errors report plain-language explanations without crashes.
+
+### 5. `readiness-seed-backup.json`
+- **Description:** Valid JSON backup archive containing a single project with an attached source file in the passport manifest, used in Slice 4 E2E testing to verify that filling all editable editor fields brings Handoff Readiness to 100%.

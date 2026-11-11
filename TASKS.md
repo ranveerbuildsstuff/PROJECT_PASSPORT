@@ -148,17 +148,17 @@
 
 ## Slice 4: Passport Editor & Live Preview [CURRENT]
 
-- [ ] Implement form controls in `src/ui/`: `Input`, `Textarea`, select dropdowns, and key-value item lists.
-- [ ] Create multi-section Passport Editor tabbed or stepped layout (Project info, Stack, Decisions, Tasks, Bugs, Instructions).
-- [ ] Implement dynamic array editors for stack entries, requirements, decisions, tasks, and bugs.
-- [ ] Implement plain-language inline validation feedback as fields change.
-- [ ] Implement auto-save to Dexie with debouncing and subtle save status indicator.
-- [ ] Implement Live Markdown Preview panel displaying formatted passport state via `passportToMarkdown`.
-- [ ] Implement real-time Readiness Score ring updating dynamically as the user fills in sections.
-- [ ] Implement responsive split-pane or toggle view between Editor and Preview on mobile viewports.
-- [ ] **Tests added:** Unit and component tests for form state management, debounced autosave, validation indicators, and markdown preview updates.
-- [ ] **Docs updated:** Document editor architecture and form state handling in `PROGRESS.md`.
-- [ ] **Commit message:** `Slice 4: passport editor and live preview`
+- [x] Implement form controls in `src/ui/`: `Input`, `Textarea`, `Select`, and keyboard-accessible item list controls.
+- [x] Create multi-section Passport Editor accordion layout (Basics, Tech stack, Requirements, Decisions, Completed, Tasks, Bugs, Instructions, Next action, Open questions, Attached context summary).
+- [x] Implement dynamic array editors with add, edit, delete (with toast Undo), and keyboard reordering (Move up/down buttons).
+- [x] Implement plain-language inline validation feedback as fields change and block autosave while invalid.
+- [x] Implement auto-save to Dexie with debouncing (600ms) and accessible status indicator (Saved, Saving..., Not saved, Error).
+- [x] Implement Live Markdown Preview panel displaying formatted passport state via `passportToMarkdown` with token estimate and Copy button.
+- [x] Implement real-time Readiness Score ring updating dynamically as the user fills in sections.
+- [x] Implement responsive split-pane or toggle view between Editor and Preview on mobile viewports with zero horizontal overflow.
+- [x] **Tests added:** Unit and component tests for domain helpers (`newId`, `moveItem`, `applyEditorFields`), `useAutosave` hook, and all 11 editor sections (103 Vitest tests); 22 Playwright E2E tests across desktop and mobile-360 viewports with zero test skips or fixed sleeps.
+- [x] **Docs updated:** Document editor architecture, merge safety, autosave hook, and router navigation interceptor in `PROGRESS.md`.
+- [x] **Commit message:** `Slice 4: passport editor`
 
 **Done when:**
 - `npm run typecheck`, `npm run lint`, `npm test`, and `npm run build` pass.

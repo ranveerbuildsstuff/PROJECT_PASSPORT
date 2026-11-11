@@ -11,9 +11,9 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const showToast = useCallback(
-    (message: string, type: ToastType = 'info', title?: string) => {
+    (message: string, type: ToastType = 'info', title?: string, action?: { label: string; onClick: () => void }) => {
       const id = `${idPrefix}-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
-      const newToast: ToastMessage = { id, type, title, message };
+      const newToast: ToastMessage = { id, type, title, message, action };
       setToasts((prev) => [...prev, newToast]);
 
       setTimeout(() => {
@@ -56,6 +56,18 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
               {t.title && <span className="font-semibold text-xs uppercase tracking-wider">{t.title}</span>}
               <span className="text-sm leading-snug">{t.message}</span>
             </div>
+            {t.action && (
+              <button
+                type="button"
+                onClick={() => {
+                  t.action?.onClick();
+                  removeToast(t.id);
+                }}
+                className="shrink-0 inline-flex items-center justify-center min-h-[44px] px-2 text-xs font-semibold text-accent-brass hover:underline cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-brass rounded"
+              >
+                {t.action.label}
+              </button>
+            )}
             <button
               type="button"
               onClick={() => removeToast(t.id)}

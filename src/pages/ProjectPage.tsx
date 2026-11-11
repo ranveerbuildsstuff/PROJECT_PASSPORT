@@ -1,3 +1,4 @@
+import React, { useState, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -28,6 +29,7 @@ import {
 import { useProject } from './hooks';
 import { computeReadiness } from '../domain';
 import { formatDateTime, formatProjectStatus } from '../lib';
+import { PassportEditor } from './passport';
 
 const VALID_TABS = ['overview', 'passport', 'conversations', 'files', 'checkpoints', 'export'] as const;
 type TabType = typeof VALID_TABS[number];
@@ -41,6 +43,14 @@ export function ProjectPage() {
     : 'overview';
 
   const { project, passport, isLoading, notFound, error, reload } = useProject(id);
+  const [navInterceptor, setNavInterceptor] = useState<((target: string) => boolean) | null>(null);
+
+  const registerNavigationInterceptor = useCallback(
+    (interceptor: ((target: string) => boolean) | null) => {
+      setNavInterceptor(() => interceptor);
+    },
+    []
+  );
 
   if (isLoading) {
     return (
@@ -92,7 +102,21 @@ export function ProjectPage() {
   ];
 
   const handleTabChange = (newTab: string) => {
+    if (activeTab === 'passport' && navInterceptor) {
+      const allowed = navInterceptor(newTab);
+      if (!allowed) return;
+    }
     navigate(`/project/${project.id}/${newTab}`);
+  };
+
+  const handleBackLinkClick = (e: React.MouseEvent) => {
+    if (activeTab === 'passport' && navInterceptor) {
+      const allowed = navInterceptor('home');
+      if (!allowed) {
+        e.preventDefault();
+        return;
+      }
+    }
   };
 
   const getStatusVariant = (status: string) => {
@@ -114,6 +138,7 @@ export function ProjectPage() {
       <div>
         <Link
           to="/"
+          onClick={handleBackLinkClick}
           className="inline-flex items-center gap-1.5 text-xs font-medium text-text-muted hover:text-text-primary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-brass rounded min-h-[44px] px-1"
         >
           <ArrowLeft className="w-4 h-4" aria-hidden="true" />
@@ -314,7 +339,22 @@ export function ProjectPage() {
           </div>
         )}
 
-        {activeTab !== 'overview' && (
+        {activeTab === 'passport' && passport && (
+          <PassportEditor
+            projectId={project.id}
+            initialPassport={passport}
+            onNavigateTab={(targetTab) => {
+              if (targetTab === 'home') {
+                navigate('/');
+              } else {
+                navigate(`/project/${project.id}/${targetTab}`);
+              }
+            }}
+            registerNavigationInterceptor={registerNavigationInterceptor}
+          />
+        )}
+
+        {activeTab !== 'overview' && activeTab !== 'passport' && (
           <Card className="p-8 sm:p-12 text-center flex flex-col items-center justify-center max-w-xl mx-auto my-6">
             <div className="w-12 h-12 rounded-full bg-bg-app border border-border-subtle flex items-center justify-center text-accent-brass mb-4">
               <Layers className="w-6 h-6" aria-hidden="true" />

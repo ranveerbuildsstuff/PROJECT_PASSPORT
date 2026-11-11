@@ -85,9 +85,18 @@ describe('ProjectPage Component Tests', () => {
     expect(screen.getByText('Stack')).toBeInTheDocument();
     expect(screen.getByText('Decisions')).toBeInTheDocument();
 
-    // Check other tab placeholders
+    // Check passport tab renders the editor
     const passportTab = screen.getByRole('tab', { name: /Passport/i });
     fireEvent.click(passportTab);
+
+    await waitFor(() => {
+      expect(screen.getByText('Basics')).toBeInTheDocument();
+      expect(screen.getByText('Tech stack')).toBeInTheDocument();
+    });
+
+    // Check placeholder on remaining future tabs (e.g. Conversations)
+    const convTab = screen.getByRole('tab', { name: /Conversations/i });
+    fireEvent.click(convTab);
 
     await waitFor(() => {
       expect(screen.getByText(/Coming in a later slice/i)).toBeInTheDocument();

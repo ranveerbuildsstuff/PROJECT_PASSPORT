@@ -44,11 +44,11 @@ test.describe('Project Page E2E Flows', () => {
     await expect(page.getByText('Active decisions')).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Next Action' })).toBeVisible();
 
-    // Click Passport tab
+    // Click Passport tab (now renders editor in Slice 4)
     await page.getByRole('tab', { name: 'Passport' }).click();
     await expect(page).toHaveURL(new RegExp(`/project/${projectId}/passport`));
-    await expect(page.getByRole('heading', { name: 'Passport Tab' })).toBeVisible();
-    await expect(page.getByText('Coming in a later slice')).toBeVisible();
+    await expect(page.getByRole('button', { name: /Basics/i })).toBeVisible();
+    await expect(page.getByText('Saved')).toBeVisible();
 
     // Click Conversations tab
     await page.getByRole('tab', { name: 'Conversations' }).click();
@@ -72,12 +72,12 @@ test.describe('Project Page E2E Flows', () => {
 
     // Direct loading of a tab URL
     await page.goto(`/project/${projectId}/passport`);
-    await expect(page.getByRole('heading', { name: 'Passport Tab' })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Basics/i })).toBeVisible();
     await expect(page.getByRole('tab', { name: 'Passport' })).toHaveAttribute('aria-selected', 'true');
 
     // Reload directly and verify it still displays cleanly
     await page.reload();
-    await expect(page.getByRole('heading', { name: 'Passport Tab' })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Basics/i })).toBeVisible();
     await expect(page.getByRole('tab', { name: 'Passport' })).toHaveAttribute('aria-selected', 'true');
 
     expect(errors).toEqual([]);

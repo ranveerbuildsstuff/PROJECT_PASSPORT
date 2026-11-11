@@ -74,14 +74,16 @@ export function useProject(projectId: string | undefined) {
   const [notFound, setNotFound] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchProjectData = useCallback(async () => {
+  const fetchProjectData = useCallback(async (isBackground = false) => {
     if (!projectId) {
       setNotFound(true);
       setIsLoading(false);
       return;
     }
 
-    setIsLoading(true);
+    if (!isBackground) {
+      setIsLoading(true);
+    }
     setError(null);
     setNotFound(false);
 
@@ -105,7 +107,14 @@ export function useProject(projectId: string | undefined) {
   }, [projectId]);
 
   useEffect(() => {
-    fetchProjectData();
+    fetchProjectData(false);
+
+    const handleStorageUpdate = () => {
+      fetchProjectData(true);
+    };
+
+    window.addEventListener('project-storage-updated', handleStorageUpdate);
+    return () => window.removeEventListener('project-storage-updated', handleStorageUpdate);
   }, [fetchProjectData]);
 
   return { project, passport, isLoading, notFound, error, reload: fetchProjectData };
