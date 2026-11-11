@@ -173,7 +173,7 @@ test.describe('Backup and Restore E2E Flow', () => {
     await expect(page.getByRole('link', { name: 'Renamed Project Name' })).not.toBeVisible();
 
     // Verify there is still exactly one project on dashboard
-    await expect(page.getByText('1 local project')).toBeVisible();
+    await expect(page.getByText('1 local project', { exact: true })).toBeVisible();
 
     expect(errors).toEqual([]);
   });

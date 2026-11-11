@@ -10,34 +10,52 @@ export interface ShotOptions {
   fullPage?: boolean;
   reviewName?: string;
   clip?: { x: number; y: number; width: number; height: number };
+  locator?: Locator;
 }
 
 /**
  * Normalizes ANY CSS color via canvas (fillStyle = computed backgroundColor;
  * fillRect 1x1; read alpha byte from getImageData), so rgba(), rgb(/), color(srgb),
  * oklab/oklch all work across browsers.
+ * Fails closed: sets fillStyle to sentinel '#010203' first, and throws
+ * "Unparseable colour: <value>" if fillStyle remains unchanged on invalid color input.
  * Returns normalized alpha between 0 and 1.
  */
-export async function getBackgroundAlpha(locator: Locator): Promise<number> {
-  return await locator.evaluate((el: HTMLElement) => {
+export async function getBackgroundAlpha(locator: Locator, colorOverride?: string): Promise<number> {
+  return await locator.evaluate((el: HTMLElement, override?: string) => {
     const computed = window.getComputedStyle(el);
-    const bg = computed.backgroundColor;
+    const bg =
+      override !== undefined
+        ? override
+        : (el.dataset.color || el.getAttribute('data-color') || computed.backgroundColor);
     const canvas = document.createElement('canvas');
     canvas.width = 1;
     canvas.height = 1;
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
-    if (!ctx) return 1;
+    if (!ctx) throw new Error('Canvas 2D context unavailable');
     ctx.clearRect(0, 0, 1, 1);
+    const sentinel = '#010203';
+    ctx.fillStyle = sentinel;
     ctx.fillStyle = bg;
+    if (
+      ctx.fillStyle === sentinel &&
+      bg !== sentinel &&
+      bg !== '#010203' &&
+      bg !== 'rgb(1, 2, 3)' &&
+      bg !== 'rgba(1, 2, 3, 1)'
+    ) {
+      throw new Error(`Unparseable colour: ${bg}`);
+    }
     ctx.fillRect(0, 0, 1, 1);
     const imgData = ctx.getImageData(0, 0, 1, 1);
     return (imgData.data[3] ?? 255) / 255;
-  });
+  }, colorOverride);
 }
 
 /**
  * Saves a screenshot to e2e-results/screenshots/<project>-<name>.png.
  * When options.reviewName is set, COPIES the file into e2e-results/review/<reviewName>.
+ * When options.locator is provided or pageOrLocator is a Locator, clips screenshot to that element.
  * When { fullPage: true }, temporarily makes sticky and fixed elements static
  * (injects a style tag, then removes it) so they appear at their natural position.
  */
@@ -58,10 +76,11 @@ export async function shot(
 
   const filePath = `e2e-results/screenshots/${projectName}-${name}.png`;
   const isLocator = 'page' in pageOrLocator && typeof (pageOrLocator as Locator).screenshot === 'function';
+  const targetLocator = options?.locator ?? (isLocator ? (pageOrLocator as Locator) : null);
   const page = isLocator ? (pageOrLocator as Locator).page() : (pageOrLocator as Page);
 
-  if (isLocator) {
-    await (pageOrLocator as Locator).screenshot({ path: filePath });
+  if (targetLocator) {
+    await targetLocator.screenshot({ path: filePath });
   } else if (options?.clip) {
     await page.screenshot({ path: filePath, clip: options.clip });
   } else if (options?.fullPage) {

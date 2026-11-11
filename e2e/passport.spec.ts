@@ -10,11 +10,7 @@ import {
 test.describe('Passport Editor E2E Tests', () => {
   test.beforeEach(async ({ page, context }) => {
     // Grant clipboard permissions for copy tests
-    try {
-      await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-    } catch {
-      // Ignored if browser doesn't support granting clipboard
-    }
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
 
     await page.goto('/');
     await page.evaluate(async () => {
@@ -370,15 +366,15 @@ test.describe('Passport Editor E2E Tests', () => {
     await expect(page.getByRole('status', { name: 'Autosave status' })).toContainText('Saved');
 
     // All 7 checks have passed -> 100/100 score
-    await expect(sidePanel.getByText('100/100 score')).toBeVisible();
+    await expect(sidePanel.getByText('100/100 score', { exact: true })).toBeVisible();
 
     // Navigate to Overview tab
     await page.getByRole('tab', { name: 'Overview' }).click();
 
     // Overview header and summary shows the updated readiness score (100/100)
     await expect(page.getByRole('heading', { name: 'Readiness Checklist' })).toBeVisible();
-    await expect(page.getByText('7/7 PASSED')).toBeVisible();
-    await expect(page.getByText('100/100')).toBeVisible();
+    await expect(page.getByText('7/7 PASSED', { exact: true })).toBeVisible();
+    await expect(page.getByText('100/100', { exact: true })).toBeVisible();
     await expect(page.getByText('Objective defined')).toBeVisible();
     await expect(page.getByText('Stack recorded')).toBeVisible();
     await expect(page.getByText('Active decisions')).toBeVisible();
@@ -407,10 +403,7 @@ test.describe('Passport Editor E2E Tests', () => {
     if (isMobile) {
       const togglePreviewBtn = page.getByRole('button', { name: 'Toggle markdown preview' });
       await expect(togglePreviewBtn).toBeVisible();
-      const isExpanded = await togglePreviewBtn.getAttribute('aria-expanded');
-      if (isExpanded === 'false') {
-        await togglePreviewBtn.click();
-      }
+      await expect(togglePreviewBtn).toHaveAttribute('aria-expanded', 'true');
     }
 
     // Verify PROJECT_STATE.md preview card contains the entered goal
@@ -424,14 +417,10 @@ test.describe('Passport Editor E2E Tests', () => {
     // Success toast appears
     await expect(page.getByText(/Markdown copied to clipboard/i)).toBeVisible();
 
-    // Check clipboard content if available
-    try {
-      const clipboardText = await page.evaluate(() => navigator.clipboard.readText());
-      expect(clipboardText).toContain('# Markdown Live Preview App');
-      expect(clipboardText).toContain('Verify markdown preview and copy functionality');
-    } catch {
-      // Browsers without clipboard API permissions in headless environment skip direct clipboard read
-    }
+    // Check clipboard content directly (no catch)
+    const clipboardText = await page.evaluate(() => navigator.clipboard.readText());
+    expect(clipboardText).toContain('# Markdown Live Preview App');
+    expect(clipboardText).toContain('Verify markdown preview and copy functionality');
   });
 
   test('8. Edit and immediately click another tab, then come back; nothing is lost', async ({ page }) => {
@@ -556,14 +545,11 @@ test.describe('Passport Editor E2E Tests', () => {
 
     await expect(page.getByRole('status', { name: 'Autosave status' })).toContainText('Saved');
 
-    // On mobile, expand markdown preview so screenshot captures everything
+    // On mobile, verify markdown preview is expanded so screenshot captures everything
     const isDesktop = test.info().project.name === 'desktop';
     if (!isDesktop) {
       const togglePreviewBtn = page.getByRole('button', { name: 'Toggle markdown preview' });
-      const isExpanded = await togglePreviewBtn.getAttribute('aria-expanded');
-      if (isExpanded === 'false') {
-        await togglePreviewBtn.click();
-      }
+      await expect(togglePreviewBtn).toHaveAttribute('aria-expanded', 'true');
     }
 
     // Capture viewport-only top screenshot with review copy via shotViewportTop

@@ -16,6 +16,7 @@ Current slice: none (Slice 4b & Ticket T2 complete)
 - [x] Slice 4: Passport editor + live preview
 - [x] Slice 4b: Editor UX fixes & review hygiene
 - [x] Tooling Ticket T2: Test integrity + autosave hardening
+- [x] Tooling Ticket T2b: Verification fixes
 - [ ] Slice 5: Capture prompt, reconstruct prompt, paste-back + merge
 - [ ] Slice 6: Conversation paste import
 - [ ] Slice 7: ChatGPT / Claude export import
@@ -139,6 +140,16 @@ Consolidated manual checklist tests into `storageService.test.ts` and deleted re
   - Derived displayed status from `(saveStatus, isDirty, isDraftValid)` ensuring "Saved" can never render while dirty.
   - Added `describeStorageError(err)` in `src/storage/errors.ts` mapping typed errors (`ProjectNotFound`, `ValidationFailed`, `StorageUnavailable`, `QuotaExceeded`, `BackupInvalid`, unknown) to human-readable plain language without internal IDs or stack traces. Added comprehensive fake-timer Vitest tests.
 - **Housekeeping & Test Integrity Rules:** Added section 13 ("Test Integrity Rules") to `AGENTS.md`. Updated `TASKS.md` removing stale `[CURRENT]` marker and appending E2E/axe requirements to Slices 6–11.
+
+### Tooling Ticket T2b: Verification Fixes
+- **DevDependency `@types/node`:** Added `@types/node` with explicit user permission, deleted temporary `e2e/node.d.ts`, and verified clean TypeScript compilation across application and E2E suites (`tsc --noEmit`).
+- **Fail-Closed Alpha Normalizer:** Hardened `getBackgroundAlpha` in `e2e/helpers.ts` to assign a sentinel `#010203` to `ctx.fillStyle` before setting the element color; if `ctx.fillStyle` retains the sentinel and the input is not legitimately `#010203`, it throws `new Error('Unparseable colour: ' + bg)`. Added selftest in `e2e/helpers.selftest.spec.ts` proving unparseable strings throw while preserving existing transparency and opaque selftests.
+- **Exact Count Assertions:** Updated `backup.spec.ts` assertion `getByText('1 local project', { exact: true })` and audited all `getByText` occurrences with numbers.
+- **Four Workers & Concurrency Stability:** Ran `npx playwright test --workers=4` across the entire 104-test E2E suite with 100% green pass. Verified that switching `backup.spec.ts` from CDP stream chunking (`download.createReadStream()`) to filesystem buffer reads (`fs.readFileSync()`) slashed execution time from 49.3s to <15s without masking any application defects.
+- **Header Badge Review Image & Element Screenshot:** Added `{ locator?: Locator }` to `ShotOptions` in `shot()`. In `shell.spec.ts` test 15, captured `mobile-360-header-badge.png` clipped directly to the `<header>` locator and verified its dimensions are exactly 360x64 (width 360, height equals measured header height).
+- **Guard Sweep & Elimination of Conditional Assertions:** Audited all `if`, `try`, and conditional checks across `e2e/`. Removed swallowed `try/catch` around clipboard assertions in `passport.spec.ts` test 7, directly asserting clipboard text. Removed conditional accordion checks.
+- **CSS Single Declaration:** Consolidated `--app-header-h: 64px` declaration to `:root` only in `src/index.css`. Added E2E assertions in `shell.spec.ts` test 15 confirming it resolves to `64px` in both dark and light themes.
+- **Autosave Proof & Error Mapping:** Verified `describeStorageError` strips raw IDs and unexpected error strings (neither secret sentinels nor UUIDs appear). Added Vitest unit tests verifying that saves rejecting with unknown errors render friendly plain language and never raw message internals.
 
 ---
 

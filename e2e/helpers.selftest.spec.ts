@@ -186,5 +186,22 @@ test.describe('E2E Helpers Selftest', () => {
     expect(opacity).toBe('1');
     expect(backdropFilter).toBe('none');
   });
+
+  test('getBackgroundAlpha fails closed and throws "Unparseable colour: not-a-colour" for invalid colour input', async ({
+    page,
+  }) => {
+    await page.setContent(`
+      <!DOCTYPE html>
+      <html>
+        <body>
+          <div id="target" data-color="not-a-colour" style="width: 50px; height: 50px;"></div>
+        </body>
+      </html>
+    `);
+
+    const target = page.locator('#target');
+    await expect(getBackgroundAlpha(target)).rejects.toThrow('Unparseable colour: not-a-colour');
+    await expect(getBackgroundAlpha(target, 'not-a-colour')).rejects.toThrow('Unparseable colour: not-a-colour');
+  });
 });
 

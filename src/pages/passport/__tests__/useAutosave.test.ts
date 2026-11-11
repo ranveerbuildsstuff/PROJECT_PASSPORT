@@ -50,6 +50,14 @@ describe('describeStorageError', () => {
     expect(msg).toBe('An unexpected storage error occurred. Your changes could not be saved.');
     expect(msg).not.toContain('row 42');
   });
+
+  it('maps unexpected errors to plain text containing neither secret sentinels nor UUIDs', () => {
+    const err = new Error('secret-sentinel 123e4567-e89b-12d3-a456-426614174000');
+    const msg = describeStorageError(err);
+    expect(msg).toBe('An unexpected storage error occurred. Your changes could not be saved.');
+    expect(msg).not.toContain('secret-sentinel');
+    expect(msg).not.toContain('123e4567-e89b-12d3-a456-426614174000');
+  });
 });
 
 describe('useAutosave Hook', () => {
@@ -217,6 +225,45 @@ describe('useAutosave Hook', () => {
 
     expect(result.current.saveStatus).toBe('error');
     expect(result.current.statusMessage).toContain('quota has been exceeded');
+  });
+
+  it('shows plain language and never the raw message when save rejects with an unknown error', async () => {
+    const initial = createEmptyPassport('Initial Project');
+    initial.project.id = 'proj-1';
+
+    vi.spyOn(storage, 'getPassport').mockResolvedValue(initial);
+    const rawTechnicalError =
+      'CRITICAL_INTERNAL_DB_CRASH: 0xDEADBEEF secret-sentinel 123e4567-e89b-12d3-a456-426614174000';
+    vi.spyOn(storage, 'savePassport').mockRejectedValue(new Error(rawTechnicalError));
+
+    const { result } = renderHook(() =>
+      useAutosave({
+        projectId: 'proj-1',
+        initialPassport: initial,
+        debounceMs: 600,
+      })
+    );
+
+    act(() => {
+      result.current.updateDraft((prev) => ({
+        ...prev,
+        project: { ...prev.project, summary: 'Updated summary' },
+      }));
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(600);
+      await Promise.resolve();
+    });
+
+    expect(result.current.saveStatus).toBe('error');
+    expect(result.current.statusMessage).toBe(
+      'An unexpected storage error occurred. Your changes could not be saved.'
+    );
+    expect(result.current.statusMessage).not.toContain('CRITICAL_INTERNAL_DB_CRASH');
+    expect(result.current.statusMessage).not.toContain('0xDEADBEEF');
+    expect(result.current.statusMessage).not.toContain('secret-sentinel');
+    expect(result.current.statusMessage).not.toContain('123e4567-e89b-12d3-a456-426614174000');
   });
 
   it('ensures merge safety: preserves files and conversations modified elsewhere', async () => {

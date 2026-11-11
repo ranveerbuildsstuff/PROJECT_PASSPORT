@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import { test, expect } from '@playwright/test';
 import {
   shot,
@@ -388,8 +389,9 @@ test.describe('App Shell, Accessibility & Visuals', () => {
       const alpha = await getBackgroundAlpha(header);
       expect(alpha).toBe(1);
 
-      const { opacity, backdropFilter, scrollWidth, clientWidth } = await header.evaluate((el) => {
+      const { opacity, backdropFilter, scrollWidth, clientWidth, headerHVar } = await header.evaluate((el) => {
         const computed = window.getComputedStyle(el);
+        const rootComputed = window.getComputedStyle(document.documentElement);
         const bf =
           computed.backdropFilter ||
           (computed as unknown as Record<string, string>)['webkitBackdropFilter'] ||
@@ -399,12 +401,14 @@ test.describe('App Shell, Accessibility & Visuals', () => {
           backdropFilter: bf,
           scrollWidth: el.scrollWidth,
           clientWidth: el.clientWidth,
+          headerHVar: rootComputed.getPropertyValue('--app-header-h').trim(),
         };
       });
 
       expect(opacity).toBe('1');
       expect(backdropFilter).toBe('none');
       expect(scrollWidth).toBeLessThanOrEqual(clientWidth);
+      expect(headerHVar).toBe('64px');
     };
 
     // 1. Dark theme check on both projects
@@ -439,8 +443,22 @@ test.describe('App Shell, Accessibility & Visuals', () => {
       const headerOverflow = await header.evaluate((el) => el.scrollWidth > el.clientWidth);
       expect(headerOverflow).toBe(false);
 
-      // Screenshot review image using shot() with reviewName (no raw page.screenshot)
-      await shot(header, 'header-badge', { reviewName: 'mobile-360-header-badge.png' });
+      // Screenshot review image using shot() with { locator: header, reviewName: ... }
+      const imgPath = await shot(page, 'header-badge', {
+        locator: header,
+        reviewName: 'mobile-360-header-badge.png',
+      });
+
+      // Assert the screenshot is the header only: width 360, height equals measured header height
+      const imgBuf = await fs.promises.readFile(imgPath);
+      const imgWidth = imgBuf.readUInt32BE(16);
+      const imgHeight = imgBuf.readUInt32BE(20);
+      expect(imgWidth).toBe(360);
+      expect(imgHeight).toBe(Math.round(headerBox!.height));
+
+      const reviewBuf = await fs.promises.readFile('e2e-results/review/mobile-360-header-badge.png');
+      expect(reviewBuf.readUInt32BE(16)).toBe(360);
+      expect(reviewBuf.readUInt32BE(20)).toBe(Math.round(headerBox!.height));
     }
   });
 });
