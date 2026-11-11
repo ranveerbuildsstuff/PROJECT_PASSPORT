@@ -3,7 +3,7 @@
   "type": "introductory-architecture-post",
   "publishing_engine": "composio_mcp",
   "linkedin": {
-    "status": "ready_for_review",
+    "status": "failed",
     "toolkit": "linkedin",
     "account_id": "linkedin_matra-taler",
     "author_urn": "urn:li:person:EFi4Y6e1mo",
@@ -12,10 +12,10 @@
     "connection_status": "ACTIVE",
     "publishedAt": null,
     "postUrl": null,
-    "error": null
+    "error": "Tool execution unsuccessful: \"Invalid request data provided\\n- String should have at most 3000 characters on parameter `commentary`\""
   },
   "x": {
-    "status": "ready_for_review",
+    "status": "failed",
     "toolkit": "twitter",
     "account_id": "twitter_fip-yearly",
     "account_name": "Ranveer Singh Rajput (@ranveerbuilds)",
@@ -25,7 +25,7 @@
     "publishedAt": null,
     "postUrl": null,
     "threadIds": [],
-    "error": null
+    "error": "Tool execution unsuccessful: \"Request failed error: `{\\\"detail\\\":\\\"credits depleted\\\",\\\"status\\\":402,\\\"title\\\":\\\"Payment Required\\\",\\\"type\\\":\\\"https://api.x.com/2/problems/credits-depleted\\\"}`\""
   },
   "visual": {
     "generated": true,
