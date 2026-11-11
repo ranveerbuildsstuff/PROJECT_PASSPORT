@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { test, expect, type Page } from '@playwright/test';
 import {
   shot,
@@ -396,6 +398,26 @@ test.describe('Passport Editor E2E Tests', () => {
 
     // Set goal
     await page.getByRole('textbox', { name: 'Project goal' }).fill('Verify markdown preview and copy functionality');
+
+    // Expand all sections to fill stack, decision, task per requirement 6
+    await page.getByRole('button', { name: /Expand all/i }).click();
+
+    // Fill stack item
+    await page.getByRole('button', { name: /Add stack item/i }).first().click();
+    const stack1 = page.getByRole('group', { name: 'Stack item 1' });
+    await stack1.getByRole('textbox', { name: 'Name' }).fill('React 19 Framework');
+
+    // Fill decision
+    await page.getByRole('button', { name: /Add decision/i }).first().click();
+    const dec1 = page.getByRole('group', { name: 'Decision 1' });
+    await dec1.getByRole('textbox', { name: 'Decision' }).fill('Use IndexedDB for local-first persistence');
+    await dec1.getByRole('textbox', { name: 'Reason' }).fill('Guarantees zero outbound data leakage');
+
+    // Fill task
+    await page.getByRole('button', { name: /Add task/i }).first().click();
+    const task1 = page.getByRole('group', { name: 'Task 1' });
+    await task1.getByRole('textbox', { name: 'Description' }).fill('Implement offline export packaging');
+
     await expect(page.getByRole('status', { name: 'Autosave status' })).toContainText('Saved');
 
     // On mobile viewport, ensure preview is expanded
@@ -406,10 +428,23 @@ test.describe('Passport Editor E2E Tests', () => {
       await expect(togglePreviewBtn).toHaveAttribute('aria-expanded', 'true');
     }
 
-    // Verify PROJECT_STATE.md preview card contains the entered goal
-    const previewContainer = page.locator('aside');
-    await expect(previewContainer).toContainText('Verify markdown preview and copy functionality');
-    await expect(previewContainer).toContainText('estimate');
+    // Verify markdown preview is a keyboard-focusable scrollable region with role="region" and aria-label="Markdown preview"
+    const previewRegion = page.getByRole('region', { name: 'Markdown preview' });
+    await expect(previewRegion).toBeVisible();
+
+    // Assert full text in preview region contains entered text (not just visible clipped part)
+    const previewFullText = await previewRegion.textContent();
+    expect(previewFullText).not.toBeNull();
+    expect(previewFullText).toContain('React 19 Framework');
+    expect(previewFullText).toContain('Use IndexedDB for local-first persistence');
+    expect(previewFullText).toContain('Guarantees zero outbound data leakage');
+    expect(previewFullText).toContain('Implement offline export packaging');
+    expect(previewFullText).toContain('Verify markdown preview and copy functionality');
+
+    // Assert that the token label equals ~estimateTokens(full text) (estimate)
+    const expectedTokens = Math.ceil((previewFullText?.length || 0) / 4);
+    const tokenRegex = new RegExp(`~${expectedTokens.toLocaleString()}\\s+tokens\\s+\\(estimate\\)`);
+    await expect(page.getByText(tokenRegex)).toBeVisible();
 
     // Click Copy button
     await page.getByRole('button', { name: 'Copy markdown' }).click();
@@ -420,7 +455,11 @@ test.describe('Passport Editor E2E Tests', () => {
     // Check clipboard content directly (no catch)
     const clipboardText = await page.evaluate(() => navigator.clipboard.readText());
     expect(clipboardText).toContain('# Markdown Live Preview App');
+    expect(clipboardText).toContain('React 19 Framework');
     expect(clipboardText).toContain('Verify markdown preview and copy functionality');
+
+    // One axe scan on the editor with the region present
+    await expectNoSeriousA11y(page);
   });
 
   test('8. Edit and immediately click another tab, then come back; nothing is lost', async ({ page }) => {
@@ -563,7 +602,7 @@ test.describe('Passport Editor E2E Tests', () => {
       reviewName: isDesktop ? 'desktop-passport-editor-populated.png' : 'mobile-360-passport-editor-populated.png',
     });
 
-    // On mobile, if height > 6000px, capture part1 and part2 via shot() with clip and reviewName
+    // On mobile, if height > 6000px, capture part1 and part2; otherwise remove stale part files
     if (!isDesktop) {
       const fullHeight = await page.evaluate(() => document.body.scrollHeight);
       if (fullHeight > 6000) {
@@ -575,6 +614,13 @@ test.describe('Passport Editor E2E Tests', () => {
         await shot(page, 'passport-editor-populated-part2', {
           clip: { x: 0, y: halfHeight, width: 360, height: fullHeight - halfHeight },
           reviewName: 'mobile-360-passport-editor-populated-part2.png',
+        });
+      } else {
+        await fs.promises.rm(path.join('e2e-results', 'review', 'mobile-360-passport-editor-populated-part1.png'), {
+          force: true,
+        });
+        await fs.promises.rm(path.join('e2e-results', 'review', 'mobile-360-passport-editor-populated-part2.png'), {
+          force: true,
         });
       }
     }
@@ -702,5 +748,82 @@ test.describe('Passport Editor E2E Tests', () => {
     }
     expect(savingIndex).toBeGreaterThanOrEqual(0);
     expect(savedIndex).toBeGreaterThan(savingIndex);
+  });
+
+  test('16. External-change conflict protection: two pages in one browser context, conflict detection, reload latest, keep my version, and axe scan', async ({
+    page,
+    context,
+  }) => {
+    collectConsoleErrors(page);
+    const { projectId } = await createAndOpenPassport(page, 'Concurrent Collaboration Project');
+
+    // Open Page B in the same browser context pointing to the same project editor
+    const pageB = await context.newPage();
+    collectConsoleErrors(pageB);
+    await pageB.goto(`/project/${projectId}/passport`);
+    await expect(pageB.getByRole('heading', { level: 1, name: 'Concurrent Collaboration Project' })).toBeVisible();
+    await expect(pageB.getByRole('status', { name: 'Autosave status' })).toContainText('Saved');
+
+    // Page A makes an edit and saves
+    const goalA = page.getByRole('textbox', { name: 'Project goal' });
+    await goalA.fill('Goal set by Page A');
+    await expect(page.getByRole('status', { name: 'Autosave status' })).toContainText('Saved');
+
+    // Page B (which loaded before Page A saved) now makes an edit
+    const goalB = pageB.getByRole('textbox', { name: 'Project goal' });
+    await goalB.fill('Goal attempted by Page B');
+
+    // Page B's autosave triggers conflict because stored goal has changed from baseline
+    const autosaveStatusB = pageB.getByRole('status', { name: 'Autosave status' });
+    await expect(autosaveStatusB).toContainText('This passport was changed somewhere else');
+    const reloadBtn = pageB.getByRole('button', { name: 'Reload latest' });
+    const keepBtn = pageB.getByRole('button', { name: 'Keep my version' });
+    await expect(reloadBtn).toBeVisible();
+    await expect(keepBtn).toBeVisible();
+
+    // Verify Page B did not overwrite Page A's value in storage
+    const storedGoal = await page.evaluate(async (pId: string) => {
+      const req = indexedDB.open('ProjectPassportDB');
+      return new Promise<string>((resolve) => {
+        req.onsuccess = () => {
+          const db = req.result;
+          const tx = db.transaction('passports', 'readonly');
+          const getReq = tx.objectStore('passports').get(pId);
+          getReq.onsuccess = () => resolve(getReq.result?.passport?.project?.goal || '');
+        };
+      });
+    }, projectId!);
+    expect(storedGoal).toBe('Goal set by Page A');
+
+    // Axe scan of the conflict state in Page B (desktop + mobile-360)
+    await expectNoSeriousA11y(pageB);
+
+    // Scenario 1: Click "Reload latest" in Page B -> shows A's value
+    await reloadBtn.click();
+    await expect(autosaveStatusB).toContainText('Saved');
+    await expect(goalB).toHaveValue('Goal set by Page A');
+
+    // Scenario 2: "Keep my version"
+    // In Page A, edit goal again and wait for Saved
+    await goalA.fill('New Goal from Page A');
+    await expect(page.getByRole('status', { name: 'Autosave status' })).toContainText('Saved');
+
+    // In Page B, edit goal to Page B's intended version
+    await goalB.fill('Decisive Goal from Page B');
+
+    // Page B detects conflict again
+    await expect(autosaveStatusB).toContainText('This passport was changed somewhere else');
+
+    // Click "Keep my version" -> rebases baseline on stored, then saves
+    await keepBtn.click();
+    await expect(autosaveStatusB).toContainText('Saved');
+    await expect(goalB).toHaveValue('Decisive Goal from Page B');
+
+    // Reload Page B and verify Page B's value persisted
+    await pageB.reload();
+    await expect(pageB.getByRole('textbox', { name: 'Project goal' })).toHaveValue('Decisive Goal from Page B');
+
+    // Close Page B
+    await pageB.close();
   });
 });

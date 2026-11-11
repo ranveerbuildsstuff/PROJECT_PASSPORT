@@ -17,6 +17,7 @@ Current slice: none (Slice 4b & Ticket T2 complete)
 - [x] Slice 4b: Editor UX fixes & review hygiene
 - [x] Tooling Ticket T2: Test integrity + autosave hardening
 - [x] Tooling Ticket T2b: Verification fixes
+- [x] Tooling Ticket T2c: Autosave failure paths and verification gaps
 - [ ] Slice 5: Capture prompt, reconstruct prompt, paste-back + merge
 - [ ] Slice 6: Conversation paste import
 - [ ] Slice 7: ChatGPT / Claude export import
@@ -150,6 +151,34 @@ Consolidated manual checklist tests into `storageService.test.ts` and deleted re
 - **Guard Sweep & Elimination of Conditional Assertions:** Audited all `if`, `try`, and conditional checks across `e2e/`. Removed swallowed `try/catch` around clipboard assertions in `passport.spec.ts` test 7, directly asserting clipboard text. Removed conditional accordion checks.
 - **CSS Single Declaration:** Consolidated `--app-header-h: 64px` declaration to `:root` only in `src/index.css`. Added E2E assertions in `shell.spec.ts` test 15 confirming it resolves to `64px` in both dark and light themes.
 - **Autosave Proof & Error Mapping:** Verified `describeStorageError` strips raw IDs and unexpected error strings (neither secret sentinels nor UUIDs appear). Added Vitest unit tests verifying that saves rejecting with unknown errors render friendly plain language and never raw message internals.
+
+### Tooling Ticket T2c: Autosave Failure Paths, External-Change Protection & Verification Gaps
+- **Bounded flushSave Result:** Refactored `flushSave()` in `src/pages/passport/useAutosave.ts` to return `Promise<{ ok: true } | { ok: false; reason: 'invalid' | 'error' | 'conflict' }>`. It makes at most ONE pass beyond any in-flight save plus a bounded re-check for edits made meanwhile (maximum 3 passes), then returns immediately. It never loops on a failing save. All callers (navigation tab switch, discard guard, router guard, and unmount) updated to handle `ok: false` via the existing unsaved-changes dialog path without hanging.
+- **Error Recovery in Autosave Status:** When autosave encounters a persistent failure (`saveStatus === 'error'`), displays a dedicated 44px touch-target secondary button ("Try again") in the autosave status area (both in the desktop sticky panel header and mobile sticky bar) which re-invokes `flushSave()`. All error messages remain plain-language without IDs or technical stack traces.
+- **External-Change Conflict Protection:**
+  - Added pure `editorFieldsOf(passport)` and `EditorOwnedFields` in `src/domain/editor.ts`, reused by `applyEditorFields`.
+  - Before writing to storage, `useAutosave` retrieves the stored passport and compares its editor-owned fields with the last-saved baseline (`baselineRef`).
+  - If stored fields differ from baseline, writing is blocked; status transitions to `'conflict'` with message: *"This passport was changed somewhere else (another tab or a merge). Reload the latest version, or keep your version."*.
+  - Renders 44px buttons: *"Reload latest"* (resets draft to stored data, stating unsaved edits are discarded) and *"Keep my version"* (rebases baseline onto stored, then immediately forces save of current draft). Baseline updates on every successful save and on `resetDraft`.
+- **Markdown Preview Investigation & Fix:**
+  - Analysis confirmed that the generator `passportToMarkdown` does NOT omit sections; it outputs all populated sections in full.
+  - The preview container (`div.max-h-96.overflow-y-auto`) visually clipped text exceeding 384px height.
+  - Wrapped preview in a scrollable, keyboard-focusable region with `role="region"`, `aria-label="Markdown preview"`, `tabIndex={0}`, and visible focus ring. Synchronized copy button's accessible name with visible text (`aria-label={copied ? 'Copied' : 'Copy markdown'}`) to eliminate WCAG `label-content-name-mismatch`.
+  - Extended E2E test 7: verified that entered stack, decision, and task text is present in the full preview text, token estimate matches `~N tokens (estimate)`, and passes a dedicated axe scan.
+- **Vitest Unit Test Suite:**
+  - Moved `describeStorageError` unit tests to `src/storage/__tests__/errors.test.ts`. Noted that `StaleWrite` error handling and tests will be added once Slice 5b lands.
+  - Added comprehensive fake-timer tests in `useAutosave.test.ts`: verifying bounded 3-pass resolution on rejected save, ProjectNotFound handling, invalid drafts returning `{ ok: false, reason: 'invalid' }` with 0 storage writes, edits during flush preserved without data loss, external conflicts blocking writes, "Reload latest" and "Keep my version" workflows, and status never showing `'saved'` while dirty or in conflict. (16 test files, 122 tests passed).
+- **Concurrency, Workers & Timeout Ceiling:**
+  - Recorded that this machine is CPU-bound: running 4 workers caused CPU contention and test timeouts (6.9m with timeout failures in task-442 vs 5.1m with 2 workers). Top-level `timeout: 20_000` enforced in `playwright.config.ts` with 2 workers.
+  - All 106 tests passed with 0 failures under the 20s ceiling; the slowest test completed in 14.9s.
+- **Failure Disclosure (Rule 13.7) & AGENTS.md:**
+  - Added Rule 13.7 to `AGENTS.md` mandating disclosure of all failed test runs with error text and remediation.
+  - Disclosed task-442 4-worker failure log and diff `b473d3c~1..b473d3c`.
+  - Explained `backup.spec.ts` test 7 download streaming (`download.createReadStream()` over CDP) vs filesystem read (`fs.readFileSync()`), and passport test 2 duration.
+- **Review Folder Hygiene:**
+  - Cleaned `e2e-results/review/` down to exactly the 6 required PNG screenshots and 2 markdown reports.
+  - Documented that `desktop-passport-editor-populated.pdf` was an external artifact produced via `iLovePDF`, not Playwright.
+  - Updated test 11 to remove obsolete `-part1` and `-part2` files via `fs.promises.rm(..., { force: true })` without `.catch`.
 
 ---
 

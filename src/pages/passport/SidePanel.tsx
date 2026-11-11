@@ -7,9 +7,12 @@ import { AutosaveStatus } from './AutosaveStatus';
 
 export interface SidePanelProps {
   draft: PassportV1;
-  saveStatus?: 'saved' | 'saving' | 'not_saved' | 'error';
+  saveStatus?: 'saved' | 'saving' | 'not_saved' | 'error' | 'conflict';
   statusMessage?: string;
   className?: string;
+  onRetry?: () => void;
+  onReloadLatest?: () => void;
+  onKeepMyVersion?: () => void;
 }
 
 export function SidePanel({
@@ -17,6 +20,9 @@ export function SidePanel({
   saveStatus,
   statusMessage,
   className = '',
+  onRetry,
+  onReloadLatest,
+  onKeepMyVersion,
 }: SidePanelProps): React.ReactElement {
   const { showToast } = useToast();
   const [copied, setCopied] = useState(false);
@@ -47,13 +53,29 @@ export function SidePanel({
       {/* Desktop Sticky Header: Autosave Status */}
       {saveStatus && (
         <div
-          className="sticky z-20 flex items-center justify-between p-3.5 rounded-lg border border-border-subtle bg-bg-surface shadow-sm"
+          className="sticky z-20 flex flex-col gap-2 p-3.5 rounded-lg border border-border-subtle bg-bg-surface shadow-sm"
           style={{ top: 'calc(var(--app-header-h) + 1rem)' }}
         >
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold text-text-muted">Autosave:</span>
-            <AutosaveStatus saveStatus={saveStatus} statusMessage={statusMessage} />
-          </div>
+          {saveStatus === 'conflict' ? (
+            <AutosaveStatus
+              saveStatus={saveStatus}
+              statusMessage={statusMessage}
+              onRetry={onRetry}
+              onReloadLatest={onReloadLatest}
+              onKeepMyVersion={onKeepMyVersion}
+            />
+          ) : (
+            <div className="flex items-center flex-wrap gap-2">
+              <span className="text-xs font-semibold text-text-muted">Autosave:</span>
+              <AutosaveStatus
+                saveStatus={saveStatus}
+                statusMessage={statusMessage}
+                onRetry={onRetry}
+                onReloadLatest={onReloadLatest}
+                onKeepMyVersion={onKeepMyVersion}
+              />
+            </div>
+          )}
         </div>
       )}
 
@@ -121,7 +143,7 @@ export function SidePanel({
               size="sm"
               onClick={handleCopy}
               className="gap-1.5"
-              aria-label="Copy markdown"
+              aria-label={copied ? 'Copied' : 'Copy markdown'}
             >
               {copied ? (
                 <>
@@ -157,7 +179,12 @@ export function SidePanel({
             </span>
           </div>
 
-          <div className="relative rounded-lg border border-border-subtle bg-bg-app p-3 max-h-96 overflow-y-auto font-mono text-xs leading-relaxed text-text-primary whitespace-pre-wrap select-all">
+          <div
+            role="region"
+            aria-label="Markdown preview"
+            tabIndex={0}
+            className="relative rounded-lg border border-border-subtle bg-bg-app p-3 max-h-96 overflow-y-auto font-mono text-xs leading-relaxed text-text-primary whitespace-pre-wrap select-all focus:outline-none focus:ring-1 focus:ring-accent-brass"
+          >
             {markdown}
           </div>
         </div>

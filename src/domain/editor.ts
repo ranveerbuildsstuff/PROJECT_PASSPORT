@@ -94,6 +94,53 @@ export function moveItem<T>(list: readonly T[], from: number, to: number): T[] {
 }
 
 /**
+ * Editor-owned fields: the subset of a PassportV1 that the passport editor modifies.
+ */
+export type EditorOwnedFields = {
+  project: {
+    name: string;
+    goal: string;
+    summary: string;
+    status: PassportV1['project']['status'];
+  };
+  stack: PassportV1['stack'];
+  requirements: PassportV1['requirements'];
+  decisions: PassportV1['decisions'];
+  completed: PassportV1['completed'];
+  tasks: PassportV1['tasks'];
+  bugs: PassportV1['bugs'];
+  bugsReviewed: boolean;
+  instructions: string[];
+  nextAction: string;
+  openQuestions: string[];
+};
+
+/**
+ * Extracts ONLY the editor-owned fields from a passport object.
+ * Used for external-change conflict comparison and safe field updates.
+ */
+export function editorFieldsOf(passport: PassportV1): EditorOwnedFields {
+  return {
+    project: {
+      name: passport.project.name,
+      goal: passport.project.goal,
+      summary: passport.project.summary,
+      status: passport.project.status,
+    },
+    stack: passport.stack.map((item) => ({ ...item })),
+    requirements: passport.requirements.map((item) => ({ ...item })),
+    decisions: passport.decisions.map((item) => ({ ...item })),
+    completed: passport.completed.map((item) => ({ ...item })),
+    tasks: passport.tasks.map((item) => ({ ...item })),
+    bugs: passport.bugs.map((item) => ({ ...item })),
+    bugsReviewed: Boolean(passport.bugsReviewed),
+    instructions: [...passport.instructions],
+    nextAction: passport.nextAction,
+    openQuestions: [...passport.openQuestions],
+  };
+}
+
+/**
  * Applies ONLY the editor-owned fields from `draft` onto `latest`.
  *
  * Editor-owned fields:
@@ -110,6 +157,7 @@ export function moveItem<T>(list: readonly T[], from: number, to: number): T[] {
  * managed in other tabs or background slices.
  */
 export function applyEditorFields(latest: PassportV1, draft: PassportV1): PassportV1 {
+  const editorFields = editorFieldsOf(draft);
   return {
     ...latest,
     schemaVersion: latest.schemaVersion,
@@ -117,21 +165,21 @@ export function applyEditorFields(latest: PassportV1, draft: PassportV1): Passpo
       ...latest.project,
       id: latest.project.id,
       createdAt: latest.project.createdAt,
-      name: draft.project.name,
-      goal: draft.project.goal,
-      summary: draft.project.summary,
-      status: draft.project.status,
+      name: editorFields.project.name,
+      goal: editorFields.project.goal,
+      summary: editorFields.project.summary,
+      status: editorFields.project.status,
     },
-    stack: draft.stack.map((item) => ({ ...item })),
-    requirements: draft.requirements.map((item) => ({ ...item })),
-    decisions: draft.decisions.map((item) => ({ ...item })),
-    completed: draft.completed.map((item) => ({ ...item })),
-    tasks: draft.tasks.map((item) => ({ ...item })),
-    bugs: draft.bugs.map((item) => ({ ...item })),
-    bugsReviewed: Boolean(draft.bugsReviewed),
-    instructions: [...draft.instructions],
-    nextAction: draft.nextAction,
-    openQuestions: [...draft.openQuestions],
+    stack: editorFields.stack,
+    requirements: editorFields.requirements,
+    decisions: editorFields.decisions,
+    completed: editorFields.completed,
+    tasks: editorFields.tasks,
+    bugs: editorFields.bugs,
+    bugsReviewed: editorFields.bugsReviewed,
+    instructions: editorFields.instructions,
+    nextAction: editorFields.nextAction,
+    openQuestions: editorFields.openQuestions,
     files: latest.files.map((file) => ({ ...file })),
     conversations: latest.conversations.map((conv) => ({ ...conv })),
   };

@@ -84,6 +84,7 @@ private/          # Gitignored directory for real user test files and exports
     - **Exact text assertions on counts:** Text assertions verifying item or restored entity counts must use exact matching (e.g. `getByText('Restored 1 project', { exact: true })`).
     - **Execution time ceiling:** No individual test may exceed 20 seconds. Heavy tests spanning multiple views or dialogs must be split into dedicated per-screen tests with one accessibility scan each.
     - **Deterministic state transitions:** Observe state changes and transitions using DOM observers (such as `MutationObserver`) or distinct event listeners rather than loose regexes matching either the starting or ending state (e.g. no `/Saving|Saved/`).
+    - **Failure disclosure (Rule 13.7):** Any failed run during a ticket is reported with its error text and the change that fixed it, even if a later run passes.
 
 ## 5. Per-Slice Execution Process
 

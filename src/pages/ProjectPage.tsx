@@ -43,10 +43,10 @@ export function ProjectPage() {
     : 'overview';
 
   const { project, passport, isLoading, notFound, error, reload } = useProject(id);
-  const [navInterceptor, setNavInterceptor] = useState<((target: string) => boolean) | null>(null);
+  const [navInterceptor, setNavInterceptor] = useState<((target: string) => boolean | Promise<boolean>) | null>(null);
 
   const registerNavigationInterceptor = useCallback(
-    (interceptor: ((target: string) => boolean) | null) => {
+    (interceptor: ((target: string) => boolean | Promise<boolean>) | null) => {
       setNavInterceptor(() => interceptor);
     },
     []
@@ -101,21 +101,22 @@ export function ProjectPage() {
     { id: 'export', label: 'Export' },
   ];
 
-  const handleTabChange = (newTab: string) => {
+  const handleTabChange = async (newTab: string) => {
     if (activeTab === 'passport' && navInterceptor) {
-      const allowed = navInterceptor(newTab);
+      const allowed = await navInterceptor(newTab);
       if (!allowed) return;
     }
     navigate(`/project/${project.id}/${newTab}`);
   };
 
-  const handleBackLinkClick = (e: React.MouseEvent) => {
+  const handleBackLinkClick = async (e: React.MouseEvent) => {
     if (activeTab === 'passport' && navInterceptor) {
-      const allowed = navInterceptor('home');
-      if (!allowed) {
-        e.preventDefault();
-        return;
+      e.preventDefault();
+      const allowed = await navInterceptor('/');
+      if (allowed) {
+        navigate('/');
       }
+      return;
     }
   };
 

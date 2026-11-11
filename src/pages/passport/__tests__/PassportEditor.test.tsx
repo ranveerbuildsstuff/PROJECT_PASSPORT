@@ -187,8 +187,8 @@ describe('PassportEditor Component', () => {
   });
 
   it('prompts with discard confirmation dialog when attempting to navigate with invalid draft', async () => {
-    let interceptor: ((target: string) => boolean) | null = null;
-    const registerInterceptor = (fn: ((target: string) => boolean) | null) => {
+    let interceptor: ((target: string) => boolean | Promise<boolean>) | null = null;
+    const registerInterceptor = (fn: ((target: string) => boolean | Promise<boolean>) | null) => {
       interceptor = fn;
     };
 
@@ -217,8 +217,8 @@ describe('PassportEditor Component', () => {
     expect(interceptor).not.toBeNull();
 
     // Attempt navigation while invalid
-    act(() => {
-      const allowed = interceptor!('overview');
+    await act(async () => {
+      const allowed = await interceptor!('overview');
       expect(allowed).toBe(false);
     });
 

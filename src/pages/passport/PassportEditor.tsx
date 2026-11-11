@@ -25,7 +25,7 @@ export interface PassportEditorProps {
   projectId: string;
   initialPassport: PassportV1;
   onNavigateTab: (tab: string) => void;
-  registerNavigationInterceptor?: (interceptor: ((targetTab: string) => boolean) | null) => void;
+  registerNavigationInterceptor?: (interceptor: ((targetTab: string) => boolean | Promise<boolean>) | null) => void;
 }
 
 export function PassportEditor({
@@ -42,10 +42,16 @@ export function PassportEditor({
     isDraftValid,
     fieldErrors,
     flushSave,
+    reloadLatest,
+    keepMyVersion,
   } = useAutosave({
     projectId,
     initialPassport,
   });
+
+  const handleRetry = useCallback(() => {
+    void flushSave();
+  }, [flushSave]);
 
   const isDesktop = useMediaQuery('(min-width: 1024px)');
 
@@ -98,13 +104,18 @@ export function PassportEditor({
   flushSaveRef.current = flushSave;
 
   // Interceptor check for navigation away from passport tab
-  const interceptorCheck = useCallback((target: string): boolean => {
+  const interceptorCheck = useCallback(async (target: string): Promise<boolean> => {
     if (!isDraftValidRef.current) {
       setPendingTargetTab(target);
       setIsDiscardDialogOpen(true);
       return false; // block navigation
     }
-    void flushSaveRef.current();
+    const result = await flushSaveRef.current();
+    if (!result.ok) {
+      setPendingTargetTab(target);
+      setIsDiscardDialogOpen(true);
+      return false; // block navigation and show unsaved changes dialog
+    }
     return true; // allow navigation
   }, []);
 
@@ -118,8 +129,8 @@ export function PassportEditor({
     }
   }, [registerNavigationInterceptor, interceptorCheck]);
 
-  const handleInternalNavigation = (target: string) => {
-    if (interceptorCheck(target)) {
+  const handleInternalNavigation = async (target: string) => {
+    if (await interceptorCheck(target)) {
       onNavigateTab(target);
     }
   };
@@ -144,16 +155,22 @@ export function PassportEditor({
       {/* Mobile Sticky Bar: Slim bar right below the app header */}
       {!isDesktop && (
         <div
-          className="sticky z-30 -mx-4 px-4 py-2 border-b border-border-subtle bg-bg-surface flex items-center justify-between shadow-xs"
+          className="sticky z-30 -mx-4 px-4 py-2 border-b border-border-subtle bg-bg-surface flex items-center justify-between shadow-xs gap-2 flex-wrap"
           style={{ top: 'var(--app-header-h)' }}
         >
-          <AutosaveStatus saveStatus={saveStatus} statusMessage={statusMessage} />
+          <AutosaveStatus
+            saveStatus={saveStatus}
+            statusMessage={statusMessage}
+            onRetry={handleRetry}
+            onReloadLatest={reloadLatest}
+            onKeepMyVersion={keepMyVersion}
+          />
           <Button
             type="button"
             variant="ghost"
             size="sm"
             onClick={() => toggleAllSections(!allExpanded)}
-            className="text-xs text-text-muted hover:text-text-primary gap-1 min-h-[36px] py-1 px-2.5"
+            className="text-xs text-text-muted hover:text-text-primary gap-1 min-h-[44px] min-w-[44px] py-1 px-2.5"
           >
             <ChevronsUpDown className="w-3.5 h-3.5" aria-hidden="true" />
             <span>{allExpanded ? 'Collapse all' : 'Expand all'}</span>
@@ -343,6 +360,9 @@ export function PassportEditor({
             draft={draft}
             saveStatus={isDesktop ? saveStatus : undefined}
             statusMessage={isDesktop ? statusMessage : undefined}
+            onRetry={isDesktop ? handleRetry : undefined}
+            onReloadLatest={isDesktop ? reloadLatest : undefined}
+            onKeepMyVersion={isDesktop ? keepMyVersion : undefined}
           />
         </div>
       </div>
@@ -356,7 +376,9 @@ export function PassportEditor({
       >
         <div className="flex flex-col gap-4">
           <p id="discard-dialog-description" className="text-sm text-text-muted leading-relaxed">
-            Your passport currently has validation errors that cannot be saved:
+            {!isDraftValid
+              ? 'Your passport currently has validation errors that must be fixed before saving:'
+              : 'Your passport currently has unsaved changes that cannot be saved:'}
           </p>
           <div className="p-3 rounded-lg border border-color-danger/30 bg-color-danger/10 text-xs text-text-primary font-mono">
             {statusMessage}
