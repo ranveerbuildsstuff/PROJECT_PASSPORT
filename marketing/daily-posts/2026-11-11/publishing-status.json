@@ -3,29 +3,30 @@
   "type": "introductory-architecture-post",
   "publishing_engine": "composio_mcp",
   "linkedin": {
-    "status": "ready_for_review",
+    "status": "published",
     "toolkit": "linkedin",
     "account_id": "linkedin_matra-taler",
     "author_urn": "urn:li:person:EFi4Y6e1mo",
     "account_name": "Ranveer Singh Rajput",
     "tool_slug": "LINKEDIN_CREATE_LINKED_IN_POST",
     "connection_status": "ACTIVE",
-    "publishedAt": null,
-    "postUrl": null,
+    "publishedAt": "2026-11-11T14:36:11.000Z",
+    "postUrn": "urn:li:share:7526291691759226881",
+    "postUrl": "https://www.linkedin.com/feed/update/urn:li:share:7526291691759226881/",
     "error": null
   },
   "x": {
-    "status": "ready_for_review",
+    "status": "credits_depleted",
     "toolkit": "twitter",
     "account_id": "twitter_fip-yearly",
     "account_name": "Ranveer Singh Rajput (@ranveerbuilds)",
     "tool_slug": "TWITTER_CREATION_OF_A_POST",
     "connection_status": "ACTIVE",
-    "setup_url": null,
+    "setup_url": "https://dashboard.composio.dev/~/org/connect/apps/twitter?open=true",
     "publishedAt": null,
     "postUrl": null,
     "threadIds": [],
-    "error": null
+    "error": "HTTP 402 Payment Required: credits depleted (https://api.x.com/2/problems/credits-depleted)"
   },
   "visual": {
     "generated": true,
@@ -45,6 +46,6 @@
   "duplicateCheck": {
     "checked": true,
     "isDuplicate": false,
-    "reason": "Inaugural post"
+    "reason": "Inaugural post successfully published to LinkedIn"
   }
 }
