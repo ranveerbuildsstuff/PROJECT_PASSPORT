@@ -25,6 +25,7 @@ import {
   Tabs,
   ProgressRing,
   EmptyState,
+  CaptureDialog,
 } from '../ui';
 import { useProject } from './hooks';
 import { computeReadiness } from '../domain';
@@ -43,6 +44,7 @@ export function ProjectPage() {
     : 'overview';
 
   const { project, passport, isLoading, notFound, error, reload } = useProject(id);
+  const [isCaptureOpen, setIsCaptureOpen] = useState(false);
   const [navInterceptor, setNavInterceptor] = useState<((target: string) => boolean | Promise<boolean>) | null>(null);
 
   const registerNavigationInterceptor = useCallback(
@@ -261,10 +263,21 @@ export function ProjectPage() {
             {/* Next Action Box */}
             <Card className="border-l-4 border-l-accent-brass">
               <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2">
-                  <ArrowRight className="w-4 h-4 text-accent-brass" aria-hidden="true" />
-                  <span>Next Action</span>
-                </CardTitle>
+                <div className="flex items-center justify-between gap-4 flex-wrap">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <ArrowRight className="w-4 h-4 text-accent-brass" aria-hidden="true" />
+                    <span>Next Action</span>
+                  </CardTitle>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setIsCaptureOpen(true)}
+                    className="min-h-[44px]"
+                  >
+                    Capture from AI
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent>
                 <p className="text-sm leading-relaxed text-text-primary">
@@ -352,6 +365,7 @@ export function ProjectPage() {
               }
             }}
             registerNavigationInterceptor={registerNavigationInterceptor}
+            onOpenCapture={() => setIsCaptureOpen(true)}
           />
         )}
 
@@ -376,6 +390,11 @@ export function ProjectPage() {
           </Card>
         )}
       </div>
+
+      <CaptureDialog
+        isOpen={isCaptureOpen}
+        onClose={() => setIsCaptureOpen(false)}
+      />
     </div>
   );
 }

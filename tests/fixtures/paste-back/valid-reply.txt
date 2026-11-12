@@ -1,0 +1,41 @@
+Certainly! Here is your project passport based on our discussion:
+
+```json
+{
+  “project”: {
+    “name”: “CloudSync Portal”,
+    “goal”: “Provide cross-device local-first document sync”,
+    “summary”: “Initial design phase completed with end-to-end encryption architecture”,
+    “status”: “in_progress”
+  },
+  “stack”: [
+    { “name”: “React”, “role”: “Frontend UI”, “version”: “18.2” },
+    { “name”: “TypeScript”, “role”: “Type safety”, “version”: “5.3” }
+  ],
+  “requirements”: [
+    { “text”: “Zero-knowledge encryption for all documents”, “priority”: “must” }
+  ],
+  “decisions”: [
+    { “decision”: “Use AES-GCM 256”, “reason”: “High performance and standard browser support”, “status”: “active” }
+  ],
+  “completed”: [
+    { “text”: “Key derivation protocol benchmarked” }
+  ],
+  “tasks”: [
+    { “text”: “Implement IndexedDB blob store”, “status”: “todo”, “priority”: “high” }
+  ],
+  “bugs”: [
+    { “text”: “Memory spike on large sync payloads”, “severity”: “medium”, “status”: “open” }
+  ],
+  “bugsReviewed”: false,
+  “instructions”: [
+    “Always mask secret keys in debug logs”
+  ],
+  “nextAction”: “Benchmark IndexedDB chunked writes”,
+  “openQuestions”: [
+    “Should we compress before encrypting?”
+  ],
+}
+```
+
+Let me know if you would like me to adjust any fields or add more tasks!

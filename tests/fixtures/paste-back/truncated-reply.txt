@@ -1,0 +1,7 @@
+Here is the start of the passport for your project:
+
+```json
+{
+  "project": {
+    "name": "Truncated Project",
+    "goal": "Test incomplete response handling

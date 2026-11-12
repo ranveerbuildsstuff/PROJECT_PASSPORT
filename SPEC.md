@@ -134,11 +134,30 @@ Readiness measures handoff preparedness across 7 equally-weighted checks:
 - **Reconstruct Prompt:**
   Used when the original AI conversation is no longer accessible. It packages selected imported conversation turns (bounded by a token cap with a clear warning) and asks a destination AI to synthesize the initial Passport Schema v1 JSON.
 - **Paste-back Processing:**
-  - Extracts JSON from markdown fenced code blocks or raw unescaped text.
-  - Tolerates trailing commentary, prose introductions, and typographic/smart quotes (`“`, `”`, `‘`, `’`).
-  - Validates against Schema v1.
-  - Explains all validation or parsing failures in plain language.
-  - Provides a section-by-section merge UI allowing the user to select per section: **Replace**, **Merge**, or **Skip**.
+  - Extracts JSON from markdown fenced code blocks (` ```json `, ` ```JSON `, or bare ` ``` `) or raw unescaped text via an iterative $O(n)$ string-aware scanner (capped at 1,000,000 characters; never recursive).
+  - Handles one-level unwrap of `{"passport": {...}}`. Any `schemaVersion` other than 1 is rejected with a plain-language error.
+  - Tolerates trailing commentary, prose introductions, and automatically repairs formatting quirks (reported by repair count):
+    - Smart double quotes (`“`, `”`) as structural delimiters (smart quotes inside ASCII-quoted strings are preserved as content).
+    - Smart single quotes (`‘`, `’`) in structural positions.
+    - Trailing commas in arrays and objects.
+    - Single-line (`//`) and multi-line (`/* ... */`) comments outside strings.
+    - BOM (`\uFEFF`), zero-width characters (`\u200B`, `\u200C`, `\u200D`, `\uFEFF`), and non-breaking spaces (`\u00A0`).
+    - Unescaped literal newlines inside JSON strings.
+  - **Allowed Coercions:**
+    - `null` values are treated as omitted fields.
+    - Enums are normalized case-insensitively, converting spaces and hyphens to underscores.
+    - Single strings for `instructions` and `openQuestions` are coerced into one-element arrays.
+    - All strings are trimmed.
+    - String literals `"true"` and `"false"` are coerced to boolean for `bugsReviewed`.
+    - Empty-text list items are cleanly dropped with a note.
+    - Missing or duplicate item IDs are regenerated using client UUID generation.
+  - **Ignored Fields:**
+    - Pasted JSON may omit `id` (on items and project), `createdAt`, `updatedAt`, `schemaVersion`, `files`, and `conversations`.
+    - If present, `project.id`, `createdAt`, `updatedAt`, `schemaVersion`, `files`, `conversations`, and unknown keys are never imported; they are ignored and listed to the user.
+  - Validates against `PassportImportSchema` (derived from Schema v1 covering editor-owned sections).
+  - Explains all validation or parsing failures in human-friendly language without raw Zod traces.
+  - Computes and displays the incoming reply's own readiness score over default values.
+  - Merging arrives in Slice 5b (Slice 5a focuses on capture prompt, extraction, normalisation, and verification reporting).
 
 ## 8. Conversation Import
 

@@ -1,6 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import {
   ChevronsUpDown,
+  Sparkles,
 } from 'lucide-react';
 import type { PassportV1 } from '../../domain';
 import { useAutosave } from './useAutosave';
@@ -26,6 +27,7 @@ export interface PassportEditorProps {
   initialPassport: PassportV1;
   onNavigateTab: (tab: string) => void;
   registerNavigationInterceptor?: (interceptor: ((targetTab: string) => boolean | Promise<boolean>) | null) => void;
+  onOpenCapture?: () => void;
 }
 
 export function PassportEditor({
@@ -33,6 +35,7 @@ export function PassportEditor({
   initialPassport,
   onNavigateTab,
   registerNavigationInterceptor,
+  onOpenCapture,
 }: PassportEditorProps): React.ReactElement {
   const {
     draft,
@@ -165,16 +168,30 @@ export function PassportEditor({
             onReloadLatest={reloadLatest}
             onKeepMyVersion={keepMyVersion}
           />
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => toggleAllSections(!allExpanded)}
-            className="text-xs text-text-muted hover:text-text-primary gap-1 min-h-[44px] min-w-[44px] py-1 px-2.5"
-          >
-            <ChevronsUpDown className="w-3.5 h-3.5" aria-hidden="true" />
-            <span>{allExpanded ? 'Collapse all' : 'Expand all'}</span>
-          </Button>
+          <div className="flex items-center gap-1.5">
+            {onOpenCapture && (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={onOpenCapture}
+                className="text-xs gap-1 min-h-[44px] min-w-[44px] py-1 px-2.5"
+              >
+                <Sparkles className="w-3.5 h-3.5" aria-hidden="true" />
+                <span>Capture from AI</span>
+              </Button>
+            )}
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => toggleAllSections(!allExpanded)}
+              className="text-xs text-text-muted hover:text-text-primary gap-1 min-h-[44px] min-w-[44px] py-1 px-2.5"
+            >
+              <ChevronsUpDown className="w-3.5 h-3.5" aria-hidden="true" />
+              <span>{allExpanded ? 'Collapse all' : 'Expand all'}</span>
+            </Button>
+          </div>
         </div>
       )}
 
@@ -188,16 +205,30 @@ export function PassportEditor({
               <span className="text-xs font-semibold text-text-muted uppercase tracking-wider">
                 Passport Sections
               </span>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => toggleAllSections(!allExpanded)}
-                className="text-xs text-text-muted hover:text-text-primary gap-1.5 min-h-[44px]"
-              >
-                <ChevronsUpDown className="w-3.5 h-3.5" aria-hidden="true" />
-                <span>{allExpanded ? 'Collapse all' : 'Expand all'}</span>
-              </Button>
+              <div className="flex items-center gap-2">
+                {onOpenCapture && (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={onOpenCapture}
+                    className="text-xs gap-1.5 min-h-[44px]"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" aria-hidden="true" />
+                    <span>Capture from AI</span>
+                  </Button>
+                )}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => toggleAllSections(!allExpanded)}
+                  className="text-xs text-text-muted hover:text-text-primary gap-1.5 min-h-[44px]"
+                >
+                  <ChevronsUpDown className="w-3.5 h-3.5" aria-hidden="true" />
+                  <span>{allExpanded ? 'Collapse all' : 'Expand all'}</span>
+                </Button>
+              </div>
             </div>
           )}
 

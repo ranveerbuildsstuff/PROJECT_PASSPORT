@@ -1,5 +1,10 @@
 import { test, expect } from '@playwright/test';
-import { expectNoSeriousA11y, collectConsoleErrors, getBackgroundAlpha } from './helpers';
+import {
+  expectNoSeriousA11y,
+  collectConsoleErrors,
+  getBackgroundAlpha,
+  collectExternalRequests,
+} from './helpers';
 
 test.describe('E2E Helpers Selftest', () => {
   test('expectNoSeriousA11y rejects on inaccessible page and mentions image-alt and color-contrast', async ({
@@ -202,6 +207,35 @@ test.describe('E2E Helpers Selftest', () => {
     const target = page.locator('#target');
     await expect(getBackgroundAlpha(target)).rejects.toThrow('Unparseable colour: not-a-colour');
     await expect(getBackgroundAlpha(target, 'not-a-colour')).rejects.toThrow('Unparseable colour: not-a-colour');
+  });
+
+  test('collectExternalRequests detects an outbound external network request', async ({
+    page,
+  }) => {
+    const getExternalRequests = collectExternalRequests(page);
+
+    await page.setContent(`
+      <!DOCTYPE html>
+      <html>
+        <body><h1>External Request Selftest</h1></body>
+      </html>
+    `);
+
+    // Route external test request to abort immediately without network latency
+    await page.route('https://example.com/api/test', (route) => route.abort());
+
+    // Trigger an external request and await it
+    await page.evaluate(async () => {
+      try {
+        await fetch('https://example.com/api/test');
+      } catch {
+        // aborted request error expected
+      }
+    });
+
+    const requests = getExternalRequests();
+    expect(requests.length).toBeGreaterThan(0);
+    expect(requests.some((r) => r.url() === 'https://example.com/api/test')).toBe(true);
   });
 });
 

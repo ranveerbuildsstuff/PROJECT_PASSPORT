@@ -291,3 +291,28 @@ export async function auditPageLayoutAndTouchTargets(
     );
   }
 }
+
+/**
+ * Monitors and collects any outbound network requests made by the page
+ * that do NOT target the local test server (http://127.0.0.1:4179 or http://localhost:4179)
+ * or browser-internal data: / blob: schemes.
+ * Returns a getter function returning the array of external Request objects.
+ */
+export function collectExternalRequests(page: Page): () => Array<{ url(): string; method(): string }> {
+  const externalRequests: Array<{ url(): string; method(): string }> = [];
+
+  page.on('request', (request) => {
+    const url = request.url();
+    if (
+      url.startsWith('http://localhost:4179') ||
+      url.startsWith('http://127.0.0.1:4179') ||
+      url.startsWith('data:') ||
+      url.startsWith('blob:')
+    ) {
+      return;
+    }
+    externalRequests.push(request);
+  });
+
+  return () => [...externalRequests];
+}

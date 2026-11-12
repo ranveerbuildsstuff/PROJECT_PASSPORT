@@ -180,6 +180,37 @@ Consolidated manual checklist tests into `storageService.test.ts` and deleted re
   - Documented that `desktop-passport-editor-populated.pdf` was an external artifact produced via `iLovePDF`, not Playwright.
   - Updated test 11 to remove obsolete `-part1` and `-part2` files via `fs.promises.rm(..., { force: true })` without `.catch`.
 
+### Slice 5a: Capture Prompt, Paste-Back Parsing & Validation
+- **Domain & Schema (`src/domain/passportImport.ts`):**
+  - Derived `PassportImportSchema` directly from `PassportSchemaV1.shape` without duplicated field declarations, covering editor-owned sections only with optional item IDs.
+  - Exported `MERGE_SECTION_IDS`: `basics`, `stack`, `requirements`, `decisions`, `completed`, `tasks`, `bugs`, `instructions`, `nextAction`, `openQuestions`.
+  - Implemented `normalizeImportedPassport`: unwraps single-level `{"passport": {...}}`, validates `schemaVersion: 1`, applies coercions (null to omitted, enums case-insensitive with `_`/`-`/spaces handled, single string to 1-item array for instructions and openQuestions, strings trimmed, "true"/"false" to boolean for `bugsReviewed`, empty-text items dropped with plain-language notes, missing or duplicate item IDs regenerated with fresh UUIDs), and tracks ignored keys (`id`, `createdAt`, `updatedAt`, `schemaVersion`, `files`, `conversations`, unknown keys).
+- **Prompt Generation (`src/export/prompts.ts`):**
+  - Implemented deterministic, vendor-neutral `generateCapturePrompt()` with interpolated enum choices, `CAPTURE_PROMPT_VERSION = 1`, and required verbatim instructions (single JSON object in one code fence, follow skeleton, omit fields rather than fabricate, decisions need reasons, accurate completed/tasks/bugs, set `bugsReviewed` true only when certain, always give `nextAction`, uncertainty in `openQuestions`, never include secrets, omit IDs and timestamps).
+- **Iterative $O(n)$ JSON Extractor (`src/import/jsonExtractor.ts`):**
+  - Implemented an iterative, non-recursive, string-aware scanner capped at 1,000,000 characters. Runs in linear $O(n)$ time with zero recursion, safely handling 50,000 nested braces without stack overflow.
+  - Scans fenced markdown blocks first, then balanced `{...}` objects. Tries raw `JSON.parse` first and applies non-destructive repairs only on failure: smart double quotes as delimiters (preserving smart quotes inside ASCII strings as content), smart single quotes in structural positions, trailing commas in objects and arrays, single/multi-line comments outside strings, BOM, zero-width characters, NBSP, and literal newlines in strings.
+  - Reports typed error codes: `empty`, `too_large`, `no_json_found`, `truncated`, `invalid_json` (with line, column, and max 60-character excerpt), and `not_an_object`.
+- **Paste-Back Service (`src/import/pasteBack.ts`):**
+  - Evaluates extracted JSON against `PassportImportSchema`, rejecting inputs containing zero recognized passport sections.
+  - Maps validation issues to plain-language messages via `formatZodIssueToPlainLanguage`, capping details at 8 items followed by "and N more". Never leaks raw Zod traces, curly braces, or `undefined`.
+  - Computes incoming readiness score over default passport values, labelled as the reply's own score.
+- **UI & Entry Points (`src/ui/CaptureDialog.tsx`):**
+  - Implemented a 2-step modal dialog mounted at `ProjectPage` level.
+  - Step 1 ("Copy this prompt"): Read-only monospace box (scrollable, focusable), `~N tokens (estimate)` badge, brass "Copy prompt" button with toast and select-all fallback, and privacy notice.
+  - Step 2 ("Paste the AI’s reply"): Min 8-row textarea, brass "Check reply" button with loading indicator, and secondary "Clear" button.
+  - Result states: Accessible success card (`role="status"`) displaying section counts, repairs, ignored keys, readiness ring, and notice "Merging arrives in the next update"; accessible error card (`role="alert"`) with title, message, next steps, and "Copy prompt again" button. Focus shifts to the result heading upon check.
+  - Entry points: Secondary "Capture from AI" button added to the Passport tab toolbar (both desktop and mobile sticky bar) and the Overview next-action card header.
+- **Off-Thread & Storage Scope Rationale:**
+  - Processing is capped at 1,000,000 characters and completes in single-digit milliseconds on the main thread, making a Web Worker unnecessary for Slice 5a.
+  - Zero writes to Dexie or IndexedDB in Slice 5a (merging, diffing, and storage mutations are strictly Slice 5b).
+  - Secret scanning is deferred to Slice 8; Reconstruct prompt explicitly moved to Slice 6.
+- **Test Integrity & Failure Disclosure (Rule 13.7):**
+  - *Run 1 of `e2e/capture.spec.ts`*: Test 5 timed out because the test attempted to click the theme toggle button in the app header while the modal dialog was open; the dialog backdrop intercepted pointer events. Additionally, executing 4 full-page axe scans in one test approached the 20s ceiling. *Fix*: Split Test 5 into Test 5 (Dark theme: step 1 + success states with 1 axe scan) and Test 6 (Light theme: toggle theme before opening dialog + error state with 1 axe scan).
+  - *Run 2 of `e2e/capture.spec.ts`*: Test 6 failed on `expect(page.locator('html')).toHaveClass(/light/)` because theme is controlled via `data-theme="light"` on `<html>`. *Fix*: Updated assertion to `expect(page.locator('html')).toHaveAttribute('data-theme', 'light')`.
+  - *Run 1 of `e2e/helpers.selftest.spec.ts`*: Test 17 failed on mobile-360 because `fetch()` inside `page.evaluate` was not awaited, causing `requests.length` to be evaluated before request dispatch. *Fix*: Awaited `fetch()` inside `page.evaluate`.
+  - *Zero Outbound Proof*: Added `collectExternalRequests(page)` to `e2e/helpers.ts` with selftest in `helpers.selftest.spec.ts`; verified 0 outbound requests across the entire capture flow and verified baseline goal unchanged after reload to prove zero storage writes.
+
 ---
 
 ## Known Issues

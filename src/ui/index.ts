@@ -18,3 +18,4 @@ export * from './Select';
 export * from './Accordion';
 export * from './CompactEmptyState';
 export * from './useMediaQuery';
+export * from './CaptureDialog';

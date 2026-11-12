@@ -190,14 +190,34 @@
 
 ---
 
-## Slice 5: Capture Prompt, Reconstruct Prompt, Paste-back & Merge
+## Slice 5a: Capture Prompt, Paste-back Parsing and Validation
 
-- [ ] In `src/export/prompts.ts`, implement `generateCapturePrompt()` strictly enforcing Schema v1 formatting (instructing the AI to set `bugsReviewed` to `true` only if confirmed no open bugs, otherwise `false`).
-- [ ] Implement `generateReconstructPrompt(conversations, tokenBudget)` with token cap warning.
-- [ ] Implement Capture Dialog with one-click prompt copying and clear step-by-step instructions.
-- [ ] In `src/import/jsonExtractor.ts`, implement pure JSON extraction handling markdown code fences, raw text, smart quotes, and trailing prose (ensuring `bugsReviewed` is preserved or defaulted to `false`).
-- [ ] Implement validation runner for extracted JSON providing plain-language explanations on failures.
+- [x] In `src/export/prompts.ts`, implement `generateCapturePrompt()` strictly enforcing Schema v1 formatting (instructing the AI to set `bugsReviewed` to `true` only if confirmed no open bugs, otherwise `false`). (Note: Reconstruct prompt moved to Slice 6).
+- [x] Implement Capture Dialog (`src/ui/CaptureDialog.tsx`) with one-click prompt copying (`~N tokens (estimate)`), clipboard fallback, privacy notice, min 8-row textarea, check reply button with loading state, and accessible success/error cards.
+- [x] In `src/import/jsonExtractor.ts`, implement pure $O(n)$ iterative string-aware JSON extraction handling markdown code fences, raw text, smart quotes, trailing commas, comments, BOM/NBSP, literal newlines, and trailing prose (capped at 1,000,000 chars, no recursion).
+- [x] In `src/domain/passportImport.ts`, derive `PassportImportSchema` from `PassportSchemaV1`, export `MERGE_SECTION_IDS`, implement `normalizeImportedPassport` with coercions and ignored keys tracking.
+- [x] In `src/import/pasteBack.ts`, implement `processPasteBack` with plain-language errors, capped details (8 + "and N more"), and incoming readiness score.
+- [x] Entry points: Secondary "Capture from AI" button on Passport tab toolbar and Overview next action area.
+- [x] Synthetic test fixtures in `tests/fixtures/paste-back/` (`valid-reply.txt`, `truncated-reply.txt`, `README.md`).
+- [x] Zero outbound network requests and zero IndexedDB storage writes verified.
+- [x] **Tests added:** 100 new Vitest unit tests (202 total across 21 files); 12 Playwright E2E tests (120 total across 2 workers) covering all flows, accessibility, and zero network/storage impact.
+- [x] **Docs updated:** Update `SPEC.md` §7, `PROGRESS.md`, and record failure disclosure and rationale.
+- [x] **Commit message:** `Slice 5a: capture prompt, paste-back parsing and validation`
+
+**Done when:**
+- `npm run typecheck`, `npm run lint`, `npm test`, `npm run build`, and `npm run test:e2e` pass with zero errors.
+- Fuzz (500 seeded PRNG mutations) and safety tests green; zero outbound network requests proven.
+- `SPEC.md` §7 updated with tolerance rules, ignored keys, and coercion list.
+- `PROGRESS.md` updated with rationale and failure disclosures.
+- Port 4179 is confirmed free.
+
+---
+
+## Slice 5b: Section-by-Section Merge UI, Visual Diff & Checkpoints
+
 - [ ] Implement section-by-section Merge UI showing diffs and controls for Replace / Merge / Skip per section (including `bugsReviewed` handling).
+- [ ] Implement automated checkpoint creation before merge mutation.
+- [ ] Implement atomic Dexie storage write of merged passport.
 - [ ] Implement automatic checkpoint creation before applying any paste-back merge.
 - [ ] **Tests added:** Unit tests for prompt generation, resilient JSON extraction, edge-case parsing (smart quotes, trailing comments), and merge logic.
 - [ ] **Docs updated:** Note prompt templates and extraction heuristics in `PROGRESS.md`.
