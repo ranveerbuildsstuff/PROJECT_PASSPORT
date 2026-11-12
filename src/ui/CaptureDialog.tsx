@@ -24,6 +24,7 @@ import {
   getPassport,
   getProject,
 } from '../storage';
+import { flushActiveAutosave } from '../lib';
 
 export interface CaptureDialogProps {
   isOpen: boolean;
@@ -161,6 +162,7 @@ export function CaptureDialog({
       });
 
       const checkpointId = res.checkpointId;
+      const postMergeUpdatedAt = res.updatedPassport.project.updatedAt;
       onMergeComplete?.(checkpointId);
       onClose();
 
@@ -176,8 +178,16 @@ export function CaptureDialog({
           label: 'Undo',
           onClick: async () => {
             try {
+              // Flush any pending in-memory autosave edits first so newer edits are not discarded
+              await flushActiveAutosave();
+              const currentPass = await getPassport(projectId);
+              const hasNewerEdits = currentPass && currentPass.project.updatedAt !== postMergeUpdatedAt;
               await restoreCheckpoint(checkpointId);
-              showToast('Merge undone.', 'info');
+              if (hasNewerEdits) {
+                showToast('Merge undone. Newer edits saved in a "Before restore" checkpoint.', 'info');
+              } else {
+                showToast('Merge undone.', 'info');
+              }
             } catch (err) {
               showToast(describeStorageError(err), 'error');
             }

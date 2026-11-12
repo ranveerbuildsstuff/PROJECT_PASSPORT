@@ -561,6 +561,35 @@ describe('Storage Service & Dexie Layer', () => {
     expect(updatedProject.updatedAt).toBe(updatedPassport.project.updatedAt);
   });
 
+  it('savePassport throws StaleWrite and writes nothing when stored project.updatedAt changes between read and write', async () => {
+    const project = await createProject('Guard Test Project');
+    const initialPassport = (await getPassport(project.id))!;
+    const expectedUpdatedAt = initialPassport.project.updatedAt;
+
+    // Simulate an external concurrent change modifying stored record in Dexie
+    await new Promise((resolve) => setTimeout(resolve, 15));
+    await renameProject(project.id, 'External Concurrent Name');
+
+    const externalProject = (await getProject(project.id))!;
+    expect(externalProject.updatedAt).not.toBe(expectedUpdatedAt);
+
+    // Draft prepared with local edits using the now-stale expectedUpdatedAt
+    const localDraft: PassportV1 = JSON.parse(JSON.stringify(initialPassport));
+    localDraft.project.goal = 'Attempted overwrite of goal';
+
+    // Attempt save with stale expectedUpdatedAt
+    await expect(
+      savePassport(localDraft, { expectedUpdatedAt })
+    ).rejects.toThrow(StaleWrite);
+
+    // Verify atomic guard: NOTHING was written!
+    const storedProject = (await getProject(project.id))!;
+    const storedPassport = (await getPassport(project.id))!;
+    expect(storedProject.name).toBe('External Concurrent Name');
+    expect(storedPassport.project.name).toBe('External Concurrent Name');
+    expect(storedPassport.project.goal).not.toBe('Attempted overwrite of goal');
+  });
+
   it('confirms production isAvailable actually tries to open the database and catches open errors', async () => {
     _setStorageAvailableForTesting(null);
 
@@ -1063,6 +1092,45 @@ describe('Storage Service & Dexie Layer', () => {
       expect(checkpoints).toHaveLength(0);
     });
 
+    it('rollback proof: applyMergeWithCheckpoint rolls back both checkpoint and passport when writing passport inside transaction fails', async () => {
+      const proj = await createProject('Alpha Rollback Proof');
+      const baseline = (await getPassport(proj.id))!;
+      baseline.project.goal = 'Safe original goal';
+      await savePassport(baseline);
+
+      const beforeMerge = (await getPassport(proj.id))!;
+      const mergedPassport: PassportV1 = JSON.parse(JSON.stringify(beforeMerge));
+      mergedPassport.project.goal = 'Merged failure goal';
+
+      // Spy on db.passports.put (the write inside the transaction after checkpoint put)
+      const spy = vi.spyOn(db.passports, 'put').mockImplementation(() => {
+        throw new Error('Simulated failure writing passport in applyMergeWithCheckpoint');
+      });
+
+      let thrown: unknown;
+      try {
+        await applyMergeWithCheckpoint({
+          projectId: proj.id,
+          expectedUpdatedAt: beforeMerge.project.updatedAt,
+          mergedPassport,
+        });
+      } catch (err) {
+        thrown = err;
+      } finally {
+        spy.mockRestore();
+      }
+
+      expect(thrown).toBeDefined();
+
+      // Assert complete rollback: no checkpoint created, passport and project untouched
+      const currentPassport = (await getPassport(proj.id))!;
+      const currentProject = (await getProject(proj.id))!;
+      expect(currentPassport.project.goal).toBe('Safe original goal');
+      expect(currentProject.name).toBe('Alpha Rollback Proof');
+      const checkpoints = await db.checkpoints.where('projectId').equals(proj.id).toArray();
+      expect(checkpoints).toHaveLength(0);
+    });
+
     it('restores checkpoint correctly and creates an automated "Before restore" checkpoint', async () => {
       const proj = await createProject('Alpha');
       const initial = (await getPassport(proj.id))!;
@@ -1094,6 +1162,43 @@ describe('Storage Service & Dexie Layer', () => {
       const checkpoints = await db.checkpoints.where('projectId').equals(proj.id).toArray();
       expect(checkpoints.length).toBeGreaterThanOrEqual(2);
       expect(checkpoints.some((c) => c.description === 'Before restore')).toBe(true);
+    });
+
+    it('undo safety: edits made after a merge are preserved in "Before restore" checkpoint and recoverable', async () => {
+      const proj = await createProject('Alpha Undo Safety');
+      const initial = (await getPassport(proj.id))!;
+      initial.project.goal = 'Pre-merge baseline goal';
+      await savePassport(initial);
+
+      const beforeMerge = (await getPassport(proj.id))!;
+      const mergedPassport: PassportV1 = JSON.parse(JSON.stringify(beforeMerge));
+      mergedPassport.project.goal = 'Merged AI goal';
+
+      const { checkpointId } = await applyMergeWithCheckpoint({
+        projectId: proj.id,
+        expectedUpdatedAt: beforeMerge.project.updatedAt,
+        mergedPassport,
+      });
+
+      // User makes a newer edit after the merge
+      const postMergePassport = (await getPassport(proj.id))!;
+      postMergePassport.project.goal = 'User newer edit after merge';
+      await savePassport(postMergePassport);
+
+      // Now user clicks Undo -> restoreCheckpoint(checkpointId)
+      const restored = await restoreCheckpoint(checkpointId);
+      expect(restored.project.goal).toBe('Pre-merge baseline goal');
+
+      // Checkpoints in DB must include an automated "Before restore" checkpoint
+      const checkpoints = await db.checkpoints.where('projectId').equals(proj.id).toArray();
+      const beforeRestoreCp = checkpoints.find((c) => c.description === 'Before restore');
+      expect(beforeRestoreCp).toBeDefined();
+      // The "Before restore" checkpoint contains the newer edit!
+      expect((beforeRestoreCp!.passport as PassportV1).project.goal).toBe('User newer edit after merge');
+
+      // The newer edit is recoverable by restoring that checkpoint!
+      const recovered = await restoreCheckpoint(beforeRestoreCp!.id);
+      expect(recovered.project.goal).toBe('User newer edit after merge');
     });
   });
 });

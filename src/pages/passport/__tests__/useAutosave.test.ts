@@ -3,7 +3,7 @@ import { renderHook, act } from '@testing-library/react';
 import { useAutosave, type FlushResult } from '../useAutosave';
 import { createEmptyPassport } from '../../../domain';
 import * as storage from '../../../storage';
-import { QuotaExceeded } from '../../../storage';
+import { QuotaExceeded, StaleWrite } from '../../../storage';
 
 describe('useAutosave Hook', () => {
   beforeEach(() => {
@@ -890,5 +890,62 @@ describe('useAutosave Hook', () => {
     expect(result.current.saveStatus).toBe('conflict');
     expect(result.current.statusMessage).not.toBe('Saved');
     expect(result.current.statusMessage).toContain('changed somewhere else');
+  });
+
+  it('StaleWrite thrown by savePassport maps to conflict status and allows reload or keep my version', async () => {
+    const initial = createEmptyPassport('Initial Project');
+    initial.project.id = 'proj-1';
+
+    vi.spyOn(storage, 'getPassport').mockResolvedValue(initial);
+    const saveSpy = vi.spyOn(storage, 'savePassport')
+      .mockRejectedValueOnce(new StaleWrite())
+      .mockResolvedValue();
+
+    const { result } = renderHook(() =>
+      useAutosave({
+        projectId: 'proj-1',
+        initialPassport: initial,
+        debounceMs: 600,
+      })
+    );
+
+    act(() => {
+      result.current.updateDraft((prev) => ({
+        ...prev,
+        project: { ...prev.project, name: 'Local edit to save' },
+      }));
+    });
+
+    let flushRes!: FlushResult;
+    await act(async () => {
+      flushRes = await result.current.flushSave();
+    });
+
+    expect(flushRes).toEqual({ ok: false, reason: 'conflict' });
+    expect(result.current.saveStatus).toBe('conflict');
+    expect(result.current.statusMessage).toContain('This passport was changed somewhere else');
+    expect(saveSpy).toHaveBeenCalledTimes(1);
+    expect(saveSpy.mock.calls[0]?.[1]?.expectedUpdatedAt).toBe(initial.project.updatedAt);
+
+    // Keep my version rebases onto stored and retries through the guard
+    const latestAfterConflict = {
+      ...initial,
+      project: {
+        ...initial.project,
+        updatedAt: '2026-11-12T16:00:00.000Z',
+      },
+    };
+    vi.spyOn(storage, 'getPassport').mockResolvedValue(latestAfterConflict);
+
+    let keepRes!: FlushResult;
+    await act(async () => {
+      keepRes = await result.current.keepMyVersion();
+    });
+
+    expect(keepRes).toEqual({ ok: true });
+    expect(saveSpy).toHaveBeenCalledTimes(2);
+    expect(saveSpy.mock.calls[1]?.[1]?.expectedUpdatedAt).toBe('2026-11-12T16:00:00.000Z');
+    expect(result.current.saveStatus).toBe('saved');
+    expect(result.current.isDirty).toBe(false);
   });
 });

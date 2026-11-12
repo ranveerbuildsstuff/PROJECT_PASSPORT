@@ -63,7 +63,8 @@ test.describe('Passport Editor E2E Tests', () => {
     const statusSelect = page.getByLabel('Project status');
     await statusSelect.selectOption('in_progress');
 
-    // Wait for the debounced autosave status indicator
+    // Wait for autosave cycle: transitions to saving then saved
+    await expect(page.getByRole('status', { name: 'Autosave status' })).toContainText('Saving');
     await expect(page.getByRole('status', { name: 'Autosave status' })).toContainText('Saved');
 
     // Reload page
@@ -80,9 +81,9 @@ test.describe('Passport Editor E2E Tests', () => {
     await expect(page.getByRole('status', { name: 'Autosave status' })).toContainText('Saved');
   });
 
-  test('2. Add one item in every list plus next action; reload; all persist', async ({ page }) => {
+  test('2a. Add items to stack, requirements, decisions, completed, and next action; reload; all persist', async ({ page }) => {
     collectConsoleErrors(page);
-    await createAndOpenPassport(page, 'Full Feature App');
+    await createAndOpenPassport(page, 'Feature App Part A');
 
     // Expand all sections
     await page.getByRole('button', { name: /Expand all/i }).click();
@@ -111,28 +112,8 @@ test.describe('Passport Editor E2E Tests', () => {
     const comp1 = page.getByRole('group', { name: 'Completed item 1' });
     await comp1.getByRole('textbox', { name: 'Description' }).fill('Completed initial scaffold');
 
-    // 5. Tasks
-    await page.getByRole('button', { name: /Add task/i }).first().click();
-    const task1 = page.getByRole('group', { name: 'Task 1' });
-    await task1.getByRole('textbox', { name: 'Description' }).fill('Implement passport editor test suite');
-
-    // 6. Bugs
-    await page.getByRole('button', { name: /Add bug/i }).first().click();
-    const bug1 = page.getByRole('group', { name: 'Bug 1' });
-    await bug1.getByRole('textbox', { name: 'Description' }).fill('Windows file path backslash normalization');
-
-    // 7. Instructions
-    await page.getByRole('button', { name: /Add instruction/i }).first().click();
-    const inst1 = page.getByRole('group', { name: 'Instruction 1' });
-    await inst1.getByRole('textbox', { name: 'Rule / Instruction' }).fill('Always use TypeScript strict mode');
-
-    // 8. Next Action
+    // 5. Next Action
     await page.getByRole('textbox', { name: 'Immediate next action' }).fill('Run E2E test verification');
-
-    // 9. Open Questions
-    await page.getByRole('button', { name: /Add open question/i }).first().click();
-    const q1 = page.getByRole('group', { name: 'Question 1' });
-    await q1.getByRole('textbox', { name: 'Question' }).fill('What cloud sync options should be considered?');
 
     // Wait for Saved
     await expect(page.getByRole('status', { name: 'Autosave status' })).toContainText('Saved');
@@ -158,6 +139,44 @@ test.describe('Passport Editor E2E Tests', () => {
     const comp1Reloaded = page.getByRole('group', { name: 'Completed item 1' });
     await expect(comp1Reloaded.getByRole('textbox', { name: 'Description' })).toHaveValue('Completed initial scaffold');
 
+    await expect(page.getByRole('textbox', { name: 'Immediate next action' })).toHaveValue('Run E2E test verification');
+  });
+
+  test('2b. Add items to tasks, bugs, instructions, and open questions; reload; all persist', async ({ page }) => {
+    collectConsoleErrors(page);
+    await createAndOpenPassport(page, 'Feature App Part B');
+
+    // Expand all sections
+    await page.getByRole('button', { name: /Expand all/i }).click();
+
+    // 1. Tasks
+    await page.getByRole('button', { name: /Add task/i }).first().click();
+    const task1 = page.getByRole('group', { name: 'Task 1' });
+    await task1.getByRole('textbox', { name: 'Description' }).fill('Implement passport editor test suite');
+
+    // 2. Bugs
+    await page.getByRole('button', { name: /Add bug/i }).first().click();
+    const bug1 = page.getByRole('group', { name: 'Bug 1' });
+    await bug1.getByRole('textbox', { name: 'Description' }).fill('Windows file path backslash normalization');
+
+    // 3. Instructions
+    await page.getByRole('button', { name: /Add instruction/i }).first().click();
+    const inst1 = page.getByRole('group', { name: 'Instruction 1' });
+    await inst1.getByRole('textbox', { name: 'Rule / Instruction' }).fill('Always use TypeScript strict mode');
+
+    // 4. Open Questions
+    await page.getByRole('button', { name: /Add open question/i }).first().click();
+    const q1 = page.getByRole('group', { name: 'Question 1' });
+    await q1.getByRole('textbox', { name: 'Question' }).fill('What cloud sync options should be considered?');
+
+    // Wait for Saved
+    await expect(page.getByRole('status', { name: 'Autosave status' })).toContainText('Saved');
+
+    // Reload
+    await page.reload();
+    await page.getByRole('button', { name: /Expand all/i }).click();
+
+    // Verify all fields persisted
     const task1Reloaded = page.getByRole('group', { name: 'Task 1' });
     await expect(task1Reloaded.getByRole('textbox', { name: 'Description' })).toHaveValue('Implement passport editor test suite');
 
@@ -166,8 +185,6 @@ test.describe('Passport Editor E2E Tests', () => {
 
     const inst1Reloaded = page.getByRole('group', { name: 'Instruction 1' });
     await expect(inst1Reloaded.getByRole('textbox', { name: 'Rule / Instruction' })).toHaveValue('Always use TypeScript strict mode');
-
-    await expect(page.getByRole('textbox', { name: 'Immediate next action' })).toHaveValue('Run E2E test verification');
 
     const q1Reloaded = page.getByRole('group', { name: 'Question 1' });
     await expect(q1Reloaded.getByRole('textbox', { name: 'Question' })).toHaveValue('What cloud sync options should be considered?');
@@ -305,28 +322,69 @@ test.describe('Passport Editor E2E Tests', () => {
     await expect(page.getByRole('heading', { level: 1, name: 'Validation Test Project' })).toBeVisible();
   });
 
-  test('6. Readiness updates live as fields are filled; bugsReviewed toggle alone passes bugs check; Overview & dashboard reflect score', async ({ page }) => {
+  test('6a. Readiness updates live as fields are filled in editor; bugsReviewed toggle alone passes bugs check', async ({ page }) => {
     collectConsoleErrors(page);
 
-    // Restore synthetic backup containing 1 project with a file in its passport manifest
+    // Seed project with 1 file attached in passport manifest so "Context attached" passes
     await page.goto('/');
-    await page.getByRole('button', { name: 'Backup and restore' }).click();
-    const backupDialog = page.getByRole('dialog', { name: 'Backup & restore' });
-    await expect(backupDialog).toBeVisible();
+    const projId = 'readiness-live-proj';
+    await page.evaluate(async (id) => {
+      const dbReq = indexedDB.open('ProjectPassportDB');
+      await new Promise<void>((resolve, reject) => {
+        dbReq.onsuccess = () => {
+          const idb = dbReq.result;
+          const tx = idb.transaction(['projects', 'passports'], 'readwrite');
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => reject(tx.error);
+          const now = new Date().toISOString();
+          tx.objectStore('projects').put({
+            id,
+            name: 'Readiness Live Test',
+            status: 'in_progress',
+            createdAt: now,
+            updatedAt: now,
+          });
+          tx.objectStore('passports').put({
+            projectId: id,
+            passport: {
+              schemaVersion: 1,
+              project: {
+                id,
+                name: 'Readiness Live Test',
+                status: 'in_progress',
+                goal: '',
+                summary: '',
+                createdAt: now,
+                updatedAt: now,
+              },
+              stack: [],
+              requirements: [],
+              decisions: [],
+              completed: [],
+              tasks: [],
+              bugs: [],
+              bugsReviewed: false,
+              instructions: [],
+              nextAction: '',
+              openQuestions: [],
+              files: [
+                {
+                  path: 'src/main.ts',
+                  purpose: 'Application entry point',
+                  included: true,
+                  sizeBytes: 512,
+                },
+              ],
+              conversations: [],
+            },
+          });
+        };
+        dbReq.onerror = () => reject(dbReq.error);
+      });
+    }, projId);
 
-    const fileInput = backupDialog.locator('input[type="file"]');
-    await fileInput.setInputFiles('tests/fixtures/readiness-seed-backup.json');
-
-    // Confirm restore
-    await backupDialog.getByRole('button', { name: 'Confirm and restore' }).click();
-    await expect(backupDialog).not.toBeVisible();
-    await expect(page.getByText('Restored 1 project', { exact: true })).toBeVisible();
-
-    // Open the restored project
-    await page.getByRole('link', { name: /Readiness Live Test/ }).first().click();
-
-    // Navigate to Passport editor
-    await page.getByRole('tab', { name: 'Passport' }).click();
+    // Navigate to Passport editor directly
+    await page.goto(`/project/${projId}/passport`);
     await expect(page.getByRole('button', { name: /Basics/i })).toBeVisible();
 
     const sidePanel = page.locator('aside');
@@ -340,10 +398,14 @@ test.describe('Passport Editor E2E Tests', () => {
 
     // Expand all sections
     await page.getByRole('button', { name: /Expand all/i }).click();
+    await expect(page.getByRole('button', { name: /Collapse all/i })).toBeVisible();
 
     // 2. Add Stack
-    await page.getByRole('button', { name: /Add stack item/i }).first().click();
+    const addStackBtn = page.getByRole('button', { name: /Add stack item/i }).first();
+    await expect(addStackBtn).toBeVisible();
+    await addStackBtn.click();
     const stack1 = page.getByRole('group', { name: 'Stack item 1' });
+    await expect(stack1).toBeVisible();
     await stack1.getByRole('textbox', { name: 'Name' }).fill('TypeScript');
 
     // 3. Add Active Decision
@@ -369,9 +431,71 @@ test.describe('Passport Editor E2E Tests', () => {
 
     // All 7 checks have passed -> 100/100 score
     await expect(sidePanel.getByText('100/100 score', { exact: true })).toBeVisible();
+  });
 
-    // Navigate to Overview tab
-    await page.getByRole('tab', { name: 'Overview' }).click();
+  test('6b. Project Overview checklist and Dashboard card reflect 100% readiness score', async ({ page }) => {
+    collectConsoleErrors(page);
+
+    // Create a 100% complete project directly via storage seed for speed and isolation
+    await page.goto('/');
+    const projId = 'readiness-100-proj';
+    await page.evaluate(async (id) => {
+      const dbReq = indexedDB.open('ProjectPassportDB');
+      await new Promise<void>((resolve, reject) => {
+        dbReq.onsuccess = () => {
+          const idb = dbReq.result;
+          const tx = idb.transaction(['projects', 'passports'], 'readwrite');
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => reject(tx.error);
+          const now = new Date().toISOString();
+          tx.objectStore('projects').put({
+            id,
+            name: 'Readiness 100 Project',
+            status: 'in_progress',
+            createdAt: now,
+            updatedAt: now,
+          });
+          tx.objectStore('passports').put({
+            projectId: id,
+            passport: {
+              schemaVersion: 1,
+              project: {
+                id,
+                name: 'Readiness 100 Project',
+                status: 'in_progress',
+                goal: 'Build full-featured offline assistant',
+                summary: 'Complete executive summary',
+                createdAt: now,
+                updatedAt: now,
+              },
+              stack: [{ name: 'TypeScript', role: 'Language', version: '5.0', notes: '' }],
+              requirements: [{ id: 'r1', text: 'Local-first architecture', priority: 'must' }],
+              decisions: [{ id: 'd1', decision: 'Zero network calls', reason: 'Security and privacy', status: 'active', date: '2026-11-12' }],
+              completed: [],
+              tasks: [{ id: 't1', text: 'Initial migration', status: 'todo', priority: 'medium' }],
+              bugs: [],
+              bugsReviewed: true,
+              instructions: [],
+              nextAction: 'Publish release v1',
+              openQuestions: [],
+              files: [
+                {
+                  path: 'src/main.ts',
+                  purpose: 'Application entry point',
+                  included: true,
+                  sizeBytes: 512,
+                },
+              ],
+              conversations: [],
+            },
+          });
+        };
+        dbReq.onerror = () => reject(dbReq.error);
+      });
+    }, projId);
+
+    await page.reload();
+    await page.getByRole('link', { name: /Readiness 100 Project/ }).first().click();
 
     // Overview header and summary shows the updated readiness score (100/100)
     await expect(page.getByRole('heading', { name: 'Readiness Checklist' })).toBeVisible();
@@ -388,11 +512,11 @@ test.describe('Passport Editor E2E Tests', () => {
     // Navigate to Dashboard and verify card shows updated readiness (100%)
     await page.getByRole('link', { name: /Back to all projects/i }).click();
     await expect(page).toHaveURL('/');
-    await expect(page.getByText('Readiness Live Test')).toBeVisible();
+    await expect(page.getByText('Readiness 100 Project')).toBeVisible();
     await expect(page.getByTitle('Readiness: 100%')).toBeVisible();
   });
 
-  test('7. Markdown preview shows entered content and updates live; Copy button copies to clipboard with toast', async ({ page }) => {
+  test('7a. Markdown preview shows entered content and updates live; token count estimate matches', async ({ page }) => {
     collectConsoleErrors(page);
     await createAndOpenPassport(page, 'Markdown Live Preview App');
 
@@ -401,10 +525,14 @@ test.describe('Passport Editor E2E Tests', () => {
 
     // Expand all sections to fill stack, decision, task per requirement 6
     await page.getByRole('button', { name: /Expand all/i }).click();
+    await expect(page.getByRole('button', { name: /Collapse all/i })).toBeVisible();
 
     // Fill stack item
-    await page.getByRole('button', { name: /Add stack item/i }).first().click();
+    const addStackBtn = page.getByRole('button', { name: /Add stack item/i }).first();
+    await expect(addStackBtn).toBeVisible();
+    await addStackBtn.click();
     const stack1 = page.getByRole('group', { name: 'Stack item 1' });
+    await expect(stack1).toBeVisible();
     await stack1.getByRole('textbox', { name: 'Name' }).fill('React 19 Framework');
 
     // Fill decision
@@ -445,6 +573,82 @@ test.describe('Passport Editor E2E Tests', () => {
     const expectedTokens = Math.ceil((previewFullText?.length || 0) / 4);
     const tokenRegex = new RegExp(`~${expectedTokens.toLocaleString()}\\s+tokens\\s+\\(estimate\\)`);
     await expect(page.getByText(tokenRegex)).toBeVisible();
+  });
+
+  test('7b. Copy button copies markdown to clipboard with toast and passes axe scan', async ({ page, context }) => {
+    collectConsoleErrors(page);
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+
+    const projectId = '7b7b7b7b-7b7b-4b7b-8b7b-7b7b7b7b7b7b';
+    await page.evaluate(async (pId: string) => {
+      const now = new Date().toISOString();
+      const pRecord = {
+        id: pId,
+        name: 'Markdown Copy Test App',
+        createdAt: now,
+        updatedAt: now,
+      };
+      const passRecord = {
+        projectId: pId,
+        schemaVersion: 1,
+        passport: {
+          schemaVersion: 1,
+          project: {
+            id: pId,
+            name: 'Markdown Copy Test App',
+            goal: 'Verify markdown preview and copy functionality',
+            summary: '',
+            status: 'idea',
+            createdAt: now,
+            updatedAt: now,
+          },
+          stack: [
+            {
+              id: 'stack-1',
+              name: 'React 19 Framework',
+              category: 'frontend',
+              version: '',
+              notes: '',
+            },
+          ],
+          requirements: [],
+          decisions: [],
+          completed: [],
+          tasks: [],
+          bugs: [],
+          bugsReviewed: false,
+          instructions: [],
+          nextAction: '',
+          openQuestions: [],
+          files: [],
+          conversations: [],
+        },
+      };
+      const req = indexedDB.open('ProjectPassportDB');
+      await new Promise<void>((resolve, reject) => {
+        req.onsuccess = () => {
+          const db = req.result;
+          const tx = db.transaction(['projects', 'passports'], 'readwrite');
+          tx.objectStore('projects').put(pRecord);
+          tx.objectStore('passports').put(passRecord);
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => reject(tx.error);
+        };
+        req.onerror = () => reject(req.error);
+      });
+    }, projectId);
+
+    await page.goto(`/project/${projectId}/passport`);
+    await expect(page.getByRole('heading', { level: 1, name: 'Markdown Copy Test App' })).toBeVisible();
+    await expect(page.getByRole('status', { name: 'Autosave status' })).toContainText('Saved');
+
+    // On mobile viewport, ensure preview is expanded
+    const isMobile = test.info().project.name === 'mobile-360';
+    if (isMobile) {
+      const togglePreviewBtn = page.getByRole('button', { name: 'Toggle markdown preview' });
+      await expect(togglePreviewBtn).toBeVisible();
+      await expect(togglePreviewBtn).toHaveAttribute('aria-expanded', 'true');
+    }
 
     // Click Copy button
     await page.getByRole('button', { name: 'Copy markdown' }).click();
@@ -454,7 +658,7 @@ test.describe('Passport Editor E2E Tests', () => {
 
     // Check clipboard content directly (no catch)
     const clipboardText = await page.evaluate(() => navigator.clipboard.readText());
-    expect(clipboardText).toContain('# Markdown Live Preview App');
+    expect(clipboardText).toContain('# Markdown Copy Test App');
     expect(clipboardText).toContain('React 19 Framework');
     expect(clipboardText).toContain('Verify markdown preview and copy functionality');
 
@@ -551,10 +755,14 @@ test.describe('Passport Editor E2E Tests', () => {
 
     // Expand all
     await page.getByRole('button', { name: /Expand all/i }).click();
+    await expect(page.getByRole('button', { name: /Collapse all/i })).toBeVisible();
 
     // Stack
-    await page.getByRole('button', { name: /Add stack item/i }).first().click();
+    const addStackBtn = page.getByRole('button', { name: /Add stack item/i }).first();
+    await expect(addStackBtn).toBeVisible();
+    await addStackBtn.click();
     const stack1 = page.getByRole('group', { name: 'Stack item 1' });
+    await expect(stack1).toBeVisible();
     await stack1.getByRole('textbox', { name: 'Name' }).fill('Vite + React');
     await stack1.getByRole('textbox', { name: 'Role' }).fill('Frontend framework');
     await stack1.getByRole('textbox', { name: 'Version' }).fill('5.4.0');
@@ -750,23 +958,89 @@ test.describe('Passport Editor E2E Tests', () => {
     expect(savedIndex).toBeGreaterThan(savingIndex);
   });
 
-  test('16. External-change conflict protection: two pages in one browser context, conflict detection, reload latest, keep my version, and axe scan', async ({
+  test('16a. External-change conflict protection: two pages in one context detect conflict, reload latest syncs stored version, axe scan', async ({
     page,
     context,
   }) => {
     collectConsoleErrors(page);
-    const { projectId } = await createAndOpenPassport(page, 'Concurrent Collaboration Project');
+    const projectId = '16161616-1616-4616-8616-161616161616';
+    await page.evaluate(async (pId: string) => {
+      const now = new Date().toISOString();
+      const pRecord = {
+        id: pId,
+        name: 'Concurrent Collaboration Project A',
+        createdAt: now,
+        updatedAt: now,
+      };
+      const passRecord = {
+        projectId: pId,
+        schemaVersion: 1,
+        passport: {
+          schemaVersion: 1,
+          project: {
+            id: pId,
+            name: 'Concurrent Collaboration Project A',
+            goal: '',
+            summary: '',
+            status: 'idea',
+            createdAt: now,
+            updatedAt: now,
+          },
+          stack: [],
+          requirements: [],
+          decisions: [],
+          completed: [],
+          tasks: [],
+          bugs: [],
+          bugsReviewed: false,
+          instructions: [],
+          nextAction: '',
+          openQuestions: [],
+          files: [],
+          conversations: [],
+        },
+      };
+      const req = indexedDB.open('ProjectPassportDB');
+      await new Promise<void>((resolve, reject) => {
+        req.onsuccess = () => {
+          const db = req.result;
+          const tx = db.transaction(['projects', 'passports'], 'readwrite');
+          tx.objectStore('projects').put(pRecord);
+          tx.objectStore('passports').put(passRecord);
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => reject(tx.error);
+        };
+        req.onerror = () => reject(req.error);
+      });
+    }, projectId);
+
+    await page.goto(`/project/${projectId}/passport`);
+    await expect(page.getByRole('heading', { level: 1, name: 'Concurrent Collaboration Project A' })).toBeVisible();
+    await expect(page.getByRole('status', { name: 'Autosave status' })).toContainText('Saved');
 
     // Open Page B in the same browser context pointing to the same project editor
     const pageB = await context.newPage();
     collectConsoleErrors(pageB);
     await pageB.goto(`/project/${projectId}/passport`);
-    await expect(pageB.getByRole('heading', { level: 1, name: 'Concurrent Collaboration Project' })).toBeVisible();
+    await expect(pageB.getByRole('heading', { level: 1, name: 'Concurrent Collaboration Project A' })).toBeVisible();
     await expect(pageB.getByRole('status', { name: 'Autosave status' })).toContainText('Saved');
 
     // Page A makes an edit and saves
     const goalA = page.getByRole('textbox', { name: 'Project goal' });
     await goalA.fill('Goal set by Page A');
+    await expect.poll(async () => {
+      return await page.evaluate(async (pId: string) => {
+        const req = indexedDB.open('ProjectPassportDB');
+        return new Promise<string>((resolve) => {
+          req.onsuccess = () => {
+            const db = req.result;
+            const tx = db.transaction('passports', 'readonly');
+            const getReq = tx.objectStore('passports').get(pId);
+            getReq.onsuccess = () => resolve(getReq.result?.passport?.project?.goal || '');
+          };
+        });
+      }, projectId!);
+    }).toBe('Goal set by Page A');
     await expect(page.getByRole('status', { name: 'Autosave status' })).toContainText('Saved');
 
     // Page B (which loaded before Page A saved) now makes an edit
@@ -803,16 +1077,49 @@ test.describe('Passport Editor E2E Tests', () => {
     await expect(autosaveStatusB).toContainText('Saved');
     await expect(goalB).toHaveValue('Goal set by Page A');
 
-    // Scenario 2: "Keep my version"
-    // In Page A, edit goal again and wait for Saved
-    await goalA.fill('New Goal from Page A');
+    await pageB.close();
+  });
+
+  test('16b. External-change conflict protection: Keep my version rebases onto stored and forces user draft', async ({
+    page,
+    context,
+  }) => {
+    collectConsoleErrors(page);
+    const { projectId } = await createAndOpenPassport(page, 'Concurrent Collaboration Project B');
+
+    // Open Page B in the same browser context pointing to the same project editor
+    const pageB = await context.newPage();
+    collectConsoleErrors(pageB);
+    await pageB.goto(`/project/${projectId}/passport`);
+    await expect(pageB.getByRole('heading', { level: 1, name: 'Concurrent Collaboration Project B' })).toBeVisible();
+    await expect(pageB.getByRole('status', { name: 'Autosave status' })).toContainText('Saved');
+
+    // Page A makes an edit and saves
+    const goalA = page.getByRole('textbox', { name: 'Project goal' });
+    await goalA.fill('Initial Goal from Page A');
+    await expect.poll(async () => {
+      return await page.evaluate(async (pId: string) => {
+        const req = indexedDB.open('ProjectPassportDB');
+        return new Promise<string>((resolve) => {
+          req.onsuccess = () => {
+            const db = req.result;
+            const tx = db.transaction('passports', 'readonly');
+            const getReq = tx.objectStore('passports').get(pId);
+            getReq.onsuccess = () => resolve(getReq.result?.passport?.project?.goal || '');
+          };
+        });
+      }, projectId!);
+    }).toBe('Initial Goal from Page A');
     await expect(page.getByRole('status', { name: 'Autosave status' })).toContainText('Saved');
 
-    // In Page B, edit goal to Page B's intended version
+    // Page B makes an edit and encounters conflict
+    const goalB = pageB.getByRole('textbox', { name: 'Project goal' });
     await goalB.fill('Decisive Goal from Page B');
 
-    // Page B detects conflict again
+    const autosaveStatusB = pageB.getByRole('status', { name: 'Autosave status' });
     await expect(autosaveStatusB).toContainText('This passport was changed somewhere else');
+    const keepBtn = pageB.getByRole('button', { name: 'Keep my version' });
+    await expect(keepBtn).toBeVisible();
 
     // Click "Keep my version" -> rebases baseline on stored, then saves
     await keepBtn.click();
@@ -823,7 +1130,6 @@ test.describe('Passport Editor E2E Tests', () => {
     await pageB.reload();
     await expect(pageB.getByRole('textbox', { name: 'Project goal' })).toHaveValue('Decisive Goal from Page B');
 
-    // Close Page B
     await pageB.close();
   });
 });

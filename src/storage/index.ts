@@ -6,6 +6,7 @@ export {
   deleteProject,
   getPassport,
   savePassport,
+  type SavePassportOptions,
   applyMergeWithCheckpoint,
   restoreCheckpoint,
   getCheckpoint,

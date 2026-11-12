@@ -234,6 +234,25 @@
 
 ---
 
+## Slice 5c: Autosave Stale-Write Guard, Undo Safety & Slow-Test Split
+
+- [x] **Autosave stale-write guard:** Made `savePassport` support atomic stale-write validation via `{ expectedUpdatedAt?: string }` inside a single Dexie transaction on `[projects, passports]`, throwing `StaleWrite` on timestamp mismatch.
+- [x] **Autosave conflict handling:** Mapped `StaleWrite` in `useAutosave` to the existing `'conflict'` status with "Reload latest" and "Keep my version" buttons. "Keep my version" rebases onto the stored record and retries through the atomic guard.
+- [x] **Undo-after-merge safety:** Selected Option B; clicking Undo in the merge toast flushes autosave first (`flushActiveAutosave`), creating a "Before restore" checkpoint that preserves newer edits, and notifying the user in toast copy.
+- [x] **Rollback test:** Verified failure-injection Vitest test for `applyMergeWithCheckpoint` in `src/storage/__tests__/storageService.test.ts` proving full rollback on failed write.
+- [x] **Slow-test splitting & optimization:** Split `passport.spec.ts` tests 2, 6, 7, 16 into smaller focused sub-tests; seeded initial data in 6a, 7b, 16a directly into IndexedDB, reducing test execution times below the 12s ceiling with no test skips or timeout increases.
+- [x] **Full test suite passes:** Vitest (230 tests in 22 files), Playwright E2E (134 tests in 6.9m, 0 failures, 0 skipped).
+- [x] **Docs updated:** Recorded transaction state analysis, guard design, undo decision, slowest-test rankings, and failure disclosures in `PROGRESS.md`.
+- [x] **Commit message:** `Slice 5c: autosave stale-write guard, undo safety and slow-test split`
+
+**Done when:**
+- `npm run typecheck`, `npm run lint`, `npm test`, `npm run build`, and `npm run test:e2e` pass with zero errors.
+- Autosave and merge share one atomic stale-write guard with test verification.
+- Undo can no longer silently discard newer edits with test verification.
+- PROGRESS.md and TASKS.md updated; port 4179 is confirmed free.
+
+---
+
 ## Slice 6: Conversation Paste Import
 
 - [ ] In `src/import/pasteParser.ts`, implement speaker marker detection at line start (`You said:`, `ChatGPT said:`, `User:`, `Assistant:`, etc.).

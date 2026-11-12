@@ -244,6 +244,51 @@ Consolidated manual checklist tests into `storageService.test.ts` and deleted re
   - *Run 1 of full E2E suite (`npm run test:e2e`)*: Under 2-worker concurrent load with 124 tests running consecutively, heavy CPU load on long tests caused tests 2, 4, 6 in `passport.spec.ts` to exceed 20s. When re-tested with system resources free, all 30 tests in `passport.spec.ts` and all 124 tests in the entire repository passed with zero errors in 8.4m.
   - *Vitest test suite*: 225 tests across 22 test files all passing (100% green).
 
+### Slice 5c: Autosave Stale-Write Guard, Undo Safety & Slow-Test Split
+
+- **Autosave Transaction State Analysis:**
+  In prior slices, `useAutosave` performed a read (`getPassport`) and then subsequently invoked `savePassport` in separate Dexie calls without an enclosing transaction or optimistic lock. The check and the write were not in one Dexie transaction, leaving a window where concurrent writes could overwrite one another.
+- **Atomic Stale-Write Guard Implementation:**
+  - `savePassport` in `src/storage/storageService.ts` now accepts `{ expectedUpdatedAt?: string }` via `SavePassportOptions`.
+  - Inside a single Dexie transaction (`db.transaction('rw', [db.projects, db.passports])`), it compares the stored `project.updatedAt` to `expectedUpdatedAt` and throws `StaleWrite` on mismatch.
+  - `savePassport` also mutates `passport.project.updatedAt = now` on the caller's instance so callers retain the stored timestamp.
+  - `useAutosave` maps `StaleWrite` to the `'conflict'` status and provides "Reload latest" (fetches storage record and resets draft) and "Keep my version" (rebases `baselineRef.current` onto stored and retries through `flushSave`).
+  - Added unit test in `storageService.test.ts` proving `savePassport` throws `StaleWrite` and writes nothing when stored `updatedAt` changes between read and write.
+  - Added unit test in `useAutosave.test.ts` verifying `StaleWrite` maps to conflict status and allows reload or keep-my-version recovery.
+- **Undo-After-Merge Safety (Decision: Option B):**
+  - Option B selected: flush autosave first and take a "Before restore" checkpoint (already created automatically by `restoreCheckpoint`), then explicitly state this in the toast.
+  - In `src/lib/autosaveFlusher.ts`, added decoupled autosave flusher registration (`registerAutosaveFlusher` / `flushActiveAutosave`), avoiding cyclic dependencies between UI and page layers.
+  - In `src/ui/CaptureDialog.tsx`, clicking "Undo" flushes autosave first (`await flushActiveAutosave()`), checks whether newer edits were made, and notifies the user with: `"Merge undone. Newer edits saved in a "Before restore" checkpoint."`
+  - Added Vitest/RTL test in `tests/ui/CaptureDialog.test.tsx` and E2E test in `e2e/capture.spec.ts` (desktop and mobile-360) verifying post-merge edits are preserved in the "Before restore" checkpoint and recoverable.
+- **Rollback Verification:**
+  - Confirmed failure-injection Vitest test exists in `src/storage/__tests__/storageService.test.ts` proving `applyMergeWithCheckpoint` rolls back both checkpoint and passport records when writing passport inside the transaction fails.
+- **Slow-Test Splitting & Performance Optimization:**
+  - Split multi-scenario tests into smaller, focused tests:
+    - `passport.spec.ts` test 2 split into `2a` (stack, requirements, decisions, completed, next action) and `2b` (tasks, bugs, instructions, open questions).
+    - `passport.spec.ts` test 6 split into `6a` (live readiness score updates) and `6b` (Overview and Dashboard 100% score).
+    - `passport.spec.ts` test 7 split into `7a` (live preview and token estimate) and `7b` (clipboard copy with toast and axe scan).
+    - `passport.spec.ts` test 16 split into `16a` (concurrent conflict detection, reload latest sync, axe scan) and `16b` (keep my version rebase).
+  - Seeded initial test projects directly into IndexedDB in tests 6a, 7b, 16a, eliminating ~4-7s of UI creation and accordion navigation per test.
+  - Replaced brittle millisecond-window DOM transitions with deterministic `expect.poll` on IndexedDB storage.
+  - Final 2-worker E2E suite duration: **6.9m** (down from 8.4m baseline, 134 passed, 0 failed, 0 skipped).
+  - Machine state during runs: "nothing else" running on the machine.
+  - 5 slowest tests from the final 2-worker run:
+    1. `e2e/passport.spec.ts: 16a. External-change conflict protection: two pages in one context detect conflict, reload latest syncs stored version, axe scan` (desktop): **11.2s**
+    2. `e2e/capture.spec.ts: 1. Entry points: opens from Overview next-action and Passport tab, copies prompt to clipboard` (desktop): **10.3s**
+    3. `e2e/capture.spec.ts: 5. Dark theme: Step 1 and Success states layout, touch targets, axe scan and screenshots` (desktop): **9.6s**
+    4. `e2e/passport.spec.ts: 11. Screenshots: editor populated on desktop and mobile-360` (desktop): **9.6s**
+    5. `e2e/capture.spec.ts: 5. Dark theme: Step 1 and Success states layout, touch targets, axe scan and screenshots` (mobile-360): **9.4s**
+    *(Every single test in the entire 134-test suite is strictly <= 11.2s, comfortably below the 12s ceiling).*
+- **Capture Dialog Regression Check:**
+  - Confirmed all Slice 5a and 5b behaviors pass: focus moves to the result heading, Escape returns focus to trigger, zero outbound network requests, and zero storage writes during the Check step.
+- **Test Integrity & Failure Disclosure (Rule 13.7):**
+  - *Run 1 of `tests/ui/CaptureDialog.test.tsx`*: Vitest parse error due to an extraneous closing bracket `});` at the end of the file. *Fix*: Removed duplicate `});`.
+  - *Run 1 of `npm run build`*: TypeScript error TS2571 in `storageService.test.ts` because `checkpoint.passport` in `CheckpointRecord` is typed as `unknown`. *Fix*: Added type cast `(beforeRestoreCp!.passport as PassportV1).project.goal`.
+  - *Run 1 of `e2e/passport.spec.ts` (test 6b)*: Failed with `Project not found` because seeded `files` array used raw DB file fields rather than `FileManifestItemSchema`. *Fix*: Corrected seeded files to `{ path, purpose, included, sizeBytes }`.
+  - *Run 1 of `e2e/passport.spec.ts` (test 6a)*: Timed out on mobile-360 (21.2s) because it ran the full backup restore modal flow before 6 editor fills. *Fix*: Seeded the initial project with the attached file directly via IndexedDB in 1ms.
+  - *Run 1 of `e2e/passport.spec.ts` (test 16a)*: Failed on `expect(goalB).toHaveValue('Goal set by Page A')` returning `""`. *Root cause*: In `useAutosave`, an external update effect compared `initialPassport.project.updatedAt` to `baselineRef.current.project.updatedAt` on every re-render; when `reloadLatest` updated `baselineRef.current` to the stored record, the effect misidentified the older `initialPassport` prop as a external change and called `resetDraft(initialPassport)`, clearing the draft back to empty. *Fix*: Added `prevInitialPassportRef` to guard against re-resetting when `initialPassport` prop did not change, and dispatched `project-storage-updated` from `reloadLatest`.
+  - *Run 2 of `e2e/passport.spec.ts` (test 16a)*: Failed waiting for `'Saving'` on mobile-360. *Root cause*: In a local IndexedDB save, the status flips from `Saved` to `Saving` and back to `Saved` in ~3ms, which is easily missed by Playwright's 100ms polling interval. *Fix*: Used `expect.poll` on IndexedDB to deterministically verify Page A's edit was committed before asserting `Saved`.
+
 ---
 
 ## Known Issues

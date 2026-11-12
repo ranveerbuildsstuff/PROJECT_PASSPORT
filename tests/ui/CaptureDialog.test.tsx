@@ -265,4 +265,115 @@ describe('CaptureDialog Component (RTL)', () => {
 
     mockApplyMerge.mockRestore();
   });
+
+  it('undo-after-merge safety: clicking Undo when newer edits exist flushes and notes checkpoint in toast', async () => {
+    const postMergeUpdatedAt = '2026-01-01T12:00:00.000Z';
+    const mockApplyMerge = vi.spyOn(storage, 'applyMergeWithCheckpoint').mockResolvedValue({
+      checkpointId: 'cp-undo-test',
+      updatedPassport: {
+        schemaVersion: 1,
+        project: { id: 'p1', name: 'Merged App', status: 'idea', goal: '', summary: '', createdAt: '', updatedAt: postMergeUpdatedAt },
+        stack: [],
+        requirements: [],
+        decisions: [],
+        completed: [],
+        tasks: [],
+        bugs: [],
+        bugsReviewed: false,
+        instructions: [],
+        nextAction: '',
+        openQuestions: [],
+        files: [],
+        conversations: [],
+      },
+    });
+
+    const mockRestoreCheckpoint = vi.spyOn(storage, 'restoreCheckpoint').mockResolvedValue({
+      schemaVersion: 1,
+      project: { id: 'p1', name: 'Initial', status: 'idea', goal: 'Original goal', summary: '', createdAt: '', updatedAt: '2026-01-01T12:10:00.000Z' },
+      stack: [],
+      requirements: [],
+      decisions: [],
+      completed: [],
+      tasks: [],
+      bugs: [],
+      bugsReviewed: false,
+      instructions: [],
+      nextAction: '',
+      openQuestions: [],
+      files: [],
+      conversations: [],
+    });
+
+    const baselinePassport: PassportV1 = {
+      schemaVersion: 1,
+      project: { id: 'p1', name: 'Initial', status: 'idea', goal: 'Original goal', summary: '', createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z' },
+      stack: [],
+      requirements: [],
+      decisions: [],
+      completed: [],
+      tasks: [],
+      bugs: [],
+      bugsReviewed: false,
+      instructions: [],
+      nextAction: '',
+      openQuestions: [],
+      files: [],
+      conversations: [],
+    };
+
+    render(
+      <TestHarness
+        projectId="p1"
+        currentPassport={baselinePassport}
+      />
+    );
+
+    const textarea = screen.getByLabelText(/Paste AI response/i);
+    const checkBtn = screen.getByRole('button', { name: /Check reply/i });
+
+    fireEvent.change(textarea, {
+      target: {
+        value: '```json\n{"project":{"name":"Merged App"}}\n```',
+      },
+    });
+    fireEvent.click(checkBtn);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Apply merge/i })).toBeInTheDocument();
+    });
+
+    // Apply merge
+    fireEvent.click(screen.getByRole('button', { name: /Apply merge/i }));
+
+    // Wait for merge toast with Undo button
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Undo' })).toBeInTheDocument();
+    });
+
+    // Simulate user making edits after merge: storage now has newer updatedAt
+    vi.spyOn(storage, 'getPassport').mockResolvedValue({
+      ...baselinePassport,
+      project: {
+        ...baselinePassport.project,
+        updatedAt: '2026-01-01T12:05:00.000Z', // newer than postMergeUpdatedAt
+        goal: 'User post-merge edit',
+      },
+    });
+
+    // Click Undo
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+
+    // Assert restoreCheckpoint was called with the merge checkpoint ID
+    await waitFor(() => {
+      expect(mockRestoreCheckpoint).toHaveBeenCalledWith('cp-undo-test');
+      // Toast explicitly informs the user that newer edits were saved in a "Before restore" checkpoint
+      expect(
+        screen.getByText('Merge undone. Newer edits saved in a "Before restore" checkpoint.')
+      ).toBeInTheDocument();
+    });
+
+    mockApplyMerge.mockRestore();
+    mockRestoreCheckpoint.mockRestore();
+  });
 });

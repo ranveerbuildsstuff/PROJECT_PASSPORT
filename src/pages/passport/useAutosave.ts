@@ -1,7 +1,15 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import type { PassportV1 } from '../../domain';
 import { applyEditorFields, editorFieldsOf, validatePassportDetailed } from '../../domain';
-import { getPassport, savePassport, describeStorageError, ProjectNotFound } from '../../storage';
+import {
+  getPassport,
+  savePassport,
+  describeStorageError,
+  ProjectNotFound,
+  StaleWrite,
+} from '../../storage';
+
+import { registerAutosaveFlusher } from '../../lib';
 
 export type SaveStatus = 'saved' | 'saving' | 'not_saved' | 'error' | 'conflict';
 
@@ -138,6 +146,8 @@ export function useAutosave({
             throw new ProjectNotFound(projectId);
           }
 
+          const expectedUpdatedAt = baselineRef.current.project.updatedAt;
+
           // External-change protection: compare stored editor fields with baseline
           const storedFields = editorFieldsOf(latest);
           const baselineFields = editorFieldsOf(baselineRef.current);
@@ -151,7 +161,7 @@ export function useAutosave({
           }
 
           const merged = applyEditorFields(latest, targetDraft);
-          await savePassport(merged);
+          await savePassport(merged, { expectedUpdatedAt });
 
           // Baseline and snapshot update on every successful save
           baselineRef.current = merged;
@@ -164,6 +174,14 @@ export function useAutosave({
           window.dispatchEvent(new CustomEvent('project-storage-updated'));
           onSavedRef.current?.(merged);
         } catch (err) {
+          if (err instanceof StaleWrite || (err as { name?: string })?.name === 'StaleWrite') {
+            setRawSaveStatus('conflict');
+            setConflictMessage(
+              'This passport was changed somewhere else (another tab or a merge). Reload the latest version, or keep your version.'
+            );
+            lastPassResultRef.current = { ok: false, reason: 'conflict' };
+            return;
+          }
           const message = describeStorageError(err);
           setRawSaveStatus('error');
           setErrorMessage(message);
@@ -268,6 +286,7 @@ export function useAutosave({
       setErrorMessage(null);
       setConflictMessage(null);
       lastPassResultRef.current = { ok: true };
+      window.dispatchEvent(new CustomEvent('project-storage-updated'));
     } catch (err) {
       const message = describeStorageError(err);
       setRawSaveStatus('error');
@@ -338,6 +357,14 @@ export function useAutosave({
   const flushSaveRef = useRef(flushSave);
   flushSaveRef.current = flushSave;
 
+  // Register active flusher for external callers (e.g. Undo-after-merge safety)
+  useEffect(() => {
+    registerAutosaveFlusher(flushSave);
+    return () => {
+      registerAutosaveFlusher(null);
+    };
+  }, [flushSave]);
+
   // Flush on unmount
   useEffect(() => {
     return () => {
@@ -400,12 +427,24 @@ export function useAutosave({
     lastPassResultRef.current = { ok: true };
   }, []);
 
+  const prevInitialPassportRef = useRef<PassportV1>(initialPassport);
+
   // When initialPassport changes externally (e.g. merge applied, checkpoint restored, or project switched)
   useEffect(() => {
-    if (initialPassport.project.updatedAt !== baselineRef.current.project.updatedAt) {
-      resetDraft(initialPassport);
+    if (prevInitialPassportRef.current !== initialPassport) {
+      prevInitialPassportRef.current = initialPassport;
+      if (initialPassport.project.updatedAt !== baselineRef.current.project.updatedAt) {
+        if (isDirty) {
+          setRawSaveStatus('conflict');
+          setConflictMessage(
+            'This passport was changed somewhere else (another tab or a merge). Reload the latest version, or keep your version.'
+          );
+        } else {
+          resetDraft(initialPassport);
+        }
+      }
     }
-  }, [initialPassport, resetDraft]);
+  }, [initialPassport, resetDraft, isDirty]);
 
   return {
     draft,

@@ -378,4 +378,84 @@ test.describe('Slice 5a: Capture From AI Dialog & Paste-Back Flow', () => {
     await expect(dialog).not.toBeVisible();
     await expect(page.getByText(/Merged \d+ sections into passport\./i)).toBeVisible();
   });
+
+  test('9. Undo-after-merge safety: editing after merge and clicking Undo preserves edit in Before restore checkpoint and allows recovery', async ({
+    page,
+  }) => {
+    // 1. Navigate to Passport tab and set baseline goal
+    await page.getByRole('tab', { name: 'Passport' }).click();
+    const goalTextarea = page.getByLabel('Project goal');
+    await goalTextarea.fill('Original baseline goal');
+    await expect(page.getByText('Saved')).toBeVisible();
+
+    // 2. Open Capture dialog
+    await page.getByRole('button', { name: 'Capture from AI' }).first().click();
+    const dialog = page.getByRole('dialog', { name: 'Capture from AI' });
+    await expect(dialog).toBeVisible();
+
+    // 3. Paste valid fixture response and check reply
+    const validText = fs.readFileSync(VALID_FIXTURE_PATH, 'utf8');
+    await dialog.getByLabel('Paste AI response').fill(validText);
+    await dialog.getByRole('button', { name: 'Check reply' }).click();
+    await expect(dialog.getByRole('status')).toBeVisible();
+
+    // 4. Apply merge
+    await dialog.getByRole('button', { name: 'Apply merge' }).click();
+    await expect(dialog).not.toBeVisible();
+
+    // 5. Verify merge toast with Undo button is visible
+    const undoBtn = page.getByRole('button', { name: 'Undo' });
+    await expect(undoBtn).toBeVisible();
+
+    // Verify merged content is present
+    await expect(page.getByLabel('Project goal')).toHaveValue(
+      'Provide cross-device local-first document sync'
+    );
+
+    // 6. User makes a newer edit after merge
+    await goalTextarea.fill('User post-merge modification');
+    await expect(page.getByText('Saved')).toBeVisible();
+
+    // 7. Click Undo in the toast
+    await undoBtn.click();
+
+    // 8. Verify toast informs user that newer edits were saved in "Before restore" checkpoint
+    await expect(
+      page.getByText('Merge undone. Newer edits saved in a "Before restore" checkpoint.')
+    ).toBeVisible();
+
+    // 9. Verify passport reverted to pre-merge baseline
+    await expect(page.getByLabel('Project goal')).toHaveValue('Original baseline goal');
+
+    // 10. Verify that the newer edit is preserved and recoverable from the "Before restore" checkpoint in IndexedDB
+    const checkpointData = await page.evaluate(async () => {
+      return new Promise<{ beforeRestoreGoal: string }>((resolve, reject) => {
+        const req = indexedDB.open('ProjectPassportDB');
+        req.onerror = () => reject(req.error);
+        req.onsuccess = () => {
+          try {
+            const idb = req.result;
+            const tx = idb.transaction(['checkpoints'], 'readonly');
+            const store = tx.objectStore('checkpoints');
+            const getAllReq = store.getAll();
+            getAllReq.onsuccess = () => {
+              const cps = getAllReq.result as Array<{
+                description: string;
+                passport?: { project?: { goal?: string } };
+              }>;
+              const beforeRestoreCp = cps.find((c) => c.description === 'Before restore');
+              resolve({
+                beforeRestoreGoal: beforeRestoreCp?.passport?.project?.goal || '',
+              });
+            };
+            getAllReq.onerror = () => reject(getAllReq.error);
+          } catch (e) {
+            reject(e);
+          }
+        };
+      });
+    });
+
+    expect(checkpointData.beforeRestoreGoal).toBe('User post-merge modification');
+  });
 });

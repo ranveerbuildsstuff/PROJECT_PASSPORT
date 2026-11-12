@@ -222,7 +222,14 @@ export async function getPassport(projectId: string): Promise<PassportV1 | null>
   }
 }
 
-export async function savePassport(passport: PassportV1): Promise<void> {
+export interface SavePassportOptions {
+  expectedUpdatedAt?: string;
+}
+
+export async function savePassport(
+  passport: PassportV1,
+  options?: SavePassportOptions
+): Promise<void> {
   await ensureAvailable();
   const validation = validatePassport(passport);
   if (!validation.success || !validation.data) {
@@ -234,6 +241,7 @@ export async function savePassport(passport: PassportV1): Promise<void> {
 
   const validPassport = validation.data;
   const now = new Date().toISOString();
+  passport.project.updatedAt = now;
   validPassport.project.updatedAt = now;
 
   try {
@@ -244,6 +252,11 @@ export async function savePassport(passport: PassportV1): Promise<void> {
           `Project "${validPassport.project.id}" was not found. It may have been deleted.`,
           'Go back to your projects and try again.'
         );
+      }
+
+      // Stale-write check: if expectedUpdatedAt was supplied, ensure project wasn't modified concurrently
+      if (options?.expectedUpdatedAt && existingProject.updatedAt !== options.expectedUpdatedAt) {
+        throw new StaleWrite();
       }
 
       existingProject.name = validPassport.project.name;
