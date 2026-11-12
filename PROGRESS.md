@@ -18,8 +18,9 @@ Current slice: none (Slice 4b & Ticket T2 complete)
 - [x] Tooling Ticket T2: Test integrity + autosave hardening
 - [x] Tooling Ticket T2b: Verification fixes
 - [x] Tooling Ticket T2c: Autosave failure paths and verification gaps
-- [ ] Slice 5: Capture prompt, reconstruct prompt, paste-back + merge
-- [ ] Slice 6: Conversation paste import
+- [x] Slice 5a: Capture prompt, paste-back parsing and validation
+- [x] Slice 5b: Section-by-section merge UI, checkpoints and stale-write protection
+- [ ] Slice 6: Conversation paste import & reconstruct prompt
 - [ ] Slice 7: ChatGPT / Claude export import
 - [ ] Slice 8: Project files + secret scanner
 - [ ] Slice 9: Checkpoints (timeline, compare, restore)
@@ -210,6 +211,38 @@ Consolidated manual checklist tests into `storageService.test.ts` and deleted re
   - *Run 2 of `e2e/capture.spec.ts`*: Test 6 failed on `expect(page.locator('html')).toHaveClass(/light/)` because theme is controlled via `data-theme="light"` on `<html>`. *Fix*: Updated assertion to `expect(page.locator('html')).toHaveAttribute('data-theme', 'light')`.
   - *Run 1 of `e2e/helpers.selftest.spec.ts`*: Test 17 failed on mobile-360 because `fetch()` inside `page.evaluate` was not awaited, causing `requests.length` to be evaluated before request dispatch. *Fix*: Awaited `fetch()` inside `page.evaluate`.
   - *Zero Outbound Proof*: Added `collectExternalRequests(page)` to `e2e/helpers.ts` with selftest in `helpers.selftest.spec.ts`; verified 0 outbound requests across the entire capture flow and verified baseline goal unchanged after reload to prove zero storage writes.
+
+### Slice 5b: Section-by-Section Merge UI, Visual Diff & Checkpoints
+- **Domain Merge Module (`src/domain/merge.ts`):**
+  - Pure functions: `normalizeText`, `calculateSectionDiff`, `calculateAllSectionDiffs`, `mergePassport`.
+  - Section-by-section diff calculation produces added, changed, and removed counts for each section based on user choice (`Merge`, `Replace`, `Skip`).
+  - Merge rules:
+    - Lists (`requirements`, `decisions`, `completed`, `tasks`, `bugs`): match by item ID if present, otherwise by normalized text (lowercased, collapsed whitespace). Matched items are replaced by incoming item; non-matching incoming items are appended. For `replace` choice, entire list is replaced by incoming items. For `skip`, current list is preserved.
+    - `stack`: matches by normalized name (since stack items have no ID in Schema v1).
+    - String arrays (`instructions`, `openQuestions`): union deduplicated by normalized string for `merge`.
+    - Scalar fields (`basics`, `bugsReviewed`): for `merge`, scalar fields replace only when the incoming value is non-empty / defined; empty incoming values do not overwrite existing data.
+    - `nextAction`: replace-or-skip only (no merge semantics for a single atomic next action string).
+    - Immutable fields preserved: `project.id`, `createdAt`, `schemaVersion`, `files`, `conversations`.
+- **Atomic Dexie Storage Transaction & Stale-Write Protection (`src/storage/storageService.ts`):**
+  - Implemented `StaleWrite` error class in `src/storage/errors.ts` and updated `describeStorageError` with human-readable guidance: "This passport was modified in another tab or window. Please reload to see the latest version."
+  - Implemented `applyMergeWithCheckpoint`: executes atomically within a Dexie transaction on `[projects, passports, checkpoints]`.
+  - Verifies `expectedUpdatedAt === project.updatedAt`; if timestamps do not match, aborts and throws `StaleWrite` to prevent silent overwrite of concurrent edits.
+  - Generates a pre-merge checkpoint (type `'manual'` / `'checkpoint'`, description `'Before AI merge'`) before updating project and passport records.
+  - Automatically dispatches `project-storage-updated` custom window event to synchronize active UI views across tabs.
+  - Implemented `restoreCheckpoint`: atomically rolls back passport to any checkpoint record, creating an automatic `"Before restore"` backup checkpoint.
+- **Autosave Reactive Synchronization (`src/pages/passport/useAutosave.ts`):**
+  - Enhanced `useAutosave` hook with an effect tracking external storage updates: when `initialPassport.project.updatedAt !== baselineRef.current.project.updatedAt`, it invokes `resetDraft(initialPassport)` to re-align editor draft and autosave baseline with the merged state.
+- **Section-by-Section Merge UI (`src/ui/CaptureDialog.tsx`):**
+  - Rendered section-by-section review cards for all present sections with diff badges (`+N added`, `~N changed`, `-N removed`), and accessible 44px min-height action selectors (`Merge`, `Replace`, `Skip`).
+  - Added primary "Apply merge" button with loading spinner, disabled when checking or merging.
+  - Integrated stale-write conflict detection: displays accessible alert banner with a "Reload latest" button that re-syncs active passport state with the latest storage record.
+  - On merge success, closes dialog and triggers toast: `"Merged N sections into passport."` with an `"Undo"` action button that calls `restoreCheckpoint`.
+- **Test Integrity & Failure Disclosure (Rule 13.7):**
+  - *Run 1 of `e2e/capture.spec.ts`*: Test 2 failed looking for deleted placeholder string `"Merging arrives in the next update"`. *Fix*: Updated test to assert on `"Apply merge"` button and merge section list.
+  - *Run 1 of `e2e/capture.spec.ts`*: Test 7 failed because assertion expected dummy goal text instead of fixture goal (`"Provide cross-device local-first document sync"`). *Fix*: Updated expected string to match `tests/fixtures/paste-back/valid-reply.txt`.
+  - *Run 1 of `e2e/capture.spec.ts`*: Test 8 timed out in `page.evaluate` because code attempted to set `pass.project.updatedAt = newTime` directly on `pass` (which is a `PassportRecord` where the passport object is `pass.passport.project`). *Fix*: Updated evaluation script to inspect `record.passport.project` with proper try/catch and abort handlers.
+  - *Run 1 of full E2E suite (`npm run test:e2e`)*: Under 2-worker concurrent load with 124 tests running consecutively, heavy CPU load on long tests caused tests 2, 4, 6 in `passport.spec.ts` to exceed 20s. When re-tested with system resources free, all 30 tests in `passport.spec.ts` and all 124 tests in the entire repository passed with zero errors in 8.4m.
+  - *Vitest test suite*: 225 tests across 22 test files all passing (100% green).
 
 ---
 

@@ -53,6 +53,19 @@ export class BackupInvalid extends Error {
   }
 }
 
+export class StaleWrite extends Error {
+  readonly nextStep: string;
+
+  constructor(
+    message = 'This passport was changed somewhere else since you opened it.',
+    nextStep = 'Please reload the latest version or review the changes before saving.'
+  ) {
+    super(message);
+    this.name = 'StaleWrite';
+    this.nextStep = nextStep;
+  }
+}
+
 export class ProjectNotFound extends Error {
   readonly nextStep: string;
 
@@ -97,6 +110,10 @@ export function describeStorageError(err: unknown): string {
 
   if (err instanceof BackupInvalid) {
     return 'The backup file is invalid or cannot be read.';
+  }
+
+  if (err instanceof StaleWrite) {
+    return 'This passport was modified in another tab or window. Please reload to see the latest version.';
   }
 
   // Unknown or generic errors - never expose stack traces or raw technical internals

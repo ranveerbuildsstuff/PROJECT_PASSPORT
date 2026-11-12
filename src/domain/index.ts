@@ -5,3 +5,4 @@ export * from './markdown';
 export * from './migrate';
 export * from './editor';
 export * from './passportImport';
+export * from './merge';

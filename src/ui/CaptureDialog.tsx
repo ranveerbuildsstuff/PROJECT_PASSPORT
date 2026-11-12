@@ -1,22 +1,78 @@
-import React, { useState, useRef, useMemo } from 'react';
-import { Copy, Sparkles, CheckCircle2, AlertCircle, RefreshCw } from 'lucide-react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
+import { Copy, Sparkles, CheckCircle2, AlertCircle, RefreshCw, GitMerge, RotateCcw } from 'lucide-react';
 import { Dialog } from './Dialog';
 import { Button } from './Button';
 import { ProgressRing } from './ProgressRing';
 import { useToast } from './useToast';
 import { generateCapturePrompt } from '../export/prompts';
 import { processPasteBack, type PasteBackResult } from '../import/pasteBack';
-import { estimateTokens } from '../domain';
+import {
+  estimateTokens,
+  type PassportV1,
+  type MergeSectionId,
+  type MergeAction,
+  type MergeChoices,
+  mergePassport,
+  calculateSectionDiff,
+  createEmptyPassport,
+} from '../domain';
+import {
+  applyMergeWithCheckpoint,
+  restoreCheckpoint,
+  describeStorageError,
+  StaleWrite,
+  getPassport,
+  getProject,
+} from '../storage';
 
 export interface CaptureDialogProps {
   isOpen: boolean;
   onClose: () => void;
+  projectId?: string;
+  currentPassport?: PassportV1 | null;
+  onMergeComplete?: (checkpointId: string) => void;
 }
 
-export function CaptureDialog({ isOpen, onClose }: CaptureDialogProps): React.ReactElement {
+const SECTION_LABELS: Record<MergeSectionId, string> = {
+  basics: 'Basics',
+  stack: 'Tech stack',
+  requirements: 'Requirements',
+  decisions: 'Decisions',
+  completed: 'Completed',
+  tasks: 'Tasks',
+  bugs: 'Bugs',
+  instructions: 'Instructions',
+  nextAction: 'Next action',
+  openQuestions: 'Open questions',
+};
+
+export function CaptureDialog({
+  isOpen,
+  onClose,
+  projectId,
+  currentPassport: initialCurrentPassport,
+  onMergeComplete,
+}: CaptureDialogProps): React.ReactElement {
   const [pastedText, setPastedText] = useState('');
   const [isChecking, setIsChecking] = useState(false);
   const [result, setResult] = useState<PasteBackResult | null>(null);
+
+  // Active passport for comparison (either passed in or reloaded upon conflict)
+  const [activePassport, setActivePassport] = useState<PassportV1>(
+    initialCurrentPassport || createEmptyPassport('Project')
+  );
+
+  useEffect(() => {
+    if (initialCurrentPassport) {
+      setActivePassport(initialCurrentPassport);
+    }
+  }, [initialCurrentPassport]);
+
+  // Section-by-section merge choices
+  const [mergeChoices, setMergeChoices] = useState<MergeChoices>({});
+  const [isMerging, setIsMerging] = useState(false);
+  const [mergeError, setMergeError] = useState<string | null>(null);
+  const [isStaleError, setIsStaleError] = useState(false);
 
   const promptBoxRef = useRef<HTMLPreElement>(null);
   const resultHeadingRef = useRef<HTMLHeadingElement>(null);
@@ -24,6 +80,19 @@ export function CaptureDialog({ isOpen, onClose }: CaptureDialogProps): React.Re
 
   const promptText = useMemo(() => generateCapturePrompt(), []);
   const tokenEstimate = useMemo(() => estimateTokens(promptText), [promptText]);
+
+  // Initialize choices when result changes
+  useEffect(() => {
+    if (result && result.status === 'ok') {
+      const initialChoices: MergeChoices = {};
+      for (const s of result.presentSections) {
+        initialChoices[s] = s === 'nextAction' ? 'replace' : 'merge';
+      }
+      setMergeChoices(initialChoices);
+      setMergeError(null);
+      setIsStaleError(false);
+    }
+  }, [result]);
 
   const handleCopyPrompt = async () => {
     try {
@@ -47,6 +116,8 @@ export function CaptureDialog({ isOpen, onClose }: CaptureDialogProps): React.Re
 
   const handleCheckReply = () => {
     setIsChecking(true);
+    setMergeError(null);
+    setIsStaleError(false);
     setTimeout(() => {
       const res = processPasteBack(pastedText);
       setResult(res);
@@ -60,6 +131,92 @@ export function CaptureDialog({ isOpen, onClose }: CaptureDialogProps): React.Re
   const handleClear = () => {
     setPastedText('');
     setResult(null);
+    setMergeChoices({});
+    setMergeError(null);
+    setIsStaleError(false);
+  };
+
+  const handleChoiceChange = (sectionId: MergeSectionId, action: MergeAction) => {
+    setMergeChoices((prev) => ({
+      ...prev,
+      [sectionId]: action,
+    }));
+  };
+
+  const handleApplyMerge = async () => {
+    if (!projectId || !result || result.status !== 'ok') return;
+
+    setIsMerging(true);
+    setMergeError(null);
+    setIsStaleError(false);
+
+    try {
+      const mergedPassport = mergePassport(activePassport, result.sections, mergeChoices);
+
+      const res = await applyMergeWithCheckpoint({
+        projectId,
+        expectedUpdatedAt: activePassport.project.updatedAt,
+        mergedPassport,
+        checkpointDescription: 'Before AI merge',
+      });
+
+      const checkpointId = res.checkpointId;
+      onMergeComplete?.(checkpointId);
+      onClose();
+
+      const mergedCount = result.presentSections.filter(
+        (s) => (mergeChoices[s] ?? (s === 'nextAction' ? 'replace' : 'merge')) !== 'skip'
+      ).length;
+
+      showToast(
+        `Merged ${mergedCount} ${mergedCount === 1 ? 'section' : 'sections'} into passport.`,
+        'success',
+        undefined,
+        {
+          label: 'Undo',
+          onClick: async () => {
+            try {
+              await restoreCheckpoint(checkpointId);
+              showToast('Merge undone.', 'info');
+            } catch (err) {
+              showToast(describeStorageError(err), 'error');
+            }
+          },
+        }
+      );
+    } catch (err) {
+      if (err instanceof StaleWrite || (err as { name?: string })?.name === 'StaleWrite') {
+        setIsStaleError(true);
+        setMergeError(describeStorageError(err));
+      } else {
+        setMergeError(describeStorageError(err));
+      }
+    } finally {
+      setIsMerging(false);
+    }
+  };
+
+  const handleReloadLatest = async () => {
+    if (!projectId) return;
+    try {
+      const [latestProj, latestPass] = await Promise.all([
+        getProject(projectId),
+        getPassport(projectId),
+      ]);
+      if (latestPass) {
+        if (latestProj) {
+          latestPass.project.updatedAt = latestProj.updatedAt;
+          latestPass.project.name = latestProj.name;
+          latestPass.project.status = latestProj.status;
+        }
+        setActivePassport(latestPass);
+        setMergeError(null);
+        setIsStaleError(false);
+        showToast('Reloaded latest passport version from storage.', 'info');
+      }
+    } catch (err) {
+      setMergeError(describeStorageError(err));
+    }
   };
 
   return (
@@ -186,7 +343,7 @@ export function CaptureDialog({ isOpen, onClose }: CaptureDialogProps): React.Re
                         Passport reply verified
                       </h4>
                       <p className="text-xs text-text-muted mt-0.5">
-                        Found {result.presentSections.length} valid passport sections.
+                        Found {result.presentSections.length} valid passport sections. Choose how to merge each section below.
                       </p>
                     </div>
                   </div>
@@ -204,68 +361,60 @@ export function CaptureDialog({ isOpen, onClose }: CaptureDialogProps): React.Re
                   </div>
                 </div>
 
-                {/* Section summary table/list */}
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs pt-1">
-                  <div className="p-2 rounded bg-bg-surface border border-border-subtle/80 flex flex-col">
-                    <span className="text-text-muted">Basics</span>
-                    <span className="font-semibold text-text-primary">
-                      {result.presentSections.includes('basics') ? 'Provided' : 'Omitted'}
-                    </span>
-                  </div>
-                  <div className="p-2 rounded bg-bg-surface border border-border-subtle/80 flex flex-col">
-                    <span className="text-text-muted">Stack</span>
-                    <span className="font-semibold text-text-primary">
-                      {result.sections.stack?.length ?? 0} {result.sections.stack?.length === 1 ? 'item' : 'items'}
-                    </span>
-                  </div>
-                  <div className="p-2 rounded bg-bg-surface border border-border-subtle/80 flex flex-col">
-                    <span className="text-text-muted">Requirements</span>
-                    <span className="font-semibold text-text-primary">
-                      {result.sections.requirements?.length ?? 0} {result.sections.requirements?.length === 1 ? 'item' : 'items'}
-                    </span>
-                  </div>
-                  <div className="p-2 rounded bg-bg-surface border border-border-subtle/80 flex flex-col">
-                    <span className="text-text-muted">Decisions</span>
-                    <span className="font-semibold text-text-primary">
-                      {result.sections.decisions?.length ?? 0} {result.sections.decisions?.length === 1 ? 'decision' : 'decisions'}
-                    </span>
-                  </div>
-                  <div className="p-2 rounded bg-bg-surface border border-border-subtle/80 flex flex-col">
-                    <span className="text-text-muted">Completed</span>
-                    <span className="font-semibold text-text-primary">
-                      {result.sections.completed?.length ?? 0} {result.sections.completed?.length === 1 ? 'item' : 'items'}
-                    </span>
-                  </div>
-                  <div className="p-2 rounded bg-bg-surface border border-border-subtle/80 flex flex-col">
-                    <span className="text-text-muted">Tasks</span>
-                    <span className="font-semibold text-text-primary">
-                      {result.sections.tasks?.length ?? 0} {result.sections.tasks?.length === 1 ? 'task' : 'tasks'}
-                    </span>
-                  </div>
-                  <div className="p-2 rounded bg-bg-surface border border-border-subtle/80 flex flex-col">
-                    <span className="text-text-muted">Bugs</span>
-                    <span className="font-semibold text-text-primary">
-                      {result.sections.bugs?.items.length ?? 0} {result.sections.bugs?.items.length === 1 ? 'bug' : 'bugs'}
-                      {result.sections.bugs?.bugsReviewed ? ' (reviewed)' : ''}
-                    </span>
-                  </div>
-                  <div className="p-2 rounded bg-bg-surface border border-border-subtle/80 flex flex-col">
-                    <span className="text-text-muted">Instructions</span>
-                    <span className="font-semibold text-text-primary">
-                      {result.sections.instructions?.length ?? 0} {result.sections.instructions?.length === 1 ? 'rule' : 'rules'}
-                    </span>
-                  </div>
-                  <div className="p-2 rounded bg-bg-surface border border-border-subtle/80 flex flex-col">
-                    <span className="text-text-muted">Next action</span>
-                    <span className="font-semibold text-text-primary">
-                      {result.presentSections.includes('nextAction') ? 'Provided' : 'Omitted'}
-                    </span>
-                  </div>
-                  <div className="p-2 rounded bg-bg-surface border border-border-subtle/80 flex flex-col">
-                    <span className="text-text-muted">Open questions</span>
-                    <span className="font-semibold text-text-primary">
-                      {result.sections.openQuestions?.length ?? 0} {result.sections.openQuestions?.length === 1 ? 'item' : 'items'}
-                    </span>
+                {/* Section-by-section Merge Controls & Diff Summary */}
+                <div className="flex flex-col gap-2.5 pt-2">
+                  <h5 className="text-xs font-semibold uppercase tracking-wider text-text-muted flex items-center gap-1.5">
+                    <GitMerge className="w-3.5 h-3.5 text-accent-brass" aria-hidden="true" />
+                    <span>Section-by-section merge</span>
+                  </h5>
+
+                  <div className="flex flex-col gap-2">
+                    {result.presentSections.map((secId) => {
+                      const choice = mergeChoices[secId] ?? (secId === 'nextAction' ? 'replace' : 'merge');
+                      const diff = calculateSectionDiff(secId, activePassport, result.sections, choice);
+                      const allowedActions: MergeAction[] =
+                        secId === 'nextAction' ? ['replace', 'skip'] : ['merge', 'replace', 'skip'];
+
+                      return (
+                        <div
+                          key={secId}
+                          className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-lg border border-border-subtle bg-bg-surface"
+                        >
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-sm font-medium text-text-primary">
+                              {SECTION_LABELS[secId]}
+                            </span>
+                            <span className="text-xs font-mono text-text-muted">
+                              {diff.summary}
+                            </span>
+                          </div>
+
+                          <div
+                            role="group"
+                            aria-label={`Merge action for ${SECTION_LABELS[secId]}`}
+                            className="flex items-center gap-1 bg-bg-app p-1 rounded-lg border border-border-subtle shrink-0"
+                          >
+                            {allowedActions.map((action) => {
+                              const isSelected = choice === action;
+                              return (
+                                <button
+                                  key={action}
+                                  type="button"
+                                  onClick={() => handleChoiceChange(secId, action)}
+                                  className={`min-h-[44px] min-w-[64px] px-3 py-1.5 rounded text-xs font-medium capitalize transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-brass cursor-pointer ${
+                                    isSelected
+                                      ? 'bg-accent-brass text-bg-app font-semibold shadow-sm'
+                                      : 'text-text-muted hover:text-text-primary hover:bg-bg-surface'
+                                  }`}
+                                >
+                                  {action}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
 
@@ -293,9 +442,49 @@ export function CaptureDialog({ isOpen, onClose }: CaptureDialogProps): React.Re
                   </div>
                 )}
 
-                <p className="text-xs text-text-muted italic border-t border-border-subtle/60 pt-2">
-                  Merging arrives in the next update
-                </p>
+                {/* Storage or Stale Conflict Error */}
+                {mergeError && (
+                  <div
+                    role="alert"
+                    aria-live="assertive"
+                    className="p-3 rounded-lg border border-color-danger/40 bg-color-danger/10 text-color-danger text-xs flex items-center justify-between gap-3 flex-wrap"
+                  >
+                    <span className="font-medium">{mergeError}</span>
+                    {isStaleError && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="secondary"
+                        onClick={handleReloadLatest}
+                        className="gap-1 min-h-[44px]"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" aria-hidden="true" />
+                        <span>Reload latest</span>
+                      </Button>
+                    )}
+                  </div>
+                )}
+
+                {/* Merge Action Footer */}
+                <div className="flex items-center justify-between gap-3 pt-2 border-t border-border-subtle/60 flex-wrap">
+                  <span className="text-xs text-text-muted">
+                    An automatic backup checkpoint is created before writing.
+                  </span>
+
+                  <div className="flex items-center gap-3">
+                    <Button
+                      type="button"
+                      variant="primary"
+                      onClick={handleApplyMerge}
+                      disabled={isMerging}
+                      isLoading={isMerging}
+                      className="gap-2 min-h-[44px]"
+                    >
+                      <GitMerge className="w-4 h-4" aria-hidden="true" />
+                      <span>Apply merge</span>
+                    </Button>
+                  </div>
+                </div>
               </div>
             ) : (
               <div

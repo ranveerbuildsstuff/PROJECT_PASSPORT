@@ -400,6 +400,13 @@ export function useAutosave({
     lastPassResultRef.current = { ok: true };
   }, []);
 
+  // When initialPassport changes externally (e.g. merge applied, checkpoint restored, or project switched)
+  useEffect(() => {
+    if (initialPassport.project.updatedAt !== baselineRef.current.project.updatedAt) {
+      resetDraft(initialPassport);
+    }
+  }, [initialPassport, resetDraft]);
+
   return {
     draft,
     setDraft,

@@ -6,9 +6,8 @@ import {
   StorageUnavailable,
   QuotaExceeded,
   BackupInvalid,
+  StaleWrite,
 } from '../errors';
-
-// Note: StaleWrite test will be added once Slice 5b lands (documented in PROGRESS.md).
 
 describe('describeStorageError', () => {
   it('maps ProjectNotFound to plain language without internal IDs', () => {
@@ -40,6 +39,13 @@ describe('describeStorageError', () => {
     const err = new BackupInvalid();
     const msg = describeStorageError(err);
     expect(msg).toBe('The backup file is invalid or cannot be read.');
+  });
+
+  it('maps StaleWrite to plain language without technical internals', () => {
+    const err = new StaleWrite();
+    const msg = describeStorageError(err);
+    expect(msg).toBe('This passport was modified in another tab or window. Please reload to see the latest version.');
+    expect(err.nextStep).toBe('Please reload the latest version or review the changes before saving.');
   });
 
   it('maps unknown errors to generic plain language without stack traces', () => {

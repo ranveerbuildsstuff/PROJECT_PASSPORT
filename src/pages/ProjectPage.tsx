@@ -394,6 +394,8 @@ export function ProjectPage() {
       <CaptureDialog
         isOpen={isCaptureOpen}
         onClose={() => setIsCaptureOpen(false)}
+        projectId={project.id}
+        currentPassport={passport}
       />
     </div>
   );

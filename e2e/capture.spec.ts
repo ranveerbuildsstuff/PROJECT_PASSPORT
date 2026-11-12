@@ -113,8 +113,8 @@ test.describe('Slice 5a: Capture From AI Dialog & Paste-Back Flow', () => {
     await expect(statusCard.getByText(/smart double quotes/i)).toBeVisible();
     await expect(statusCard.getByText(/trailing commas/i)).toBeVisible();
 
-    // Verify muted note
-    await expect(statusCard.getByText('Merging arrives in the next update')).toBeVisible();
+    // Verify section-by-section merge controls and Apply merge button
+    await expect(statusCard.getByRole('button', { name: 'Apply merge' })).toBeVisible();
 
     // Assert zero console errors
     expect(consoleErrors).toEqual([]);
@@ -243,5 +243,139 @@ test.describe('Slice 5a: Capture From AI Dialog & Paste-Back Flow', () => {
     await auditPageLayoutAndTouchTargets(page, 'capture-dialog-error-light');
     await expectNoSeriousA11y(page);
     await shot(page, 'capture-dialog-error-light');
+  });
+
+  test('7. Merge happy path with undo via checkpoint', async ({ page }) => {
+    // 1. Navigate to Passport tab and set baseline goal
+    await page.getByRole('tab', { name: 'Passport' }).click();
+    const goalTextarea = page.getByLabel('Project goal');
+    await goalTextarea.fill('Original baseline goal');
+    await expect(page.getByText('Saved')).toBeVisible();
+
+    // 2. Open Capture dialog
+    await page.getByRole('button', { name: 'Capture from AI' }).first().click();
+    const dialog = page.getByRole('dialog', { name: 'Capture from AI' });
+    await expect(dialog).toBeVisible();
+
+    // 3. Paste valid fixture response and check reply
+    const validText = fs.readFileSync(VALID_FIXTURE_PATH, 'utf8');
+    await dialog.getByLabel('Paste AI response').fill(validText);
+    await dialog.getByRole('button', { name: 'Check reply' }).click();
+    await expect(dialog.getByRole('status')).toBeVisible();
+
+    // 4. Verify section-by-section merge controls and apply merge
+    await expect(dialog.getByText('Section-by-section merge')).toBeVisible();
+    const applyBtn = dialog.getByRole('button', { name: 'Apply merge' });
+    await expect(applyBtn).toBeVisible();
+    await applyBtn.click();
+
+    // 5. Verify dialog closes and toast appears with Undo
+    await expect(dialog).not.toBeVisible();
+    const toast = page.getByText(/Merged \d+ sections into passport\./i);
+    await expect(toast).toBeVisible();
+    const undoBtn = page.getByRole('button', { name: 'Undo' });
+    await expect(undoBtn).toBeVisible();
+
+    // 6. Verify editor displays merged content
+    await expect(page.getByLabel('Project goal')).toHaveValue(
+      'Provide cross-device local-first document sync'
+    );
+
+    // 7. Click Undo in the toast and verify passport reverts to pre-merge baseline
+    await undoBtn.click();
+    await expect(page.getByText('Merge undone.')).toBeVisible();
+    await expect(page.getByLabel('Project goal')).toHaveValue('Original baseline goal');
+  });
+
+  test('8. Stale-write conflict detection and recovery', async ({ page }) => {
+    // 1. Navigate to Passport tab
+    await page.getByRole('tab', { name: 'Passport' }).click();
+
+    // 2. Open Capture dialog
+    await page.getByRole('button', { name: 'Capture from AI' }).first().click();
+    const dialog = page.getByRole('dialog', { name: 'Capture from AI' });
+    await expect(dialog).toBeVisible();
+
+    // 3. Paste valid fixture response and check reply
+    const validText = fs.readFileSync(VALID_FIXTURE_PATH, 'utf8');
+    await dialog.getByLabel('Paste AI response').fill(validText);
+    await dialog.getByRole('button', { name: 'Check reply' }).click();
+    await expect(dialog.getByRole('status')).toBeVisible();
+
+    // 4. Simulate a concurrent edit in IndexedDB while dialog is open
+    await page.evaluate(async () => {
+      await new Promise<void>((resolve, reject) => {
+        const req = indexedDB.open('ProjectPassportDB');
+        req.onerror = () => reject(req.error);
+        req.onsuccess = () => {
+          try {
+            const idb = req.result;
+            const tx = idb.transaction(['projects', 'passports'], 'readwrite');
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error);
+            tx.onabort = () => reject(tx.error || new Error('Transaction aborted'));
+
+            const pStore = tx.objectStore('projects');
+            const passStore = tx.objectStore('passports');
+            const getReq = pStore.getAll();
+            getReq.onsuccess = () => {
+              try {
+                const projects = getReq.result;
+                if (projects.length > 0) {
+                  const p = projects[0];
+                  const newTime = new Date(Date.now() + 60000).toISOString();
+                  p.updatedAt = newTime;
+                  p.name = 'Concurrent Rename';
+                  pStore.put(p);
+
+                  const passReq = passStore.get(p.id);
+                  passReq.onsuccess = () => {
+                    try {
+                      const record = passReq.result;
+                      if (record && record.passport && record.passport.project) {
+                        record.passport.project.updatedAt = newTime;
+                        record.passport.project.name = 'Concurrent Rename';
+                        passStore.put(record);
+                      }
+                    } catch (e) {
+                      reject(e);
+                    }
+                  };
+                  passReq.onerror = () => reject(passReq.error);
+                } else {
+                  resolve();
+                }
+              } catch (e) {
+                reject(e);
+              }
+            };
+            getReq.onerror = () => reject(getReq.error);
+          } catch (e) {
+            reject(e);
+          }
+        };
+      });
+    });
+
+    // 5. Click Apply merge -> StaleWrite error
+    await dialog.getByRole('button', { name: 'Apply merge' }).click();
+
+    // 6. Verify stale write alert appears and dialog stays open
+    const errorAlert = dialog.getByRole('alert');
+    await expect(errorAlert).toBeVisible();
+    await expect(errorAlert).toContainText(
+      'This passport was modified in another tab or window. Please reload to see the latest version.'
+    );
+
+    // 7. Click Reload latest
+    const reloadBtn = dialog.getByRole('button', { name: 'Reload latest' });
+    await expect(reloadBtn).toBeVisible();
+    await reloadBtn.click();
+
+    // 8. Verify error clears and applying merge succeeds with reloaded baseline
+    await expect(errorAlert).not.toBeVisible();
+    await dialog.getByRole('button', { name: 'Apply merge' }).click();
+    await expect(dialog).not.toBeVisible();
+    await expect(page.getByText(/Merged \d+ sections into passport\./i)).toBeVisible();
   });
 });

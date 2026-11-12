@@ -12,11 +12,13 @@ import {
   QuotaExceeded,
   BackupInvalid,
   ProjectNotFound,
+  StaleWrite,
 } from './errors';
 import {
   createEmptyPassport,
   validatePassport,
   migratePassport,
+  newId,
   type PassportV1,
 } from '../domain';
 import {
@@ -54,7 +56,8 @@ function mapStorageError(err: unknown): never {
     err instanceof ValidationFailed ||
     err instanceof QuotaExceeded ||
     err instanceof BackupInvalid ||
-    err instanceof ProjectNotFound
+    err instanceof ProjectNotFound ||
+    err instanceof StaleWrite
   ) {
     throw err;
   }
@@ -253,6 +256,169 @@ export async function savePassport(passport: PassportV1): Promise<void> {
         passport: validPassport,
       });
     });
+  } catch (err) {
+    mapStorageError(err);
+  }
+}
+
+export interface ApplyMergeOptions {
+  projectId: string;
+  expectedUpdatedAt?: string;
+  mergedPassport: PassportV1;
+  checkpointDescription?: string;
+}
+
+export interface ApplyMergeResult {
+  checkpointId: string;
+  updatedPassport: PassportV1;
+}
+
+export async function applyMergeWithCheckpoint({
+  projectId,
+  expectedUpdatedAt,
+  mergedPassport,
+  checkpointDescription = 'Before merge',
+}: ApplyMergeOptions): Promise<ApplyMergeResult> {
+  await ensureAvailable();
+
+  const validation = validatePassport(mergedPassport);
+  if (!validation.success || !validation.data) {
+    throw new ValidationFailed(
+      'Cannot save invalid passport data.',
+      validation.errors
+    );
+  }
+
+  const validPassport = validation.data;
+  const now = new Date().toISOString();
+  validPassport.project.id = projectId;
+  validPassport.project.updatedAt = now;
+
+  let checkpointId = '';
+
+  try {
+    await db.transaction('rw', [db.projects, db.passports, db.checkpoints], async () => {
+      const existingProject = await db.projects.get(projectId);
+      if (!existingProject) {
+        throw new ProjectNotFound(
+          `Project "${projectId}" was not found. It may have been deleted.`,
+          'Go back to your projects and try again.'
+        );
+      }
+
+      // Stale-write check: if expectedUpdatedAt was supplied, ensure project wasn't modified concurrently
+      if (expectedUpdatedAt && existingProject.updatedAt !== expectedUpdatedAt) {
+        throw new StaleWrite();
+      }
+
+      const existingPassportRecord = await db.passports.get(projectId);
+      if (!existingPassportRecord) {
+        throw new ProjectNotFound(
+          `Passport for project "${projectId}" was not found.`,
+          'Go back to your projects and try again.'
+        );
+      }
+
+      // Save automatic pre-merge backup checkpoint
+      checkpointId = newId();
+      const checkpoint: CheckpointRecord = {
+        id: checkpointId,
+        projectId,
+        createdAt: now,
+        description: checkpointDescription,
+        passport: JSON.parse(JSON.stringify(existingPassportRecord.passport)),
+      };
+      await db.checkpoints.put(checkpoint);
+
+      // Save updated merged passport and project
+      existingProject.name = validPassport.project.name;
+      existingProject.status = validPassport.project.status;
+      existingProject.updatedAt = now;
+      await db.projects.put(existingProject);
+
+      await db.passports.put({
+        projectId,
+        passport: validPassport,
+      });
+    });
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('project-storage-updated'));
+    }
+
+    return {
+      checkpointId,
+      updatedPassport: validPassport,
+    };
+  } catch (err) {
+    mapStorageError(err);
+  }
+}
+
+export async function restoreCheckpoint(checkpointId: string): Promise<PassportV1> {
+  await ensureAvailable();
+
+  try {
+    let restoredPassport: PassportV1 | null = null;
+
+    await db.transaction('rw', [db.projects, db.passports, db.checkpoints], async () => {
+      const checkpoint = await db.checkpoints.get(checkpointId);
+      if (!checkpoint || !checkpoint.passport) {
+        throw new Error(`Checkpoint "${checkpointId}" not found or contains no passport data.`);
+      }
+
+      const projectId = checkpoint.projectId;
+      const existingProject = await db.projects.get(projectId);
+      if (!existingProject) {
+        throw new ProjectNotFound(
+          `Project "${projectId}" was not found.`,
+          'Go back to your projects and try again.'
+        );
+      }
+
+      const currentPassportRecord = await db.passports.get(projectId);
+      const now = new Date().toISOString();
+
+      // SPEC §10: Restoring a checkpoint ALWAYS creates an automated "Before restore" checkpoint first.
+      if (currentPassportRecord) {
+        await db.checkpoints.put({
+          id: newId(),
+          projectId,
+          createdAt: now,
+          description: 'Before restore',
+          passport: JSON.parse(JSON.stringify(currentPassportRecord.passport)),
+        });
+      }
+
+      restoredPassport = JSON.parse(JSON.stringify(checkpoint.passport)) as PassportV1;
+      restoredPassport.project.updatedAt = now;
+
+      existingProject.name = restoredPassport.project.name;
+      existingProject.status = restoredPassport.project.status;
+      existingProject.updatedAt = now;
+
+      await db.projects.put(existingProject);
+      await db.passports.put({
+        projectId,
+        passport: restoredPassport,
+      });
+    });
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('project-storage-updated'));
+    }
+
+    return restoredPassport!;
+  } catch (err) {
+    mapStorageError(err);
+  }
+}
+
+export async function getCheckpoint(checkpointId: string): Promise<CheckpointRecord | null> {
+  await ensureAvailable();
+  try {
+    const cp = await db.checkpoints.get(checkpointId);
+    return cp || null;
   } catch (err) {
     mapStorageError(err);
   }

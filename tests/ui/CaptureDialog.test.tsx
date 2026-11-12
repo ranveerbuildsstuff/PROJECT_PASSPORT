@@ -3,8 +3,20 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { CaptureDialog } from '../../src/ui/CaptureDialog';
 import { ToastProvider } from '../../src/ui';
+import type { PassportV1 } from '../../src/domain';
+import * as storage from '../../src/storage';
 
-function TestHarness({ defaultOpen = true }: { defaultOpen?: boolean }) {
+function TestHarness({
+  defaultOpen = true,
+  projectId,
+  currentPassport,
+  onMergeComplete,
+}: {
+  defaultOpen?: boolean;
+  projectId?: string;
+  currentPassport?: PassportV1;
+  onMergeComplete?: (cpId: string) => void;
+}) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
 
   return (
@@ -16,7 +28,13 @@ function TestHarness({ defaultOpen = true }: { defaultOpen?: boolean }) {
       >
         Open Capture
       </button>
-      <CaptureDialog isOpen={isOpen} onClose={() => setIsOpen(false)} />
+      <CaptureDialog
+        isOpen={isOpen}
+        onClose={() => setIsOpen(false)}
+        projectId={projectId}
+        currentPassport={currentPassport}
+        onMergeComplete={onMergeComplete}
+      />
     </ToastProvider>
   );
 }
@@ -119,7 +137,7 @@ describe('CaptureDialog Component (RTL)', () => {
       const statusCard = screen.getByRole('status');
       expect(statusCard).toBeInTheDocument();
       expect(screen.getByText(/Passport reply verified/i)).toBeInTheDocument();
-      expect(screen.getByText(/Merging arrives in the next update/i)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Apply merge/i })).toBeInTheDocument();
       // Result heading has focus
       const heading = screen.getByRole('heading', { name: /Passport reply verified/i });
       expect(document.activeElement).toBe(heading);
@@ -166,5 +184,85 @@ describe('CaptureDialog Component (RTL)', () => {
     });
 
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('allows changing section merge choices and calls applyMergeWithCheckpoint', async () => {
+    const mockApplyMerge = vi.spyOn(storage, 'applyMergeWithCheckpoint').mockResolvedValue({
+      checkpointId: 'cp-test-123',
+      updatedPassport: {
+        schemaVersion: 1,
+        project: { id: 'p1', name: 'Merged', status: 'idea', goal: '', summary: '', createdAt: '', updatedAt: '' },
+        stack: [],
+        requirements: [],
+        decisions: [],
+        completed: [],
+        tasks: [],
+        bugs: [],
+        bugsReviewed: false,
+        instructions: [],
+        nextAction: '',
+        openQuestions: [],
+        files: [],
+        conversations: [],
+      },
+    });
+
+    const baselinePassport: PassportV1 = {
+      schemaVersion: 1,
+      project: { id: 'p1', name: 'Initial', status: 'idea', goal: '', summary: '', createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z' },
+      stack: [],
+      requirements: [],
+      decisions: [],
+      completed: [],
+      tasks: [],
+      bugs: [],
+      bugsReviewed: false,
+      instructions: [],
+      nextAction: '',
+      openQuestions: [],
+      files: [],
+      conversations: [],
+    };
+
+    const onComplete = vi.fn();
+
+    render(
+      <TestHarness
+        projectId="p1"
+        currentPassport={baselinePassport}
+        onMergeComplete={onComplete}
+      />
+    );
+
+    const textarea = screen.getByLabelText(/Paste AI response/i);
+    const checkBtn = screen.getByRole('button', { name: /Check reply/i });
+
+    fireEvent.change(textarea, {
+      target: {
+        value: '```json\n{"project":{"name":"Merged App"}}\n```',
+      },
+    });
+    fireEvent.click(checkBtn);
+
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Apply merge/i })).toBeInTheDocument();
+    });
+
+    // Check that Basics section has Replace / Merge / Skip buttons
+    const replaceBtn = screen.getByRole('button', { name: /^replace$/i });
+    expect(replaceBtn).toBeInTheDocument();
+    fireEvent.click(replaceBtn);
+
+    // Click Apply merge
+    const applyBtn = screen.getByRole('button', { name: /Apply merge/i });
+    fireEvent.click(applyBtn);
+
+    await waitFor(() => {
+      expect(mockApplyMerge).toHaveBeenCalled();
+      expect(onComplete).toHaveBeenCalledWith('cp-test-123');
+    });
+
+    mockApplyMerge.mockRestore();
   });
 });

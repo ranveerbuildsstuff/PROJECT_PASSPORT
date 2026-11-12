@@ -6,6 +6,11 @@ export {
   deleteProject,
   getPassport,
   savePassport,
+  applyMergeWithCheckpoint,
+  restoreCheckpoint,
+  getCheckpoint,
+  type ApplyMergeOptions,
+  type ApplyMergeResult,
   addConversation,
   listConversations,
   getConversation,
@@ -32,6 +37,7 @@ export {
   QuotaExceeded,
   BackupInvalid,
   ProjectNotFound,
+  StaleWrite,
   describeStorageError,
 } from './errors';
 

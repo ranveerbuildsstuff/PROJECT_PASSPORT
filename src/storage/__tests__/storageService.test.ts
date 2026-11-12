@@ -8,6 +8,9 @@ import {
   deleteProject,
   getPassport,
   savePassport,
+  applyMergeWithCheckpoint,
+  restoreCheckpoint,
+  getCheckpoint,
   addConversation,
   listConversations,
   getConversation,
@@ -25,6 +28,7 @@ import {
   ValidationFailed,
   BackupInvalid,
   ProjectNotFound,
+  StaleWrite,
   type BackupData,
 } from '../index';
 import { _setStorageAvailableForTesting } from '../testing';
@@ -959,5 +963,137 @@ describe('Storage Service & Dexie Layer', () => {
       expect(usage.formattedUsage).toBeDefined();
       expect(usage.formattedQuota).toBeDefined();
     }
+  });
+
+  describe('applyMergeWithCheckpoint and Checkpoint Rollback', () => {
+    it('creates pre-merge checkpoint and writes updated passport atomically', async () => {
+      const proj = await createProject('Alpha');
+      const baseline = (await getPassport(proj.id))!;
+      baseline.project.goal = 'Original goal';
+      await savePassport(baseline);
+
+      const savedBeforeMerge = (await getPassport(proj.id))!;
+      const expectedUpdatedAt = savedBeforeMerge.project.updatedAt;
+
+      // Prepare merged passport
+      const mergedPassport: PassportV1 = JSON.parse(JSON.stringify(savedBeforeMerge));
+      mergedPassport.project.name = 'Alpha Merged';
+      mergedPassport.project.goal = 'Merged goal';
+      mergedPassport.tasks = [{ id: 't1', text: 'New Task', status: 'todo', priority: 'medium' }];
+
+      const result = await applyMergeWithCheckpoint({
+        projectId: proj.id,
+        expectedUpdatedAt,
+        mergedPassport,
+        checkpointDescription: 'Before test merge',
+      });
+
+      expect(result.checkpointId).toBeTruthy();
+
+      // Checkpoint was saved with previous passport state
+      const cp = await getCheckpoint(result.checkpointId);
+      expect(cp).toBeTruthy();
+      expect(cp?.description).toBe('Before test merge');
+      expect((cp?.passport as PassportV1).project.goal).toBe('Original goal');
+      expect((cp?.passport as PassportV1).project.name).toBe('Alpha');
+
+      // Stored passport is now the merged passport
+      const updated = (await getPassport(proj.id))!;
+      expect(updated.project.name).toBe('Alpha Merged');
+      expect(updated.project.goal).toBe('Merged goal');
+      expect(updated.tasks).toHaveLength(1);
+      expect(updated.tasks[0]?.text).toBe('New Task');
+    });
+
+    it('rejects stale writes when expectedUpdatedAt does not match current updatedAt', async () => {
+      const proj = await createProject('Alpha');
+      const baseline = (await getPassport(proj.id))!;
+      const oldUpdatedAt = baseline.project.updatedAt;
+
+      // Simulate a concurrent write in another tab
+      baseline.project.goal = 'Concurrent change';
+      await savePassport(baseline);
+
+      const mergedPassport: PassportV1 = JSON.parse(JSON.stringify(baseline));
+      mergedPassport.project.name = 'Stale Attempt';
+
+      // Attempt merge passing stale expectedUpdatedAt
+      await expect(
+        applyMergeWithCheckpoint({
+          projectId: proj.id,
+          expectedUpdatedAt: oldUpdatedAt,
+          mergedPassport,
+        })
+      ).rejects.toThrow(StaleWrite);
+
+      // Verify no checkpoint was created and no overwrite occurred
+      const current = (await getPassport(proj.id))!;
+      expect(current.project.name).toBe('Alpha');
+      expect(current.project.goal).toBe('Concurrent change');
+      const checkpoints = await db.checkpoints.where('projectId').equals(proj.id).toArray();
+      expect(checkpoints).toHaveLength(0);
+    });
+
+    it('rolls back both checkpoint and passport when transaction fails', async () => {
+      const proj = await createProject('Alpha');
+      const baseline = (await getPassport(proj.id))!;
+      baseline.project.goal = 'Safe goal';
+      await savePassport(baseline);
+
+      const savedBefore = (await getPassport(proj.id))!;
+
+      // Invalid passport data (e.g. invalid task status)
+      const invalidPassport: PassportV1 = JSON.parse(JSON.stringify(savedBefore));
+      // @ts-expect-error injecting invalid field to test validation failure
+      invalidPassport.tasks = [{ id: 't1', text: 'Task', status: 'invalid_status', priority: 'medium' }];
+
+      await expect(
+        applyMergeWithCheckpoint({
+          projectId: proj.id,
+          expectedUpdatedAt: savedBefore.project.updatedAt,
+          mergedPassport: invalidPassport,
+        })
+      ).rejects.toThrow(ValidationFailed);
+
+      // Verify complete rollback: no checkpoint created, passport untouched
+      const current = (await getPassport(proj.id))!;
+      expect(current.project.goal).toBe('Safe goal');
+      expect(current.tasks).toHaveLength(0);
+      const checkpoints = await db.checkpoints.where('projectId').equals(proj.id).toArray();
+      expect(checkpoints).toHaveLength(0);
+    });
+
+    it('restores checkpoint correctly and creates an automated "Before restore" checkpoint', async () => {
+      const proj = await createProject('Alpha');
+      const initial = (await getPassport(proj.id))!;
+      initial.project.goal = 'Initial goal';
+      await savePassport(initial);
+
+      const beforeMerge = (await getPassport(proj.id))!;
+      const mergedPassport: PassportV1 = JSON.parse(JSON.stringify(beforeMerge));
+      mergedPassport.project.goal = 'Merged goal';
+
+      const { checkpointId } = await applyMergeWithCheckpoint({
+        projectId: proj.id,
+        expectedUpdatedAt: beforeMerge.project.updatedAt,
+        mergedPassport,
+      });
+
+      // Verify merged
+      expect((await getPassport(proj.id))!.project.goal).toBe('Merged goal');
+
+      // Now restore the pre-merge checkpoint
+      const restored = await restoreCheckpoint(checkpointId);
+      expect(restored.project.goal).toBe('Initial goal');
+
+      // Verify in DB
+      const current = (await getPassport(proj.id))!;
+      expect(current.project.goal).toBe('Initial goal');
+
+      // Verify automated "Before restore" checkpoint was created
+      const checkpoints = await db.checkpoints.where('projectId').equals(proj.id).toArray();
+      expect(checkpoints.length).toBeGreaterThanOrEqual(2);
+      expect(checkpoints.some((c) => c.description === 'Before restore')).toBe(true);
+    });
   });
 });

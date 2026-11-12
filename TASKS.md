@@ -215,19 +215,22 @@
 
 ## Slice 5b: Section-by-Section Merge UI, Visual Diff & Checkpoints
 
-- [ ] Implement section-by-section Merge UI showing diffs and controls for Replace / Merge / Skip per section (including `bugsReviewed` handling).
-- [ ] Implement automated checkpoint creation before merge mutation.
-- [ ] Implement atomic Dexie storage write of merged passport.
-- [ ] Implement automatic checkpoint creation before applying any paste-back merge.
-- [ ] **Tests added:** Unit tests for prompt generation, resilient JSON extraction, edge-case parsing (smart quotes, trailing comments), and merge logic.
-- [ ] **Docs updated:** Note prompt templates and extraction heuristics in `PROGRESS.md`.
-- [ ] **Commit message:** `Slice 5: capture prompt, reconstruct prompt, paste-back and merge`
+- [x] In `src/domain/merge.ts`, implement pure merge logic and diff calculations (`calculateSectionDiff`, `calculateAllSectionDiffs`, `mergePassport`) supporting Replace / Merge / Skip per section, matching lists by ID then normalized text, replacing scalars only when non-empty, and keeping `nextAction` as replace-or-skip only.
+- [x] In `src/storage/errors.ts` and `src/storage/storageService.ts`, implement `StaleWrite` error class and `applyMergeWithCheckpoint` executing within an atomic Dexie transaction across `[projects, passports, checkpoints]` with pre-merge backup checkpoint creation and stale-write checking against concurrent tab modifications.
+- [x] In `src/storage/storageService.ts`, implement checkpoint restore helper `restoreCheckpoint` (with automatic "Before restore" backup checkpoint) for single-click undo.
+- [x] In `src/pages/passport/useAutosave.ts`, implement reactive storage baseline synchronization resetting draft state when project `updatedAt` changes externally via merge or restore.
+- [x] In `src/ui/CaptureDialog.tsx`, implement section-by-section merge review UI with diff badges (added/changed/removed counts), 44px min-height action selectors (Merge, Replace, Skip), atomic "Apply merge" button with loading indicator, stale-write alert banner with "Reload latest" recovery button, and toast with "Undo" action.
+- [x] **Tests added:** 17 unit tests for merge rules and diffs (`tests/domain/merge.test.ts`), 8 storage error tests including `StaleWrite` (`src/storage/__tests__/errors.test.ts`), 26 storage service tests verifying checkpoints and rollback on failure (`src/storage/__tests__/storageService.test.ts`), 7 RTL tests for `CaptureDialog` merge interactions (`tests/ui/CaptureDialog.test.tsx`), and 2 Playwright E2E tests for merge happy path with undo and stale-write conflict detection/recovery (16 E2E tests in `capture.spec.ts`).
+- [x] **Docs updated:** Documented merge rules, transaction atomicity, stale-write detection, and failure disclosure in `PROGRESS.md`.
+- [x] **Commit message:** `Slice 5b: section-by-section merge UI, checkpoints and stale-write protection`
 
 **Done when:**
-- `npm run typecheck`, `npm run lint`, `npm test`, and `npm run build` pass.
-- Prompts generate correctly with strict instructions.
-- Malformed and smart-quoted JSON strings are parsed reliably without uncaught exceptions.
-- Merge UI allows selective section replacement and creates an auto-checkpoint before mutating.
+- `npm run typecheck`, `npm run lint`, `npm test`, `npm run build`, and `npm run test:e2e` pass with zero errors.
+- Merge UI allows selective section replacement, merge, and skip with plain-language diff badges.
+- Automatic pre-merge backup checkpoint is created before writing to Dexie.
+- Stale-write conflict detection prevents concurrent overwrites and provides reload recovery.
+- Revert via toast Undo restores the pre-merge checkpoint cleanly.
+- Port 4179 is confirmed free.
 
 ---
 
