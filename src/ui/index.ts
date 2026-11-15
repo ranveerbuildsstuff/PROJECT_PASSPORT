@@ -28,4 +28,5 @@ export * from './AddFilesDialog';
 export * from './CreateCheckpointDialog';
 export * from './CompareDialog';
 export * from './RestoreCheckpointDialog';
+export * from './ImportPackageDialog';
 

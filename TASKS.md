@@ -345,16 +345,16 @@
 
 ## Slice 10: Export Package, Destination Presets & Package Import
 
-- [ ] In `src/export/presets.ts`, configure destination presets with editable token budgets: Lite paste (6k), ChatGPT (30k), Claude (60k), Gemini (100k), Coding Agent (40k), Custom.
-- [ ] In `src/export/budgeter.ts`, implement priority truncation when content exceeds destination budget.
-- [ ] Build Truncation Inspection UI displaying included items, trimmed turns, and omitted files with clear explanations.
-- [ ] Implement Lite Export: generates `CONTINUE_PROMPT` markdown and copies directly to clipboard.
-- [ ] Implement Full Package Export using JSZip: bundles `project-passport.json`, `PROJECT_STATE.md`, `CONTINUE_PROMPT.md`, `files/`, `conversations/`, and `MANIFEST.json`.
-- [ ] Enforce Secret Gate: export is blocked when unresolved findings exist, unless overridden with explicit user warning acknowledgment.
-- [ ] Implement Package Import: imports a full `.zip` package and verifies round-trip fidelity.
-- [ ] **Tests added:** Unit tests for token budget enforcement, priority truncation, zip generation, and round-trip export/import identity.
-- [ ] **Docs updated:** Document destination presets and package bundle layout in `PROGRESS.md`.
-- [ ] **Commit message:** `Slice 10: export package, destination presets and package import`
+- [x] In `src/export/presets.ts`, configure destination presets with editable token budgets: Lite paste (6k), ChatGPT (30k), Claude (60k), Gemini (100k), Coding Agent (40k), Custom.
+- [x] In `src/export/budgeter.ts`, implement priority truncation when content exceeds destination budget.
+- [x] Build Truncation Inspection UI displaying included items, trimmed turns, and omitted files with clear explanations.
+- [x] Implement Lite Export: generates `CONTINUE_PROMPT` markdown and copies directly to clipboard.
+- [x] Implement Full Package Export using JSZip: bundles `project-passport.json`, `PROJECT_STATE.md`, `CONTINUE_PROMPT.md`, `files/`, `conversations/`, and `MANIFEST.json`.
+- [x] Enforce Secret Gate: export is blocked when unresolved findings exist, unless overridden with explicit user warning acknowledgment.
+- [x] Implement Package Import: imports a full `.zip` package and verifies round-trip fidelity.
+- [x] **Tests added:** Unit tests for token budget enforcement, priority truncation, zip generation, and round-trip export/import identity.
+- [x] **Docs updated:** Document destination presets and package bundle layout in `PROGRESS.md`.
+- [x] **Commit message:** `Slice 10: export package, destination presets and package import`
 
 **Done when:**
 - `npm run typecheck`, `npm run lint`, `npm test`, and `npm run build` pass.

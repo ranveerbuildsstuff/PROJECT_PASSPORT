@@ -12,9 +12,15 @@ import {
   redactText,
   findingKey,
 } from '../domain/secretScanner';
+import {
+  MAX_ZIP_ENTRIES,
+  MAX_ZIP_TOTAL_UNCOMPRESSED_BYTES,
+  UNSAFE_ZIP_ERROR_MESSAGE,
+  ZIP_PARSE_ERROR_MESSAGE,
+  createZipNameDecoder,
+} from './zipSafety';
 
-export const MAX_ZIP_ENTRIES = 500;
-export const MAX_ZIP_TOTAL_UNCOMPRESSED_BYTES = 20 * 1024 * 1024; // 20 MB
+export { MAX_ZIP_ENTRIES, MAX_ZIP_TOTAL_UNCOMPRESSED_BYTES };
 
 export interface WorkerIncomingFileInput {
   name: string;
@@ -218,32 +224,9 @@ export async function handleFilesWorkerMessage(
           let zip: JSZip;
           try {
             zip = await JSZip.loadAsync(zipData, {
-              decodeFileName: (bytes: string[] | Uint8Array | Buffer) => {
-                let name: string;
-                try {
-                  if (bytes instanceof Uint8Array) {
-                    name = new TextDecoder('utf-8').decode(bytes);
-                  } else if (Array.isArray(bytes)) {
-                    name = bytes.map((b) => (typeof b === 'number' ? String.fromCharCode(b) : String(b))).join('');
-                  } else {
-                    name = String(bytes);
-                  }
-                } catch {
-                  name = String(bytes);
-                }
-                // Inspect raw entry name before JSZip sanitizes it
-                const normalized = name.replace(/\\/g, '/');
-                if (
-                  normalized.includes('../') ||
-                  normalized.endsWith('/..') ||
-                  normalized === '..' ||
-                  normalized.startsWith('/') ||
-                  /^[a-zA-Z]:/.test(name)
-                ) {
-                  hasTraversalInRawName = true;
-                }
-                return name;
-              },
+              decodeFileName: createZipNameDecoder(() => {
+                hasTraversalInRawName = true;
+              }),
             });
           } catch {
             return {
@@ -253,7 +236,7 @@ export async function handleFilesWorkerMessage(
                 result: {
                   ok: false,
                   code: 'zip_parse_error',
-                  message: 'Could not read the .zip archive.',
+                  message: ZIP_PARSE_ERROR_MESSAGE,
                 },
               },
             };
@@ -267,7 +250,7 @@ export async function handleFilesWorkerMessage(
                 result: {
                   ok: false,
                   code: 'unsafe_zip',
-                  message: "This .zip contains paths we can't use safely. Unzip it yourself and choose the folder instead.",
+                  message: UNSAFE_ZIP_ERROR_MESSAGE,
                 },
               },
             };

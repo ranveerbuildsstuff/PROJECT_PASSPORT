@@ -1921,6 +1921,152 @@ export async function importBackup(
   }
 }
 
+export interface ImportPackageOptions {
+  conflictAction?: 'replace' | 'copy';
+}
+
+/**
+ * Atomically imports a Full Handoff Package into Dexie local storage.
+ *
+ * Invariants:
+ * - Single atomic transaction on [db.projects, db.passports, db.conversations, db.files].
+ * - Conflict handling: 'replace' deletes existing project data for that ID and puts package data.
+ *   'copy' generates a new project ID, remaps conversation and file IDs, and appends '(Copy)' to the name.
+ * - Rolls back completely on failure.
+ * - Dispatches 'project-storage-updated'.
+ */
+export async function importPackage(
+  payload: {
+    passport: PassportV1;
+    files: Array<{
+      path: string;
+      purpose: string;
+      content: string;
+      sizeBytes: number;
+      included: boolean;
+    }>;
+    conversations: Array<{
+      record: {
+        id: string;
+        title: string;
+        source: 'chatgpt' | 'claude' | 'gemini' | 'paste' | 'other';
+        messageCount: number;
+        tokenEstimate: number;
+        included: boolean;
+      };
+      turns: ConversationTurn[];
+    }>;
+  },
+  options?: ImportPackageOptions
+): Promise<string> {
+  await ensureAvailable();
+
+  const originalId = payload.passport.project.id;
+  const existingProject = await db.projects.get(originalId);
+
+  const shouldCopy = Boolean(existingProject && options?.conflictAction === 'copy');
+  const targetProjectId = shouldCopy ? newId() : originalId;
+  const now = new Date().toISOString();
+
+  // Prepare cloned / mapped passport
+  const targetProjectName = shouldCopy
+    ? `${payload.passport.project.name || 'Imported Project'} (Copy)`
+    : payload.passport.project.name || 'Imported Project';
+
+  const finalPassport: PassportV1 = {
+    ...payload.passport,
+    project: {
+      ...payload.passport.project,
+      id: targetProjectId,
+      name: targetProjectName,
+      createdAt: shouldCopy ? now : payload.passport.project.createdAt,
+      updatedAt: now,
+    },
+  };
+
+  // Map conversation IDs if copying
+  const convIdMap = new Map<string, string>();
+  if (shouldCopy) {
+    for (const c of payload.conversations) {
+      convIdMap.set(c.record.id, newId());
+    }
+    finalPassport.conversations = (finalPassport.conversations || []).map((c) => ({
+      ...c,
+      id: convIdMap.get(c.id) ?? c.id,
+    }));
+  }
+
+  // Prepared files
+  const fileRecords: FileRecord[] = payload.files.map((f) => ({
+    id: `${targetProjectId}:${f.path}`,
+    projectId: targetProjectId,
+    path: f.path,
+    content: f.content,
+    sizeBytes: f.sizeBytes,
+    mime: 'text/plain',
+    acknowledgedFindings: [],
+  }));
+
+  // Prepared conversations
+  const convRecords: ConversationRecord[] = payload.conversations.map((c) => {
+    const cId = shouldCopy ? (convIdMap.get(c.record.id) ?? newId()) : c.record.id;
+    return {
+      id: cId,
+      projectId: targetProjectId,
+      title: c.record.title,
+      source: c.record.source,
+      messages: c.turns.map((t) => ({
+        id: t.id,
+        role: t.role,
+        text: t.text,
+      })),
+      createdAt: now,
+    };
+  });
+
+  const projectRecord: ProjectRecord = {
+    id: targetProjectId,
+    name: targetProjectName,
+    updatedAt: now,
+    status: finalPassport.project.status,
+  };
+
+  try {
+    await db.transaction(
+      'rw',
+      [db.projects, db.passports, db.conversations, db.files],
+      async () => {
+        if (!shouldCopy && existingProject) {
+          // Replace: delete prior data for this project ID
+          await db.projects.delete(targetProjectId);
+          await db.passports.delete(targetProjectId);
+          await db.files.where('projectId').equals(targetProjectId).delete();
+          await db.conversations.where('projectId').equals(targetProjectId).delete();
+        }
+
+        await db.projects.put(projectRecord);
+        await db.passports.put({
+          projectId: targetProjectId,
+          passport: finalPassport,
+        });
+
+        for (const f of fileRecords) {
+          await db.files.put(f);
+        }
+
+        for (const c of convRecords) {
+          await db.conversations.put(c);
+        }
+      }
+    );
+
+    window.dispatchEvent(new CustomEvent('project-storage-updated'));
+    return targetProjectId;
+  } catch (err) {
+    mapStorageError(err);
+  }
+}
+
 // ----------------------------------------------------------------------------
 // Browser Storage Persistence & Usage Utilities
 // ----------------------------------------------------------------------------

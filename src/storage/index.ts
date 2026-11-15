@@ -44,6 +44,8 @@ export {
   acknowledgeFinding,
   exportEverything,
   importBackup,
+  importPackage,
+  type ImportPackageOptions,
   requestPersistentStorage,
   getStorageUsage,
   isAvailable,

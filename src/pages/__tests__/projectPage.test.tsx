@@ -118,12 +118,13 @@ describe('ProjectPage Component Tests', () => {
       expect(screen.getByText(/No checkpoints yet/i)).toBeInTheDocument();
     });
 
-    // Check placeholder on remaining future tabs (e.g. Export)
+    // Check Export tab renders real export content
     const exportTab = screen.getByRole('tab', { name: /Export/i });
     fireEvent.click(exportTab);
 
     await waitFor(() => {
-      expect(screen.getByText(/Coming in a later slice/i)).toBeInTheDocument();
+      expect(screen.getByText(/Export Handoff Package/i)).toBeInTheDocument();
+      expect(screen.getByText(/Destination preset/i)).toBeInTheDocument();
     });
   });
 });

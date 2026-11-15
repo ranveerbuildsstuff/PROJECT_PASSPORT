@@ -4,3 +4,4 @@ export * from './StorageBlockedPage';
 export * from './hooks';
 export * from './conversations';
 export * from './files';
+export * from './export/ExportTab';

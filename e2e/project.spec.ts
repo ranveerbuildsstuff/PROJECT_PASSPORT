@@ -68,7 +68,7 @@ test.describe('Project Page E2E Flows', () => {
     // Click Export tab
     await page.getByRole('tab', { name: 'Export' }).click();
     await expect(page).toHaveURL(new RegExp(`/project/${projectId}/export`));
-    await expect(page.getByRole('heading', { name: 'Export Tab' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Export Handoff Package' })).toBeVisible();
 
     // Direct loading of a tab URL
     await page.goto(`/project/${projectId}/passport`);

@@ -13,4 +13,5 @@ export * from './fileManifest';
 export * from './checkpoint';
 export * from './diff';
 export * from './hash';
+export * from './secretGate';
 

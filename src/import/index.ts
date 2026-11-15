@@ -6,3 +6,6 @@ export * from './claudeParser';
 export * from './exportDetector';
 export * from './parseExport';
 export * from './parser.worker';
+export * from './zipSafety';
+export * from './packageImport';
+

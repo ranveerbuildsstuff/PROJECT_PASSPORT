@@ -11,6 +11,7 @@ import {
   EmptyState,
   ProgressRing,
   useToast,
+  ImportPackageDialog,
 } from '../ui';
 import { useProjects, type ProjectCardData } from './hooks';
 import {
@@ -42,6 +43,8 @@ export function DashboardPage() {
 
   const [deleteTarget, setDeleteTarget] = useState<ProjectCardData | null>(null);
   const [isSubmittingDelete, setIsSubmittingDelete] = useState(false);
+
+  const [isImportOpen, setIsImportOpen] = useState(false);
 
   // Handlers
   const handleOpenCreate = () => {
@@ -191,13 +194,22 @@ export function DashboardPage() {
           </p>
         </div>
 
-        <Button
-          variant="primary"
-          onClick={handleOpenCreate}
-        >
-          <Plus className="w-4 h-4" aria-hidden="true" />
-          <span>New project</span>
-        </Button>
+        <div className="flex items-center gap-3">
+          <Button
+            variant="outline"
+            onClick={() => setIsImportOpen(true)}
+          >
+            <FolderGit2 className="w-4 h-4" aria-hidden="true" />
+            <span>Import package</span>
+          </Button>
+          <Button
+            variant="primary"
+            onClick={handleOpenCreate}
+          >
+            <Plus className="w-4 h-4" aria-hidden="true" />
+            <span>New project</span>
+          </Button>
+        </div>
       </div>
 
       {/* Main Content: Empty State or Project List */}
@@ -407,6 +419,17 @@ export function DashboardPage() {
           </div>
         </div>
       </Dialog>
+
+      {/* Package Import Dialog */}
+      <ImportPackageDialog
+        isOpen={isImportOpen}
+        onClose={() => setIsImportOpen(false)}
+        onImportSuccess={(newId) => {
+          setIsImportOpen(false);
+          reload();
+          navigate(`/project/${newId}/overview`);
+        }}
+      />
     </div>
   );
 }
