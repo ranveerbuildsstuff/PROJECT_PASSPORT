@@ -661,4 +661,38 @@ describe('parseChatGptExport', () => {
     const result = parseChatGptExport(input);
     expect(result[0]!.tokenEstimate).toBeGreaterThan(5);
   });
+
+  it('26. parses a 50,000-node ChatGPT chain without stack overflow', () => {
+    const N = 50_000;
+    const mapping: Record<string, ChatGptNode> = {};
+    for (let i = 0; i < N; i++) {
+      const id = `node-${i}`;
+      const parent = i === 0 ? null : `node-${i - 1}`;
+      const children = i === N - 1 ? [] : [`node-${i + 1}`];
+      mapping[id] = {
+        id,
+        parent,
+        children,
+        message: {
+          id: `msg-${i}`,
+          author: { role: i % 2 === 0 ? 'user' : 'assistant' },
+          content: { parts: [`Turn ${i}`] },
+        },
+      };
+    }
+    const input: ChatGptConversation[] = [
+      {
+        id: 'c-deep-50k',
+        title: '50k Deep Chain',
+        mapping,
+        current_node: `node-${N - 1}`,
+      },
+    ];
+
+    const result = parseChatGptExport(input);
+    expect(result).toHaveLength(1);
+    expect(result[0]!.turns).toHaveLength(N);
+    expect(result[0]!.turns[0]!.text).toBe('Turn 0');
+    expect(result[0]!.turns[N - 1]!.text).toBe(`Turn ${N - 1}`);
+  });
 });

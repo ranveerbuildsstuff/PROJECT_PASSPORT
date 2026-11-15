@@ -23,10 +23,17 @@ export interface WorkerState {
   detectedFormat?: 'chatgpt' | 'claude';
 }
 
+export type WorkerIncomingFile = {
+  name: string;
+  text?: string;
+  json?: unknown;
+  file?: File | Blob;
+};
+
 export type WorkerIncomingMessage =
   | {
       action: 'parse';
-      files: Array<{ name: string; text?: string; json?: unknown }>;
+      files: WorkerIncomingFile[];
       options?: ParseOptions;
     }
   | {
@@ -185,9 +192,29 @@ if (typeof self !== 'undefined' && typeof (self as unknown as { postMessage: unk
     parsedConversations: new Map(),
   };
 
-  self.onmessage = (event: MessageEvent<WorkerIncomingMessage>) => {
+  self.onmessage = async (event: MessageEvent<WorkerIncomingMessage>) => {
     try {
-      const { nextState, response } = handleWorkerMessage(currentState, event.data);
+      let message = event.data;
+      if (message && message.action === 'parse' && Array.isArray(message.files)) {
+        const resolvedFiles: WorkerIncomingFile[] = [];
+        for (const item of message.files) {
+          if (item.file) {
+            let text = '';
+            if (typeof item.file.text === 'function') {
+              text = await item.file.text();
+            }
+            resolvedFiles.push({ name: item.name, text });
+          } else {
+            resolvedFiles.push(item);
+          }
+        }
+        message = {
+          ...message,
+          files: resolvedFiles,
+        };
+      }
+
+      const { nextState, response } = handleWorkerMessage(currentState, message);
       currentState = nextState;
       self.postMessage(response);
     } catch (err: unknown) {

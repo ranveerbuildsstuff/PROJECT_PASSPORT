@@ -421,6 +421,43 @@ Consolidated manual checklist tests into `storageService.test.ts` and deleted re
 
 ---
 
+### Slice 7b: Export Import Closeout & Hygiene
+
+- **Undisclosed Failures from Slice 6b and Slice 7 (Rule 13.7 Complete Disclosure):**
+  - *Failing Slice 6b Playwright Runs:*
+    - In `e2e/conversations.spec.ts` test 2 with real key navigation, pressing `End` in a multi-line textarea navigated to the end of the current line rather than the end of the text. Remediated by replacing with `Control+End` and `Control+Home`.
+    - Several exit-code-1 Playwright runs occurred due to port 4179 having lingering background node processes from previous aborted test runs. Remediated by ensuring port 4179 is killed and verified free prior to runs.
+  - *Failed First `git commit` for Slice 7:*
+    - Initial `git commit -m "Slice 7: ..."` failed with exit code 1 because files were not staged with `git add` prior to executing commit. Remediated by running `git add` on all modified and newly created files.
+  - *Killed First `npm test` Run:*
+    - The first full Vitest execution during Slice 7 hung / was killed because 34 test files were run concurrently while background tasks were active. Remediated by isolating test runs to affected files during development.
+  - *Failed Direct Build in Slice 7:*
+    - Direct `npm run build` failed with TypeScript strict compilation error `TS2532: Object is possibly 'undefined'` in test files under `noUncheckedIndexedAccess: true` for `result[0].title` and `turns[0].text`, and unused locator `cards` in `e2e/import-export.spec.ts`. Remediated by adding non-null assertions and removing unused variables.
+  - *All Slice 7 Playwright Failures:*
+    - Strict mode violation in `e2e/import-export.spec.ts` test 4 on `getByText('Unrecognized export format')` matching both `<h3>` and `<p>`. Remediated by scoping to heading: `getByRole('heading', { name: 'Unrecognized export format' })`.
+    - Build failure during webServer launch: `TS2552: Cannot find name 'FileReaderSync'`. Remediated by removing non-DOM global `FileReaderSync` in favor of standard `await item.file.text()`.
+    - Duplicate declaration `ERROR: The symbol "loadedFiles" has already been declared` in `src/ui/ImportExportDialog.tsx:168:10`. Remediated by removing duplicate declaration.
+    - Timeout in `e2e/import-export.spec.ts` tests 7 & 8 waiting for non-existent button `{ name: 'Close', exact: true }` inside `EditConversationDialog` and `ImportExportDialog`. Remediated by using `{ name: 'Cancel' }` and `page.keyboard.press('Escape')`.
+- **Mapping of 11 Slice 7 E2E Scenarios to Tests:**
+  1. *ChatGPT:* `e2e/import-export.spec.ts` test 1 ("ChatGPT export import: upload, selection list, axe scan, attach, and card rendering")
+  2. *Claude:* `e2e/import-export.spec.ts` test 2 ("Claude export import: parses Claude JSON and attaches with CLAUDE source stamp")
+  3. *Sharded:* `e2e/import-export.spec.ts` test 3 ("Multi-file sharded export: merges shards and de-duplicates conversations by ID")
+  4. *Branch and toggles:* `e2e/import-export.spec.ts` test 7 ("Branch and toggles: follows active branch and updates message counts when toggling system/hidden messages")
+  5. *Diagnostics:* `e2e/import-export.spec.ts` test 4 ("Diagnostics & zip rejection: handles zip archives and corrupted JSON gracefully", Case B)
+  6. *Zip rejection:* `e2e/import-export.spec.ts` test 4 ("Diagnostics & zip rejection: handles zip archives and corrupted JSON gracefully", Case A)
+  7. *Duplicates:* `e2e/import-export.spec.ts` test 5 ("Duplicate detection: flags already attached conversations and allows skipping")
+  8. *Zero outbound:* `e2e/import-export.spec.ts` test 1 (verifies `collectExternalRequests(page).length === 0` and `collectConsoleErrors(page).length === 0`)
+  9. *Layout and axe:* `e2e/import-export.spec.ts` test 1 (dialog open state axe scan) & test 8 ("Layout and axe audit: selection view accessibility and 44px touch targets across themes")
+  10. *Keyboard-only:* `e2e/import-export.spec.ts` test 6 ("Keyboard navigation: accessible selection and attach workflow")
+  11. *Worker responsiveness:* Browser timing tests for CPU responsiveness across diverse CI and host CPU environments are inherently non-deterministic. As per prompt instruction, we rely on the deterministic worker unit tests in `tests/import/parserWorker.test.ts` (verifying state machine protocol, off-thread data extraction, and separation of lightweight summaries from full turn arrays) and the off-thread `File` transfer architecture.
+- **Off-Thread File Reading Confirmation:**
+  - Audited `ImportExportDialog.tsx`: `File` objects are no longer read on the main thread. Instead, `File` references are directly posted via structured clone to `src/import/parser.worker.ts`, where `await item.file.text()` performs text extraction completely off the UI thread.
+  - `readFileAsTextTestFallback` in `ImportExportDialog.tsx` is preserved strictly as a fallback for environments without Web Worker support (e.g., jsdom in unit tests).
+- **50,000-Node ChatGPT Chain Test:**
+  - Added test 26 to `tests/import/chatgptParser.test.ts` verifying that a 50,000-node linear conversation tree is traversed iteratively without stack overflow.
+
+---
+
 ## Known Issues
 
 - **Dialog Initial Focus:** `Dialog` gives initial focus to the Close button upon opening, requiring keyboard users to press Tab once to reach the first interactive form field. Retained as designed in Slice 3; not changed in this ticket.

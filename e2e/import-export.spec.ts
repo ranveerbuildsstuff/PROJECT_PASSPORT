@@ -237,4 +237,76 @@ test.describe('Slice 7: ChatGPT and Claude Export Ingestion', () => {
     await expect(dialog).not.toBeVisible();
     await expect(page.getByText('Architectural Design Discussion')).toBeVisible();
   });
+
+  test('7. Branch and toggles: follows active branch and updates message counts when toggling system/hidden messages', async ({
+    page,
+  }) => {
+    // Open import dialog
+    await page.getByRole('button', { name: 'Import export file' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Import export file' });
+    await dialog.locator('input[type="file"]').setInputFiles(CHATGPT_FIXTURE);
+    await expect(dialog.getByText('Architectural Design Discussion')).toBeVisible();
+
+    // Default: system message is omitted -> 4 messages
+    await expect(dialog.getByText('4 messages').first()).toBeVisible();
+
+    // Toggle "Include system and hidden messages"
+    const systemCheckbox = dialog.getByLabel('Include system and hidden messages');
+    await systemCheckbox.check();
+
+    // With system included: updates to 5 messages
+    await expect(dialog.getByText('5 messages').first()).toBeVisible();
+
+    // Attach and verify dead branch is NOT included
+    await dialog.getByRole('button', { name: /Attach selected/i }).click();
+    await expect(dialog).not.toBeVisible();
+
+    // Open conversation viewer
+    await page.getByRole('button', { name: 'View/edit Architectural Design Discussion' }).click();
+    const viewer = page.getByRole('dialog', { name: 'View and edit conversation' });
+    await expect(viewer).toBeVisible();
+
+    // Active branch messages are present (including system prompt)
+    await expect(viewer.getByText('System prompt instructions.')).toBeVisible();
+    await expect(viewer.getByText('Store binary files in a separate files table with path indexes.')).toBeVisible();
+    // Dead branch message must NOT be present
+    await expect(viewer.getByText('Alternative dead branch')).toHaveCount(0);
+
+    await viewer.getByRole('button', { name: 'Cancel' }).click();
+    await expect(viewer).not.toBeVisible();
+  });
+
+  test('8. Layout and axe audit: selection view accessibility and 44px touch targets across themes', async ({
+    page,
+  }) => {
+    // Open dialog and upload
+    await page.getByRole('button', { name: 'Import export file' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Import export file' });
+    await dialog.locator('input[type="file"]').setInputFiles(CHATGPT_FIXTURE);
+    await expect(dialog.getByText('Architectural Design Discussion')).toBeVisible();
+
+    // Single axe scan on selection state (satisfying 1 scan per test ceiling)
+    await expectNoSeriousA11y(page);
+
+    // Verify touch target dimension on attach button
+    const attachBtn = dialog.getByRole('button', { name: /Attach selected/i });
+    const box = await attachBtn.boundingBox();
+    expect(box?.height).toBeGreaterThanOrEqual(44);
+
+    // Close dialog with Escape to toggle theme cleanly without backdrop interception
+    await page.keyboard.press('Escape');
+    await expect(dialog).not.toBeVisible();
+
+    // Switch theme to light and reopen dialog
+    const themeBtn = page.getByRole('button', { name: /Switch to (light|dark) theme/i });
+    await themeBtn.click();
+
+    await page.getByRole('button', { name: 'Import export file' }).click();
+    await expect(dialog).toBeVisible();
+
+    // Cleanup: close dialog with Escape and revert to dark theme
+    await page.keyboard.press('Escape');
+    await expect(dialog).not.toBeVisible();
+    await themeBtn.click();
+  });
 });

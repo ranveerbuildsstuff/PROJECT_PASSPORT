@@ -41,7 +41,11 @@ export interface ImportExportDialogProps {
 
 const MEMORY_WARNING_THRESHOLD_BYTES = 300 * 1024 * 1024; // 300 MB
 
-async function readFileAsText(file: File): Promise<string> {
+/**
+ * Test-only fallback for reading File in environments without Web Worker support (e.g. jsdom).
+ * In production browsers, the File is transferred to and read inside parser.worker.ts.
+ */
+async function readFileAsTextTestFallback(file: File): Promise<string> {
   if (typeof file.text === 'function') {
     try {
       return await file.text();
@@ -60,7 +64,8 @@ async function readFileAsText(file: File): Promise<string> {
 interface StagedFile {
   name: string;
   size: number;
-  text: string;
+  file?: File;
+  text?: string;
 }
 
 export function ImportExportDialog({
@@ -139,7 +144,6 @@ export function ImportExportDialog({
     if (!fileList || fileList.length === 0) return;
 
     let totalSize = 0;
-    const loadedFiles: StagedFile[] = [];
     const filesArray = Array.from(fileList);
 
     // Check for zip files immediately by extension
@@ -159,40 +163,31 @@ export function ImportExportDialog({
 
     setTotalSizeBytes(totalSize);
 
-    // Read file contents as text
-    try {
-      for (const file of filesArray) {
-        const text = await readFileAsText(file);
-        loadedFiles.push({
-          name: file.name,
-          size: file.size,
-          text,
-        });
-      }
-    } catch {
-      setStep('error');
-      setErrorMessage('Could not read the selected file.');
-      return;
-    }
+    // Staged files hold File references directly; no main-thread byte reading!
+    const loadedFiles: StagedFile[] = filesArray.map((file) => ({
+      name: file.name,
+      size: file.size,
+      file,
+    }));
 
     setStagedFiles(loadedFiles);
 
     if (totalSize > MEMORY_WARNING_THRESHOLD_BYTES) {
       setStep('warning_300mb');
     } else {
-      executeParse(loadedFiles, includeSystemHidden);
+      void executeParse(loadedFiles, includeSystemHidden);
     }
   };
 
-  // Launch parsing via Web Worker (or in-memory fallback)
-  const executeParse = (files: StagedFile[], includeSystem: boolean) => {
+  // Launch parsing via Web Worker (or test-only fallback)
+  const executeParse = async (files: StagedFile[], includeSystem: boolean) => {
     setStep('loading');
     setErrorMessage(null);
     setErrorDetails(null);
 
     const message: WorkerIncomingMessage = {
       action: 'parse',
-      files: files.map((f) => ({ name: f.name, text: f.text })),
+      files: files.map((f) => ({ name: f.name, file: f.file, text: f.text })),
       options: { includeSystemHidden: includeSystem },
     };
 
@@ -235,8 +230,30 @@ export function ImportExportDialog({
       }
     }
 
-    // Fallback if Worker is unavailable or throws
-    const { nextState, response } = handleWorkerMessage(fallbackStateRef.current, message);
+    // Fallback if Worker is unavailable or throws (test-only environments, e.g. jsdom)
+    const fallbackFiles: Array<{ name: string; text?: string; json?: unknown }> = [];
+    try {
+      for (const f of files) {
+        if (f.text) {
+          fallbackFiles.push({ name: f.name, text: f.text });
+        } else if (f.file) {
+          const text = await readFileAsTextTestFallback(f.file);
+          fallbackFiles.push({ name: f.name, text });
+        }
+      }
+    } catch {
+      setStep('error');
+      setErrorMessage('Could not read the selected file.');
+      return;
+    }
+
+    const fallbackMessage: WorkerIncomingMessage = {
+      action: 'parse',
+      files: fallbackFiles,
+      options: { includeSystemHidden: includeSystem },
+    };
+
+    const { nextState, response } = handleWorkerMessage(fallbackStateRef.current, fallbackMessage);
     fallbackStateRef.current = nextState;
 
     if (response.type === 'parse_result') {
@@ -256,7 +273,7 @@ export function ImportExportDialog({
   const handleToggleSystem = (checked: boolean) => {
     setIncludeSystemHidden(checked);
     if (stagedFiles.length > 0) {
-      executeParse(stagedFiles, checked);
+      void executeParse(stagedFiles, checked);
     }
   };
 
