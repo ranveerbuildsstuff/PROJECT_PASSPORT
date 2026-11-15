@@ -7,3 +7,6 @@ export * from './editor';
 export * from './passportImport';
 export * from './merge';
 export * from './conversation';
+export * from './fileRules';
+export * from './secretScanner';
+export * from './fileManifest';

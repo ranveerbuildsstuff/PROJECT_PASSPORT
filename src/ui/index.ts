@@ -24,3 +24,4 @@ export * from './PasteConversationDialog';
 export * from './ReconstructPromptDialog';
 export * from './EditConversationDialog';
 export * from './ImportExportDialog';
+export * from './AddFilesDialog';

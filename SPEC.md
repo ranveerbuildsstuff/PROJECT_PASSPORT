@@ -201,11 +201,16 @@ Readiness measures handoff preparedness across 7 equally-weighted checks:
 - **File Sources:**
   Accepts a project `.zip` archive, multiple selected files, or a folder upload (via directory picker).
 - **Default Ignore List (Editable by User):**
-  `.git`, `node_modules`, `dist`, `build`, `.next`, `.venv`, `__pycache__`, lockfiles (`package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`, etc.), binary formats, media/images, and any individual file exceeding 500 KB.
+  `.git`, `node_modules`, `dist`, `build`, `.next`, `.venv`, `__pycache__`, lockfiles (`package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`, etc.), binary formats, media/images, and any individual file exceeding 500 KB. The ignore list is editable during an import session (not persisted in the passport schema).
 - **Hard-Blocked Files (Security Invariant):**
   The following files are **never** read, uploaded, or stored in IndexedDB under any circumstance:
   `.env*`, `*.pem`, `*.key`, `id_rsa*`, and service-account style JSON files (`*service-account*.json`, `*credentials*.json`).
   If encountered, a plain-language explanation is displayed immediately.
+- **Zip Archive Safety Limits:**
+  - Maximum 500 entries per archive.
+  - Maximum 20 MB total uncompressed size.
+  - Pre-check declared entry sizes vs actual decompress sizes.
+  - Strict path traversal rejection (`..`, absolute paths, symlinks).
 - **Secret Scanner (Deterministic Pure Function):**
   Scans all included files for sensitive patterns:
   - AWS Access Key IDs (`AKIA...`)
@@ -218,9 +223,9 @@ Readiness measures handoff preparedness across 7 equally-weighted checks:
 - **Scanner Findings & Actions:**
   - Displays file path, line number, pattern category, and a **MASKED** snippet only (e.g., `sk-ant...9xQ2`).
   - Available user actions per finding:
-    1. **Redact:** Scrub secret from stored copy.
-    2. **Exclude File:** Remove file from handoff package.
-    3. **Mark False Positive:** Retain with user acknowledgment.
+    1. **Redact:** Scrub secret from stored copy using idempotent `[REDACTED]` replacement prior to persistence.
+    2. **Exclude File:** Remove file from handoff package (manifest row retained with `included: false`, storing no content record in storage).
+    3. **Mark False Positive:** Retain file in storage with user acknowledgment (`findingKey` recorded on `FileRecord.acknowledgedFindings`).
 
 ## 10. Checkpoints
 

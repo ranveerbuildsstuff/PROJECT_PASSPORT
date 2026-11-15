@@ -43,6 +43,7 @@ export interface FileRecord {
   mime: string;
   content: string | Uint8Array;
   sizeBytes: number;
+  acknowledgedFindings?: string[];
 }
 
 export class PassportDatabase extends Dexie {

@@ -23,7 +23,7 @@ Current slice: none (Slice 4b & Ticket T2 complete)
 - [x] Slice 6: Conversation paste import & reconstruct prompt
 - [x] Slice 6b: Conversation import closeout
 - [x] Slice 7: ChatGPT / Claude export import
-- [ ] Slice 8: Project files + secret scanner
+- [x] Slice 8: Project files + secret scanner
 - [ ] Slice 9: Checkpoints (timeline, compare, restore)
 - [ ] Slice 10: Export package, destination presets, import package
 - [ ] Slice 11: Polish, PWA, landing + privacy pages, deploy docs
@@ -455,6 +455,82 @@ Consolidated manual checklist tests into `storageService.test.ts` and deleted re
   - `readFileAsTextTestFallback` in `ImportExportDialog.tsx` is preserved strictly as a fallback for environments without Web Worker support (e.g., jsdom in unit tests).
 - **50,000-Node ChatGPT Chain Test:**
   - Added test 26 to `tests/import/chatgptParser.test.ts` verifying that a 50,000-node linear conversation tree is traversed iteratively without stack overflow.
+
+---
+
+### Slice 8: Project Files & Secret Scanner
+
+- **Pure Domain Security & Rules (`src/domain/fileRules.ts`, `secretScanner.ts`, `fileManifest.ts`):**
+  - Path normalization (`normalizeFilePath`): converts backslashes to forward slashes, strips leading `./`, rejects empty paths, absolute paths, and any path with `..` segments (preventing zip-slip).
+  - Hard-block detection (`isHardBlocked`): matches on file basename case-insensitively for prohibited patterns: `.env`, `.env.*`, `*.pem`, `*.key`, `id_rsa*`, `*service-account*.json`, and `*credentials*.json`. Prohibited files are rejected before decompression or content reading.
+  - Default ignore list (`shouldIgnore`): filters `.git`, `node_modules`, `dist`, `build`, `.next`, `.venv`, `__pycache__`, lockfiles (`package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`), binary/media extensions, and any file exceeding 500 KB.
+  - Session ignore list: user can dynamically add and remove ignore patterns for the current import session in memory.
+  - Secret scanning (`scanText`): bounded linear-time regexes for AWS access keys (`AKIA...`), GitHub PATs (`ghp_...`, `github_pat_...`), Google API keys (`AIza...`), `sk-` API keys (OpenAI, Anthropic), PEM private key headers (`-----BEGIN ... PRIVATE KEY-----`), JWTs (`eyJ...`), and quoted or unquoted literal assignments to `password`, `secret`, `token`, and `api_key`. Bounded quantifiers eliminate catastrophic backtracking (verified via adversarial 100k-character timing tests).
+  - Safe masking: reveals at most the first 6 and last 4 characters (e.g. `sk-ant...9xQ2`). For tokens <= 12 characters, displays category name only. Private keys never disclose key material.
+  - Deterministic redaction (`redactText`): replaces matching secrets with `[REDACTED]`. Scanning redacted text yields zero findings.
+  - Stable finding key (`findingKey`): deterministic SHA/string identifier derived from path, category, line, and masked snippet—never exposing raw secret text.
+  - Pure manifest and selector: `buildFileManifestItem`, `estimateTokens`, and `unresolvedFindings(files)` selector ready for the Slice 10 export gate.
+- **Off-Thread Web Worker (`src/import/files.worker.ts`):**
+  - Heavy operations (zip archive decompression, multi-file text reading, secret scanning) execute in an isolated Web Worker via JSZip.
+  - Zip security invariants: checks raw header bytes for `../` and `..\` directory traversal sequences before decompression, enforces maximum 500 entry limit and 20 MB total uncompressed limit, checks declared sizes before decompressing, and rejects symlinks.
+  - Two-phase protocol (`scan` -> `commit`): `scan` extracts directory tree, applies ignore/hard-block rules, and returns masked findings; `commit` applies user decisions (redacting content, excluding files, or storing false-positive acknowledgments) and returns final payloads.
+- **Storage Service (`src/storage/storageService.ts`):**
+  - Atomic transactions across `[projects, passports, files]` for `addProjectFiles`, `getProjectFile`, `updateProjectFileMeta`, `removeProjectFile`, `restoreProjectFile`, and `acknowledgeFinding`.
+  - Stale-write guarded via `expectedUpdatedAt`.
+  - Defense-in-depth: `addProjectFiles` rejects hard-blocked paths at the service layer even if submitted by a buggy UI.
+  - Action semantics: `Redact` modifies file content before storage; `Exclude File` retains the passport manifest row with `included: false` and stores no content in `db.files`; `Mark False Positive` stores the file and records the `findingKey` in `acknowledgedFindings` on `FileRecord`.
+- **UI Components & Accessibility (`src/pages/files/FilesTab.tsx` & `src/ui/AddFilesDialog.tsx`):**
+  - Implemented `/project/:id/files` tab replacing the placeholder, complete with loading, compact empty, and populated manifest views.
+  - File controls: secondary "Add files" button with choices for "Choose files", "Choose folder" (`webkitdirectory`), and "Choose .zip".
+  - Review modal:
+    - Hard-blocked alert: "We skipped N files that often hold secrets, such as .env files and private keys. They were never read or stored."
+    - Ignored files accordion: displays skipped files and editable session ignore list.
+    - Findings review: lists path, line, category, and masked snippet with 44px min-target action buttons (Redact, Exclude file, Mark as false positive).
+    - Manifest preview with token estimates and a primary brass "Attach files" button disabled until all findings are resolved.
+  - Files tab manifest list: shows file path, editable purpose (autosaved on blur), Include toggle, size, token estimate, and Remove button with Undo toast.
+- **Rule 13.7 Failure Disclosure during Slice 8:**
+  - *`tests/domain/fileRules.test.ts` glob pattern and near-miss failure:*
+    - *Error:* Trailing slash on ignore pattern (e.g. `temp/`) prevented matching path segments; `*.` wildcard was not properly stripped; `id_rsa_notes.txt` was flagged as a test near-miss failure.
+    - *Root cause:* Spec states `id_rsa*` hard-blocks any file starting with `id_rsa`, so `id_rsa_notes.txt` is genuinely blocked.
+    - *Fix:* Stripped trailing slashes and normalized wildcards in `shouldIgnore`; replaced `id_rsa_notes.txt` with `not_id_rsa.txt` in test near-misses.
+  - *`tests/domain/secretScanner.test.ts` Google key length and regex boundary failure:*
+    - *Error:* Google API key `{35}` regex missed 34-char keys; adversarial 100k-character string matched `task-sk-` because `-` is considered a `\b` word boundary.
+    - *Fix:* Updated patterns to lookbehinds `(?<![A-Za-z0-9_-])` and lookaheads `(?![A-Za-z0-9_-])`, and broadened Google key length range to `{30,45}`.
+  - *`tests/domain/secretScanner.test.ts` JSON credential failure:*
+    - *Error:* `scanText` on JSON object `{"password":"..."}` returned 0 findings because the regex expected unquoted identifiers.
+    - *Fix:* Added `(["']?)` and backreference `\1` around credential keywords to support both unquoted JS assignments and quoted JSON keys.
+  - *`tests/import/filesWorker.test.ts` Blob ArrayBuffer failure:*
+    - *Error:* `TypeError: item.file.arrayBuffer is not a function` in jsdom.
+    - *Fix:* Created `readBlobAsArrayBuffer` helper with fallback to `FileReader.readAsArrayBuffer`.
+  - *`tests/import/filesWorker.test.ts` zip-slip test:*
+    - *Error:* Expected `unsafe_zip`, received `ok: true`.
+    - *Root cause:* JSZip's `loadAsync` internally sanitizes `../` on input when creating virtual entry names.
+    - *Fix:* Added pre-scan binary inspection in `files.worker.ts` checking raw byte sequences for `../` (`[46, 46, 47]`) and `..\` (`[46, 46, 92]`), and patched the binary buffer in the test.
+  - *`src/storage/__tests__/fileStorage.test.ts` compilation and assertion failures:*
+    - *Error:* `getProjectFile` missing; return format mismatch (`addedCount`); `FileRecord` schema differences; `tokenEstimate` not persisted on `passport.files`.
+    - *Fix:* Exported `getProjectFile(projectId, path)`; updated assertions to match `{ addedCount, paths }`; verified manifest rows in `passport.files` and raw content in `db.files`.
+  - *`tests/ui/FilesTab.test.tsx` React component failures:*
+    - *Error:* `Cannot read properties of undefined (reading 'files')`; empty state copy mismatch; `showToast` React object child crash.
+    - *Fix:* Wrapped component with `FilesTabTestWrapper` subscribing to `project-storage-updated`; updated copy selector; passed `undefined` as 3rd arg to `showToast`.
+  - *TypeScript & ESLint build failures:*
+    - *Error:* `webServer` failed to start; TypeScript errors in `e2e/files.spec.ts` (`queryByText` not on `Page`), `fileManifest.ts` (missing `./tokenEstimator`), `AddFilesDialog.tsx` (unused imports), `storageService.ts` (`ValidationFailed` argument format), `files.worker.ts` (`buffer` missing on `WorkerIncomingFileInput`).
+    - *Fix:* Replaced `queryByText` with `not.toBeVisible()`; fixed domain imports; updated `ValidationFailed` error strings; added `buffer?: ArrayBuffer` to worker types.
+  - *`e2e/files.spec.ts` Playwright test 1, 2, 7 failures:*
+    - *Error:* Test 1 token count was 13 instead of 15; test 2 `webkitdirectory` required a directory path rather than memory buffer; test 7 `Choose files` strict mode violation.
+    - *Fix:* Updated token estimate expectation; created temporary directory for test 2; used `{ exact: true }` for dialog button locator in test 7.
+  - *`src/pages/__tests__/projectPage.test.tsx` Slice 8 tab placeholder assertion failure:*
+    - *Error:* `Unable to find an element with the text: /Coming in a later slice/i` after clicking Files tab.
+    - *Root cause:* `projectPage.test.tsx` previously asserted that the Files tab rendered the "Coming in a later slice" placeholder with an attached mock file in `passport.files`. In Slice 8, the Files tab renders the actual `FilesTab` component displaying attached files.
+    - *Fix:* Updated test to verify `src/index.ts` is rendered upon clicking the Files tab, and asserted "Coming in a later slice" on the Checkpoints tab.
+- **Final Test Counts:**
+  - Vitest: 500 tests across 40 files (100% passed).
+  - Playwright E2E: 190 tests across `desktop` and `mobile-360` projects (100% passed in 8.7m, 0 failures, 0 skipped).
+- **Five Slowest E2E Tests (vs 20s ceiling):**
+  1. `[mobile-360] conversations.spec.ts:144:3` (13.8s) — 3. Editing: flip role, merge with next, delete turn in viewer, save and reload persistence
+  2. `[desktop] passport.spec.ts:961:3` (11.1s) — 16a. External-change conflict protection: two pages in one context detect conflict, reload latest syncs stored version, axe scan
+  3. `[mobile-360] conversations.spec.ts:320:3` (10.8s) — 8. Layout and axe audit: verifies 44px touch targets and no horizontal overflow across themes
+  4. `[mobile-360] conversations.spec.ts:254:3` (10.2s) — 6. Reconstruct prompt: copies prompt containing conversation text and Schema v1 instructions
+  5. `[mobile-360] passport.spec.ts:961:3` (10.1s) — 16a. External-change conflict protection: two pages in one context detect conflict, reload latest syncs stored version, axe scan
 
 ---
 

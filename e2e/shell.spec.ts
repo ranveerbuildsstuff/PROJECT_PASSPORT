@@ -245,7 +245,7 @@ test.describe('App Shell, Accessibility & Visuals', () => {
     await seedProjects(page, 1);
     await page.getByRole('link', { name: /Project Alpha/i }).click();
     await page.getByRole('tab', { name: 'Files' }).click();
-    await expect(page.getByRole('heading', { name: 'Files Tab' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 2, name: 'Files' })).toBeVisible();
     await expectNoSeriousA11y(page);
   });
 
@@ -334,7 +334,7 @@ test.describe('App Shell, Accessibility & Visuals', () => {
     await seedProjects(page, 1);
     await page.getByRole('link', { name: /Project Alpha/i }).click();
     await page.getByRole('tab', { name: 'Files' }).click();
-    await expect(page.getByRole('heading', { name: 'Files Tab' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 2, name: 'Files' })).toBeVisible();
     await expectNoSeriousA11y(page);
   });
 

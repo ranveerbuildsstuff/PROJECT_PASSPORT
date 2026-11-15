@@ -302,16 +302,16 @@
 
 ## Slice 8: Project Files & Secret Scanner
 
-- [ ] Implement file import handling: single/multi-file picker, folder directory upload, and zip archive upload.
-- [ ] Implement user-editable default ignore list (`.git`, `node_modules`, `dist`, lockfiles, binaries, media, files > 500 KB).
-- [ ] Enforce security hard-block on prohibited filenames (`.env*`, `*.pem`, `*.key`, `id_rsa*`, service accounts).
-- [ ] In `src/domain/secretScanner.ts`, implement deterministic pure scanner for AWS keys, GitHub tokens, Google API keys, sk- keys, private key blocks, JWTs, and credential assignments.
-- [ ] Implement finding masking (e.g. `sk-ant...9xQ2`) ensuring raw secrets are never displayed or logged.
-- [ ] Implement Secret Review UI allowing user actions per finding: Redact, Exclude File, or Mark False Positive.
-- [ ] Implement file manifest view displaying included files, purpose descriptions, and token estimates.
-- [ ] **Tests added:** Unit tests for ignore filters, hard-block detection, secret pattern matching, masking, and redaction logic.
-- [ ] **Docs updated:** Document secret scanner regexes and hard-blocked patterns in `PROGRESS.md`.
-- [ ] **Commit message:** `Slice 8: project files and secret scanner`
+- [x] Implement file import handling: single/multi-file picker, folder directory upload, and zip archive upload.
+- [x] Implement user-editable default ignore list (`.git`, `node_modules`, `dist`, lockfiles, binaries, media, files > 500 KB).
+- [x] Enforce security hard-block on prohibited filenames (`.env*`, `*.pem`, `*.key`, `id_rsa*`, service accounts).
+- [x] In `src/domain/secretScanner.ts`, implement deterministic pure scanner for AWS keys, GitHub tokens, Google API keys, sk- keys, private key blocks, JWTs, and credential assignments.
+- [x] Implement finding masking (e.g. `sk-ant...9xQ2`) ensuring raw secrets are never displayed or logged.
+- [x] Implement Secret Review UI allowing user actions per finding: Redact, Exclude File, or Mark False Positive.
+- [x] Implement file manifest view displaying included files, purpose descriptions, and token estimates.
+- [x] **Tests added:** Unit tests for ignore filters, hard-block detection, secret pattern matching, masking, and redaction logic.
+- [x] **Docs updated:** Document secret scanner regexes and hard-blocked patterns in `PROGRESS.md`.
+- [x] **Commit message:** `Slice 8: project files and secret scanner`
 
 **Done when:**
 - `npm run typecheck`, `npm run lint`, `npm test`, and `npm run build` pass.

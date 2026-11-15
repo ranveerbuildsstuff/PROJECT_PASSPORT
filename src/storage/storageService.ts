@@ -25,6 +25,7 @@ import {
   type ConversationRef,
   type ConversationSource,
   conversationTokenEstimate,
+  isHardBlocked,
 } from '../domain';
 import {
   uint8ArrayToBase64,
@@ -997,10 +998,371 @@ export async function getFile(id: string): Promise<FileRecord | null> {
   }
 }
 
+/**
+ * Retrieves a file record by project ID and relative path.
+ */
+export async function getProjectFile(projectId: string, path: string): Promise<FileRecord | null> {
+  await ensureAvailable();
+  try {
+    const fileId = `${projectId}:${path}`;
+    const file = await db.files.get(fileId);
+    return file ?? null;
+  } catch (err) {
+    mapStorageError(err);
+  }
+}
+
 export async function removeFile(id: string): Promise<void> {
   await ensureAvailable();
   try {
     await db.files.delete(id);
+  } catch (err) {
+    mapStorageError(err);
+  }
+}
+
+// ----------------------------------------------------------------------------
+// Project Files Storage Operations (Slice 8)
+// ----------------------------------------------------------------------------
+
+export interface AddProjectFileInput {
+  path: string;
+  content?: string | Uint8Array;
+  sizeBytes: number;
+  purpose?: string;
+  included?: boolean;
+  acknowledgedFindings?: string[];
+}
+
+export interface AddProjectFilesResult {
+  addedCount: number;
+  paths: string[];
+}
+
+/**
+ * Atomically stores reviewed project files and keeps passport.files in sync.
+ *
+ * Invariants:
+ * - Defense in depth: Rejects any hard-blocked path (.env, keys) at the service layer.
+ * - Single atomic transaction on [db.projects, db.passports, db.files].
+ * - Full rollback on failure.
+ * - Stale-write guard protected.
+ * - Excluded files (included: false) store no content in db.files, only manifest entry.
+ * - Dispatches 'project-storage-updated'.
+ */
+export async function addProjectFiles(
+  projectId: string,
+  items: AddProjectFileInput[],
+  options?: { expectedUpdatedAt?: string }
+): Promise<AddProjectFilesResult> {
+  await ensureAvailable();
+
+  // Defense in depth: reject any hard-blocked paths before touching DB
+  for (const item of items) {
+    if (isHardBlocked(item.path)) {
+      throw new ValidationFailed(
+        `File "${item.path}" is hard-blocked for security.`,
+        [`File "${item.path}" is hard-blocked for security.`],
+        'Hard-blocked files (.env, keys) cannot be stored in Project Passport.'
+      );
+    }
+  }
+
+  const addedPaths: string[] = [];
+
+  try {
+    await db.transaction('rw', [db.projects, db.passports, db.files], async () => {
+      const project = await db.projects.get(projectId);
+      if (!project) {
+        throw new ProjectNotFound(
+          `Project "${projectId}" was not found.`,
+          'Go back to your projects and try again.'
+        );
+      }
+
+      if (options?.expectedUpdatedAt && project.updatedAt !== options.expectedUpdatedAt) {
+        throw new StaleWrite();
+      }
+
+      const passportRecord = await db.passports.get(projectId);
+      if (!passportRecord) {
+        throw new ProjectNotFound(
+          `Passport for project "${projectId}" was not found.`,
+          'Go back to your projects and try again.'
+        );
+      }
+
+      const now = new Date().toISOString();
+      const passport = passportRecord.passport;
+      const currentFiles = [...(passport.files || [])];
+
+      for (const item of items) {
+        const fileId = `${projectId}:${item.path}`;
+
+        // If included !== false and content is provided, store in files table
+        if (item.included !== false && item.content !== undefined) {
+          const fileRecord: FileRecord = {
+            id: fileId,
+            projectId,
+            path: item.path,
+            mime: 'text/plain',
+            content: item.content,
+            sizeBytes: item.sizeBytes,
+            acknowledgedFindings: item.acknowledgedFindings ?? [],
+          };
+          await db.files.put(fileRecord);
+        } else {
+          // If excluded, delete any prior content from files table
+          await db.files.delete(fileId);
+        }
+
+        // Update passport.files manifest row
+        const existingIdx = currentFiles.findIndex((f) => f.path === item.path);
+        const manifestRow = {
+          path: item.path,
+          purpose: item.purpose ?? (existingIdx >= 0 ? currentFiles[existingIdx]!.purpose : ''),
+          included: item.included ?? true,
+          sizeBytes: item.sizeBytes,
+        };
+
+        if (existingIdx >= 0) {
+          currentFiles[existingIdx] = manifestRow;
+        } else {
+          currentFiles.push(manifestRow);
+        }
+
+        addedPaths.push(item.path);
+      }
+
+      passport.files = currentFiles;
+      passport.project.updatedAt = now;
+      project.updatedAt = now;
+
+      await db.passports.put({ projectId, passport });
+      await db.projects.put(project);
+    });
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('project-storage-updated'));
+    }
+
+    return {
+      addedCount: addedPaths.length,
+      paths: addedPaths,
+    };
+  } catch (err) {
+    mapStorageError(err);
+  }
+}
+
+/**
+ * Updates file purpose and included status in passport.files manifest.
+ */
+export async function updateProjectFileMeta(
+  projectId: string,
+  path: string,
+  updates: { purpose?: string; included?: boolean },
+  options?: { expectedUpdatedAt?: string }
+): Promise<void> {
+  await ensureAvailable();
+
+  try {
+    await db.transaction('rw', [db.projects, db.passports, db.files], async () => {
+      const project = await db.projects.get(projectId);
+      if (!project) throw new ProjectNotFound(`Project "${projectId}" not found.`);
+
+      if (options?.expectedUpdatedAt && project.updatedAt !== options.expectedUpdatedAt) {
+        throw new StaleWrite();
+      }
+
+      const passportRecord = await db.passports.get(projectId);
+      if (!passportRecord) throw new ProjectNotFound(`Passport for "${projectId}" not found.`);
+
+      const passport = passportRecord.passport;
+      const fileEntry = (passport.files || []).find((f) => f.path === path);
+      if (!fileEntry) {
+        throw new ValidationFailed(`File "${path}" not found in project manifest.`);
+      }
+
+      if (updates.purpose !== undefined) {
+        fileEntry.purpose = updates.purpose;
+      }
+      if (updates.included !== undefined) {
+        fileEntry.included = updates.included;
+      }
+
+      const now = new Date().toISOString();
+      passport.project.updatedAt = now;
+      project.updatedAt = now;
+
+      await db.passports.put({ projectId, passport });
+      await db.projects.put(project);
+    });
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('project-storage-updated'));
+    }
+  } catch (err) {
+    mapStorageError(err);
+  }
+}
+
+export interface RemovedFilePayload {
+  manifestRow: {
+    path: string;
+    purpose: string;
+    included: boolean;
+    sizeBytes: number;
+  };
+  fileRecord?: FileRecord;
+}
+
+/**
+ * Removes a file from passport.files manifest and deletes stored content from db.files.
+ * Returns payload for undo support.
+ */
+export async function removeProjectFile(
+  projectId: string,
+  path: string,
+  options?: { expectedUpdatedAt?: string }
+): Promise<RemovedFilePayload> {
+  await ensureAvailable();
+  let payload: RemovedFilePayload | null = null;
+
+  try {
+    await db.transaction('rw', [db.projects, db.passports, db.files], async () => {
+      const project = await db.projects.get(projectId);
+      if (!project) throw new ProjectNotFound(`Project "${projectId}" not found.`);
+
+      if (options?.expectedUpdatedAt && project.updatedAt !== options.expectedUpdatedAt) {
+        throw new StaleWrite();
+      }
+
+      const passportRecord = await db.passports.get(projectId);
+      if (!passportRecord) throw new ProjectNotFound(`Passport for "${projectId}" not found.`);
+
+      const passport = passportRecord.passport;
+      const currentFiles = passport.files || [];
+      const idx = currentFiles.findIndex((f) => f.path === path);
+      if (idx === -1) {
+        throw new ValidationFailed(`File "${path}" not found in project manifest.`);
+      }
+
+      const manifestRow = currentFiles[idx]!;
+      currentFiles.splice(idx, 1);
+
+      const fileId = `${projectId}:${path}`;
+      const fileRecord = await db.files.get(fileId);
+      if (fileRecord) {
+        await db.files.delete(fileId);
+      }
+
+      const now = new Date().toISOString();
+      passport.files = currentFiles;
+      passport.project.updatedAt = now;
+      project.updatedAt = now;
+
+      await db.passports.put({ projectId, passport });
+      await db.projects.put(project);
+
+      payload = {
+        manifestRow,
+        fileRecord,
+      };
+    });
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('project-storage-updated'));
+    }
+
+    return payload!;
+  } catch (err) {
+    mapStorageError(err);
+  }
+}
+
+/**
+ * Restores a removed file for undo functionality.
+ */
+export async function restoreProjectFile(
+  projectId: string,
+  data: RemovedFilePayload,
+  options?: { expectedUpdatedAt?: string }
+): Promise<void> {
+  await ensureAvailable();
+
+  try {
+    await db.transaction('rw', [db.projects, db.passports, db.files], async () => {
+      const project = await db.projects.get(projectId);
+      if (!project) throw new ProjectNotFound(`Project "${projectId}" not found.`);
+
+      if (options?.expectedUpdatedAt && project.updatedAt !== options.expectedUpdatedAt) {
+        throw new StaleWrite();
+      }
+
+      const passportRecord = await db.passports.get(projectId);
+      if (!passportRecord) throw new ProjectNotFound(`Passport for "${projectId}" not found.`);
+
+      const passport = passportRecord.passport;
+      passport.files = [...(passport.files || []), data.manifestRow];
+
+      if (data.fileRecord) {
+        await db.files.put(data.fileRecord);
+      }
+
+      const now = new Date().toISOString();
+      passport.project.updatedAt = now;
+      project.updatedAt = now;
+
+      await db.passports.put({ projectId, passport });
+      await db.projects.put(project);
+    });
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('project-storage-updated'));
+    }
+  } catch (err) {
+    mapStorageError(err);
+  }
+}
+
+/**
+ * Acknowledges a secret finding on a file, saving the findingKey on the FileRecord.
+ */
+export async function acknowledgeFinding(
+  projectId: string,
+  path: string,
+  findingKeyStr: string,
+  options?: { expectedUpdatedAt?: string }
+): Promise<void> {
+  await ensureAvailable();
+
+  try {
+    await db.transaction('rw', [db.projects, db.passports, db.files], async () => {
+      const project = await db.projects.get(projectId);
+      if (!project) throw new ProjectNotFound(`Project "${projectId}" not found.`);
+
+      if (options?.expectedUpdatedAt && project.updatedAt !== options.expectedUpdatedAt) {
+        throw new StaleWrite();
+      }
+
+      const fileId = `${projectId}:${path}`;
+      const fileRecord = await db.files.get(fileId);
+      if (fileRecord) {
+        const acks = new Set(fileRecord.acknowledgedFindings ?? []);
+        acks.add(findingKeyStr);
+        fileRecord.acknowledgedFindings = Array.from(acks);
+        await db.files.put(fileRecord);
+      }
+
+      const now = new Date().toISOString();
+      project.updatedAt = now;
+      await db.projects.put(project);
+    });
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('project-storage-updated'));
+    }
   } catch (err) {
     mapStorageError(err);
   }
