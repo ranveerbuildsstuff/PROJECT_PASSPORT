@@ -1380,6 +1380,7 @@ export interface BackupFileRecord {
   content: string;
   isBinary: boolean;
   sizeBytes: number;
+  acknowledgedFindings?: string[];
 }
 
 export interface BackupProjectItem {
@@ -1417,6 +1418,7 @@ function serializeFileForBackup(file: FileRecord): BackupFileRecord {
     content,
     isBinary,
     sizeBytes: file.sizeBytes,
+    acknowledgedFindings: file.acknowledgedFindings ? [...file.acknowledgedFindings] : undefined,
   };
 }
 
@@ -1432,6 +1434,7 @@ function deserializeFileFromBackup(file: BackupFileRecord): FileRecord {
     mime: file.mime,
     content,
     sizeBytes: file.sizeBytes,
+    acknowledgedFindings: file.acknowledgedFindings ? [...file.acknowledgedFindings] : undefined,
   };
 }
 

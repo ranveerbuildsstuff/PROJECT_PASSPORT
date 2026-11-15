@@ -41,26 +41,6 @@ export interface ImportExportDialogProps {
 
 const MEMORY_WARNING_THRESHOLD_BYTES = 300 * 1024 * 1024; // 300 MB
 
-/**
- * Test-only fallback for reading File in environments without Web Worker support (e.g. jsdom).
- * In production browsers, the File is transferred to and read inside parser.worker.ts.
- */
-async function readFileAsTextTestFallback(file: File): Promise<string> {
-  if (typeof file.text === 'function') {
-    try {
-      return await file.text();
-    } catch {
-      // Fall back to FileReader
-    }
-  }
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result ?? ''));
-    reader.onerror = () => reject(reader.error ?? new Error('File read error'));
-    reader.readAsText(file);
-  });
-}
-
 interface StagedFile {
   name: string;
   size: number;
@@ -237,7 +217,7 @@ export function ImportExportDialog({
         if (f.text) {
           fallbackFiles.push({ name: f.name, text: f.text });
         } else if (f.file) {
-          const text = await readFileAsTextTestFallback(f.file);
+          const text = await f.file.text();
           fallbackFiles.push({ name: f.name, text });
         }
       }

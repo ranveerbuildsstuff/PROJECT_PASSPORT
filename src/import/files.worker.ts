@@ -33,45 +33,6 @@ export interface StagedWorkerFile {
   findings: SecretFinding[];
 }
 
-async function readBlobAsArrayBuffer(blob: Blob | File): Promise<ArrayBuffer> {
-  if (typeof blob.arrayBuffer === 'function') {
-    try {
-      return await blob.arrayBuffer();
-    } catch {
-      // Fallback to FileReader below
-    }
-  }
-  if (typeof FileReader !== 'undefined') {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as ArrayBuffer);
-      reader.onerror = () => reject(reader.error || new Error('Failed to read blob as ArrayBuffer'));
-      reader.readAsArrayBuffer(blob);
-    });
-  }
-  throw new Error('No method available to read ArrayBuffer from Blob');
-}
-
-function containsBytePattern(bytes: Uint8Array, pattern: number[]): boolean {
-  if (pattern.length === 0 || bytes.length < pattern.length) return false;
-  const p0 = pattern[0];
-  const pLen = pattern.length;
-  const limit = bytes.length - pLen;
-  for (let i = 0; i <= limit; i++) {
-    if (bytes[i] === p0) {
-      let match = true;
-      for (let j = 1; j < pLen; j++) {
-        if (bytes[i + j] !== pattern[j]) {
-          match = false;
-          break;
-        }
-      }
-      if (match) return true;
-    }
-  }
-  return false;
-}
-
 export interface FilesWorkerState {
   stagedFiles: Map<string, StagedWorkerFile>;
   hardBlockedPaths: string[];
@@ -246,35 +207,44 @@ export async function handleFilesWorkerMessage(
           if (item.buffer) {
             zipData = item.buffer;
           } else if (item.file) {
-            zipData = await readBlobAsArrayBuffer(item.file);
+            zipData = await item.file.arrayBuffer();
           } else if (item.text) {
             zipData = new TextEncoder().encode(item.text).buffer;
           } else {
             continue;
           }
 
-          // Pre-scan raw zip headers for path traversal (zip-slip defense) before parsing
-          const rawZipBytes = new Uint8Array(zipData);
-          if (
-            containsBytePattern(rawZipBytes, [46, 46, 47]) || // ../
-            containsBytePattern(rawZipBytes, [46, 46, 92]) // ..\
-          ) {
-            return {
-              nextState: state,
-              response: {
-                type: 'scan_result',
-                result: {
-                  ok: false,
-                  code: 'unsafe_zip',
-                  message: "This .zip contains paths we can't use safely. Unzip it yourself and choose the folder instead.",
-                },
-              },
-            };
-          }
-
+          let hasTraversalInRawName = false;
           let zip: JSZip;
           try {
-            zip = await JSZip.loadAsync(zipData);
+            zip = await JSZip.loadAsync(zipData, {
+              decodeFileName: (bytes: string[] | Uint8Array | Buffer) => {
+                let name: string;
+                try {
+                  if (bytes instanceof Uint8Array) {
+                    name = new TextDecoder('utf-8').decode(bytes);
+                  } else if (Array.isArray(bytes)) {
+                    name = bytes.map((b) => (typeof b === 'number' ? String.fromCharCode(b) : String(b))).join('');
+                  } else {
+                    name = String(bytes);
+                  }
+                } catch {
+                  name = String(bytes);
+                }
+                // Inspect raw entry name before JSZip sanitizes it
+                const normalized = name.replace(/\\/g, '/');
+                if (
+                  normalized.includes('../') ||
+                  normalized.endsWith('/..') ||
+                  normalized === '..' ||
+                  normalized.startsWith('/') ||
+                  /^[a-zA-Z]:/.test(name)
+                ) {
+                  hasTraversalInRawName = true;
+                }
+                return name;
+              },
+            });
           } catch {
             return {
               nextState: state,
@@ -284,6 +254,20 @@ export async function handleFilesWorkerMessage(
                   ok: false,
                   code: 'zip_parse_error',
                   message: 'Could not read the .zip archive.',
+                },
+              },
+            };
+          }
+
+          if (hasTraversalInRawName) {
+            return {
+              nextState: state,
+              response: {
+                type: 'scan_result',
+                result: {
+                  ok: false,
+                  code: 'unsafe_zip',
+                  message: "This .zip contains paths we can't use safely. Unzip it yourself and choose the folder instead.",
                 },
               },
             };

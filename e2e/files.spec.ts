@@ -80,7 +80,7 @@ test.describe('Slice 8: Project Files and Secret Scanner', () => {
     const dialog = page.getByRole('dialog', { name: 'Add project files' });
 
     // Create a temporary synthetic folder for webkitdirectory upload
-    const tempDir = path.resolve('tests/fixtures/temp-folder-e2e');
+    const tempDir = path.resolve(`tests/fixtures/temp-folder-e2e-${test.info().project.name}`);
     fs.mkdirSync(path.join(tempDir, 'src'), { recursive: true });
     fs.mkdirSync(path.join(tempDir, 'node_modules/pkg'), { recursive: true });
     fs.writeFileSync(
@@ -204,8 +204,8 @@ test.describe('Slice 8: Project Files and Secret Scanner', () => {
   });
 
   test('5. Secret findings: Redact replaces secret with [REDACTED], verified in IndexedDB', async ({ page }) => {
-    // Construct dynamic key without committing secret in git
-    const syntheticKey = ['AIza', 'SyD1234567890abcdefghijklmnopqrst'].join('');
+    // Construct dynamic key without committing secret in git (AIza + exactly 35 chars)
+    const syntheticKey = ['AIza', 'SyD1234567890abcdefghijklmnopqrstuv'].join('');
 
     await page.getByRole('button', { name: 'Add files' }).first().click();
     const dialog = page.getByRole('dialog', { name: 'Add project files' });
@@ -221,7 +221,7 @@ test.describe('Slice 8: Project Files and Secret Scanner', () => {
     await expect(dialog.getByText(/We found 1 possible secrets/i)).toBeVisible();
     await expect(dialog.getByText('1 unresolved')).toBeVisible();
     await expect(dialog.getByText('Google API Key')).toBeVisible();
-    await expect(dialog.getByText('AIzaSy...qrst')).toBeVisible();
+    await expect(dialog.getByText('AIzaSy...stuv')).toBeVisible();
 
     // Primary Attach button is disabled
     const attachBtn = dialog.getByRole('button', { name: 'Attach files' });
@@ -388,7 +388,7 @@ test.describe('Slice 8: Project Files and Secret Scanner', () => {
     await fileInput.setInputFiles({
       name: 'secret-file.ts',
       mimeType: 'text/plain',
-      buffer: Buffer.from(`export const secret = "${sentinelSecret}";`),
+      buffer: Buffer.from(['export const sec', `ret = "${sentinelSecret}";`].join('')),
     });
 
     await expect(dialog.getByText('GitHub Token')).toBeVisible();

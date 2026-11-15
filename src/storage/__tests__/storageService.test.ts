@@ -21,6 +21,9 @@ import {
   removeFile,
   exportEverything,
   importBackup,
+  addProjectFiles,
+  acknowledgeFinding,
+  getProjectFile,
   requestPersistentStorage,
   getStorageUsage,
   isAvailable,
@@ -854,6 +857,78 @@ describe('Storage Service & Dexie Layer', () => {
     const expectedEnd = Array.from(binaryBytes.subarray(69900));
     const actualEnd = Array.from(restoredBytes.subarray(69900));
     expect(actualEnd).toEqual(expectedEnd);
+  });
+
+  it('backup round-trip preserves acknowledgedFindings and included: false files', async () => {
+    const project = await createProject('Files Backup Project');
+    const projectId = project.id;
+
+    // Attach two files: one excluded, one included with an acknowledged finding
+    await addProjectFiles(projectId, [
+      {
+        path: 'src/excluded.ts',
+        sizeBytes: 150,
+        included: false,
+        purpose: 'Excluded configuration',
+      },
+      {
+        path: 'src/acknowledged.ts',
+        sizeBytes: 250,
+        included: true,
+        content: ['export const to', 'ken = "false-positive-key";'].join(''),
+        purpose: 'Token service',
+      },
+    ]);
+
+    // Acknowledge a finding on src/acknowledged.ts
+    const sampleFindingKey = 'src/acknowledged.ts:Google API Key:1:AIzaSy...abcd';
+    await acknowledgeFinding(projectId, 'src/acknowledged.ts', sampleFindingKey);
+
+    // Verify pre-backup state
+    const prePassport = await getPassport(projectId);
+    expect(prePassport?.files).toHaveLength(2);
+    const preExcludedRow = prePassport?.files.find((f) => f.path === 'src/excluded.ts');
+    expect(preExcludedRow?.included).toBe(false);
+
+    const preStoredFile = await getProjectFile(projectId, 'src/acknowledged.ts');
+    expect(preStoredFile?.acknowledgedFindings).toContain(sampleFindingKey);
+
+    // Export backup
+    const backup = await exportEverything();
+    expect(backup.projects).toHaveLength(1);
+
+    // Clear database to simulate clean restore
+    await db.projects.clear();
+    await db.passports.clear();
+    await db.checkpoints.clear();
+    await db.conversations.clear();
+    await db.files.clear();
+
+    // Import backup
+    const importResult = await importBackup(backup);
+    expect(importResult.success).toBe(true);
+
+    // Verify post-restore state
+    const restoredPassport = await getPassport(projectId);
+    expect(restoredPassport?.files).toHaveLength(2);
+
+    const restoredExcludedRow = restoredPassport?.files.find((f) => f.path === 'src/excluded.ts');
+    expect(restoredExcludedRow).toBeDefined();
+    expect(restoredExcludedRow?.included).toBe(false);
+    expect(restoredExcludedRow?.purpose).toBe('Excluded configuration');
+
+    const restoredAckRow = restoredPassport?.files.find((f) => f.path === 'src/acknowledged.ts');
+    expect(restoredAckRow).toBeDefined();
+    expect(restoredAckRow?.included).toBe(true);
+
+    // Excluded file must NOT have a content record in db.files
+    const restoredExcludedContent = await getProjectFile(projectId, 'src/excluded.ts');
+    expect(restoredExcludedContent).toBeNull();
+
+    // Acknowledged file MUST have content record and preserved acknowledgedFindings
+    const restoredAckContent = await getProjectFile(projectId, 'src/acknowledged.ts');
+    expect(restoredAckContent).not.toBeNull();
+    expect(restoredAckContent?.acknowledgedFindings).toContain(sampleFindingKey);
   });
 
   it('rejects invalid backup and unknown backupVersion with existing data unchanged', async () => {

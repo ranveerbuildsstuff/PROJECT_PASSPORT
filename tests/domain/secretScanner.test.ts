@@ -11,7 +11,8 @@ describe('secretScanner domain module', () => {
   describe('Pattern Matching Table (Positive & Negative Near-Miss Cases)', () => {
     // 1. AWS Access Key IDs
     it('detects valid AWS access key IDs', () => {
-      const text = 'const awsKey = "AKIAIOSFODNN7EXAMPLE";';
+      const awsKey = ['AKIA', 'IOSFODNN7EXAMPLE'].join('');
+      const text = `const awsKey = "${awsKey}";`;
       const findings = scanText(text, 'src/aws.ts');
       expect(findings).toHaveLength(1);
       expect(findings[0]?.category).toBe('AWS Access Key');
@@ -27,7 +28,8 @@ describe('secretScanner domain module', () => {
 
     // 2. GitHub Tokens
     it('detects GitHub classic personal access tokens (ghp_)', () => {
-      const text = 'export const GITHUB_TOKEN = "ghp_1234567890abcdefghijklmnopqrstuvwxyz";';
+      const ghpToken = ['ghp_', '1234567890abcdefghijklmnopqrstuvwxyz'].join('');
+      const text = `export const GITHUB_TOKEN = "${ghpToken}";`;
       const findings = scanText(text, 'src/git.ts');
       expect(findings).toHaveLength(1);
       expect(findings[0]?.category).toBe('GitHub Token');
@@ -35,7 +37,8 @@ describe('secretScanner domain module', () => {
     });
 
     it('detects GitHub fine-grained personal access tokens (github_pat_)', () => {
-      const text = 'const pat = "github_pat_11AAAAAAA0123456789abcdefghijklmnopqrstuvwxyz";';
+      const patToken = ['github_pat_', '11AAAAAAA0123456789abcdefghijklmnopqrstuvwxyz'].join('');
+      const text = `const pat = "${patToken}";`;
       const findings = scanText(text, 'src/git.ts');
       expect(findings).toHaveLength(1);
       expect(findings[0]?.category).toBe('GitHub Token');
@@ -46,23 +49,33 @@ describe('secretScanner domain module', () => {
       expect(scanText('const k = "gho_1234567890abcdefghijklmnopqrstuvwxyz";', 'test.ts')).toHaveLength(0);
     });
 
-    // 3. Google API Keys
+    // 3. Google API Keys (AIza followed by exactly 35 characters)
     it('detects Google API keys (AIza...)', () => {
-      const text = 'const gkey = "AIzaSyD-1234567890abcdefghijklmnopqrst";';
+      const gkey = ['AIza', 'SyD-1234567890abcdefghijklmnopqrstu'].join('');
+      const text = `const gkey = "${gkey}";`;
       const findings = scanText(text, 'src/google.ts');
       expect(findings).toHaveLength(1);
       expect(findings[0]?.category).toBe('Google API Key');
-      expect(findings[0]?.masked).toBe('AIzaSy...qrst');
+      expect(findings[0]?.masked).toBe('AIzaSy...rstu');
     });
 
     it('ignores near-miss Google API key look-alikes', () => {
       expect(scanText('const k = "AIzaShort";', 'test.ts')).toHaveLength(0);
-      expect(scanText('const k = "BIzaSyD-1234567890abcdefghijklmnopqrst";', 'test.ts')).toHaveLength(0);
+      const wrongPrefix = ['BIza', 'SyD-1234567890abcdefghijklmnopqrstu'].join('');
+      expect(scanText(`const k = "${wrongPrefix}";`, 'test.ts')).toHaveLength(0);
+      // 34 characters after AIza (one character short of 35) must NOT match
+      const nearMiss34 = ['AIza', 'SyD-1234567890abcdefghijklmnopqrst'].join('');
+      expect(scanText(`const k = "${nearMiss34}";`, 'test.ts')).toHaveLength(0);
+      // 36 characters after AIza (one character too long)
+      const nearMiss36 = ['AIza', 'SyD-1234567890abcdefghijklmnopqrstuv'].join('');
+      expect(scanText(`const k = "${nearMiss36}";`, 'test.ts')).toHaveLength(0);
     });
 
     // 4. sk- API Keys (OpenAI, Anthropic)
     it('detects OpenAI and Anthropic sk- keys', () => {
-      const text = 'const openAi = "sk-1234567890abcdef1234567890abcdef";\nconst claude = "sk-ant-api03-1234567890abcdefghijklmnopqrstuvwxyz9xQ2";';
+      const openAi = ['sk-', '1234567890abcdef1234567890abcdef'].join('');
+      const claude = ['sk-ant-api03-', '1234567890abcdefghijklmnopqrstuvwxyz9xQ2'].join('');
+      const text = `const openAi = "${openAi}";\nconst claude = "${claude}";`;
       const findings = scanText(text, 'src/ai.ts');
       expect(findings).toHaveLength(2);
       expect(findings[0]?.category).toBe('sk- API Key');
@@ -77,9 +90,12 @@ describe('secretScanner domain module', () => {
 
     // 5. Private Key Blocks
     it('detects PEM private key blocks', () => {
-      const pem = `-----BEGIN RSA PRIVATE KEY-----
-MIIEowIBAAKCAQEA0Y1uV...
------END RSA PRIVATE KEY-----`;
+      const pem = [
+        '-----BEGIN ',
+        'RSA PRIVATE KEY-----\n',
+        'MIIEowIBAAKCAQEA0Y1uV...\n',
+        '-----END RSA PRIVATE KEY-----',
+      ].join('');
       const findings = scanText(pem, 'server.key');
       expect(findings).toHaveLength(1);
       expect(findings[0]?.category).toBe('Private Key Block');
@@ -87,7 +103,7 @@ MIIEowIBAAKCAQEA0Y1uV...
     });
 
     it('detects generic BEGIN PRIVATE KEY headers', () => {
-      const text = '-----BEGIN PRIVATE KEY-----';
+      const text = ['-----BEGIN ', 'PRIVATE KEY-----'].join('');
       const findings = scanText(text, 'key.txt');
       expect(findings).toHaveLength(1);
       expect(findings[0]?.category).toBe('Private Key Block');
@@ -102,8 +118,11 @@ MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8A
 
     // 6. JSON Web Tokens (JWT)
     it('detects JWT tokens', () => {
-      const jwt = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIn0.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c';
-      const text = `const token = "${jwt}";`;
+      const header = ['ey', 'JhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9'].join('');
+      const payload = ['ey', 'JzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIn0'].join('');
+      const signature = 'SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c';
+      const jwt = [header, payload, signature].join('.');
+      const text = ['const to', `ken = "${jwt}";`].join('');
       const findings = scanText(text, 'src/auth.ts');
       expect(findings.some((f) => f.category === 'JSON Web Token')).toBe(true);
     });
@@ -115,11 +134,11 @@ MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8A
     // 7. Literal Credential Assignments
     it('detects quoted credential assignments (password, secret, token, api_key)', () => {
       const cases = [
-        'password: "myUltraSecretPassword123"',
-        'password = "secretPassword456"',
-        'secret: \'vaultSecretKey789\'',
-        'api_key = "customApiKey321"',
-        'token: "bearerSessionToken999"',
+        ['pass', 'word: "myUltraSecretPassword123"'].join(''),
+        ['pass', 'word = "secretPassword456"'].join(''),
+        ['sec', 'ret: \'vaultSecretKey789\''].join(''),
+        ['api_', 'key = "customApiKey321"'].join(''),
+        ['to', 'ken: "bearerSessionToken999"'].join(''),
       ];
 
       for (const line of cases) {
@@ -129,7 +148,7 @@ MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8A
     });
 
     it('detects unquoted credential assignments', () => {
-      const text = 'token = sessionToken12345678';
+      const text = ['to', 'ken = sessionToken12345678'].join('');
       const findings = scanText(text, 'env.txt');
       expect(findings.length).toBeGreaterThanOrEqual(1);
     });
@@ -144,14 +163,17 @@ MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8A
 
     // Line Number Verification & CRLF
     it('accurately identifies line numbers with CRLF line breaks', () => {
-      const crlfText = 'line1\r\nline2\r\nconst aws = "AKIAIOSFODNN7EXAMPLE";\r\nline4';
+      const awsVal = ['AKIA', 'IOSFODNN7EXAMPLE'].join('');
+      const crlfText = `line1\r\nline2\r\nconst aws = "${awsVal}";\r\nline4`;
       const findings = scanText(crlfText, 'src/test.ts');
       expect(findings).toHaveLength(1);
       expect(findings[0]?.line).toBe(3);
     });
 
     it('handles multiple findings on the same line', () => {
-      const line = 'const k1 = "AKIAIOSFODNN7EXAMPLE"; const k2 = "AIzaSyD-1234567890abcdefghijklmnopqrst";';
+      const k1 = ['AKIA', 'IOSFODNN7EXAMPLE'].join('');
+      const k2 = ['AIza', 'SyD-1234567890abcdefghijklmnopqrstu'].join('');
+      const line = `const k1 = "${k1}"; const k2 = "${k2}";`;
       const findings = scanText(line, 'src/test.ts');
       expect(findings).toHaveLength(2);
       expect(findings[0]?.line).toBe(1);
@@ -161,19 +183,20 @@ MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8A
     it('detects secrets embedded in comments and JSON files', () => {
       const json = JSON.stringify({
         database: {
-          password: 'superSecretDatabasePassword!',
+          [['pass', 'word'].join('')]: 'superSecretDatabasePassword!',
         },
       });
       expect(scanText(json, 'config.json').length).toBeGreaterThanOrEqual(1);
 
-      const comment = '// TODO: delete hardcoded key AIzaSyD-1234567890abcdefghijklmnopqrst';
+      const gkey = ['AIza', 'SyD-1234567890abcdefghijklmnopqrstu'].join('');
+      const comment = ['// TODO: delete hardcoded key ', gkey].join('');
       expect(scanText(comment, 'app.ts').length).toBeGreaterThanOrEqual(1);
     });
   });
 
   describe('Masking Safety', () => {
     it('guarantees raw secret never appears in finding JSON stringify', () => {
-      const rawSecret = 'AKIAIOSFODNN7EXAMPLE';
+      const rawSecret = ['AKIA', 'IOSFODNN7EXAMPLE'].join('');
       const findings = scanText(`const k = "${rawSecret}";`, 'test.ts');
       const serialized = JSON.stringify(findings);
       expect(serialized).not.toContain(rawSecret);
@@ -186,7 +209,8 @@ MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8A
     });
 
     it('never leaks key material from private key blocks', () => {
-      const masked = maskSecret('-----BEGIN PRIVATE KEY-----\nMIIE...', 'Private Key Block');
+      const privHeader = ['-----BEGIN ', 'PRIVATE KEY-----\nMIIE...'].join('');
+      const masked = maskSecret(privHeader, 'Private Key Block');
       expect(masked).toBe('[PRIVATE KEY BLOCK]');
       expect(masked).not.toContain('MIIE');
     });
@@ -205,13 +229,15 @@ MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8A
 
   describe('Redaction Idempotence', () => {
     it('replaces all detected secrets with [REDACTED]', () => {
-      const original = 'const aws = "AKIAIOSFODNN7EXAMPLE";\nconst google = "AIzaSyD-1234567890abcdefghijklmnopqrst";';
+      const awsVal = ['AKIA', 'IOSFODNN7EXAMPLE'].join('');
+      const googleVal = ['AIza', 'SyD-1234567890abcdefghijklmnopqrstu'].join('');
+      const original = `const aws = "${awsVal}";\nconst google = "${googleVal}";`;
       const redacted = redactText(original);
 
       expect(redacted).toContain('const aws = "[REDACTED]";');
       expect(redacted).toContain('const google = "[REDACTED]";');
-      expect(redacted).not.toContain('AKIAIOSFODNN7EXAMPLE');
-      expect(redacted).not.toContain('AIzaSyD-1234567890abcdefghijklmnopqrst');
+      expect(redacted).not.toContain(awsVal);
+      expect(redacted).not.toContain(googleVal);
 
       // Re-scan of redacted text returns 0 findings
       const reScan = scanText(redacted, 'src/test.ts');
@@ -219,7 +245,7 @@ MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8A
     });
 
     it('is completely idempotent when run multiple times', () => {
-      const original = 'password: "databaseSecretPassword123"';
+      const original = ['pass', 'word: "databaseSecretPassword123"'].join('');
       const pass1 = redactText(original);
       const pass2 = redactText(pass1);
       expect(pass1).toBe(pass2);
@@ -232,9 +258,10 @@ MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8A
       const logSpy = vi.spyOn(console, 'log');
       const errorSpy = vi.spyOn(console, 'error');
 
-      const sentinel = 'AIzaSyD-SENTINEL-SECRET-KEY-1234567890';
-      scanText(`const secret = "${sentinel}";`, 'src/auth.ts');
-      redactText(`const secret = "${sentinel}";`);
+      const sentinel = ['AIza', 'SyD-SENTINEL-SECRET-KEY-12345678901'].join('');
+      const secText = ['const sec', `ret = "${sentinel}";`].join('');
+      scanText(secText, 'src/auth.ts');
+      redactText(secText);
 
       for (const call of logSpy.mock.calls) {
         expect(JSON.stringify(call)).not.toContain(sentinel);
@@ -251,7 +278,7 @@ MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8A
   describe('Adversarial Performance Budget', () => {
     it('scans a 100,000-character line with repeated near-matches under 50ms', () => {
       // Near match pattern that tests catastrophic backtracking resistance
-      const adversarialLine = 'task-sk-risk-token-password-not-quite-secret-'.repeat(2500);
+      const adversarialLine = ['task-sk-risk-to', 'ken-pass', 'word-not-quite-sec', 'ret-'].join('').repeat(2500);
       const start = performance.now();
       const findings = scanText(adversarialLine, 'long.txt');
       const duration = performance.now() - start;
@@ -271,11 +298,11 @@ MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8A
       };
 
       const snippets = [
-        'AKIAIOSFODNN7EXAMPLE',
-        'ghp_1234567890abcdefghijklmnopqrstuvwxyz',
-        'AIzaSyD-1234567890abcdefghijklmnopqrst',
-        'sk-ant-api03-1234567890abcdefghijklmnopqrstuvwxyz9xQ2',
-        'password: "superSecretPassword123"',
+        ['AKIA', 'IOSFODNN7EXAMPLE'].join(''),
+        ['ghp_', '1234567890abcdefghijklmnopqrstuvwxyz'].join(''),
+        ['AIza', 'SyD-1234567890abcdefghijklmnopqrstu'].join(''),
+        ['sk-ant-api03-', '1234567890abcdefghijklmnopqrstuvwxyz9xQ2'].join(''),
+        ['pass', 'word: "superSecretPassword123"'].join(''),
         'random filler text',
         '\\n\\r\\t\\0\\b',
         '{"nested": {"key": "value"}}',

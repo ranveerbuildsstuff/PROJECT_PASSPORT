@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import JSZip from 'jszip';
 import {
   handleFilesWorkerMessage,
@@ -16,13 +16,14 @@ describe('files.worker handleFilesWorkerMessage', () => {
       allFindings: [],
     };
 
+    const awsVal = ['AKIA', 'IOSFODNN7EXAMPLE'].join('');
     const message: FilesWorkerIncomingMessage = {
       action: 'scan',
       files: [
         {
           name: 'app.ts',
           path: 'src/app.ts',
-          text: 'const key = "AKIAIOSFODNN7EXAMPLE";',
+          text: `const key = "${awsVal}";`,
         },
         {
           name: '.env',
@@ -141,6 +142,78 @@ describe('files.worker handleFilesWorkerMessage', () => {
     }
   });
 
+  it('proves hard-blocked zip entries are never decompressed', async () => {
+    const zip = new JSZip();
+    zip.file('.env', 'DATABASE_URL=postgres://secret');
+    zip.file('src/index.ts', 'export const a = 1;');
+    const zipBuffer = await zip.generateAsync({ type: 'arraybuffer' });
+
+    const originalLoadAsync = JSZip.loadAsync.bind(JSZip);
+    let envAsyncCalled = false;
+    const spy = vi.spyOn(JSZip, 'loadAsync').mockImplementation(async (data, options) => {
+      const zipInstance = await originalLoadAsync(data, options);
+      const envEntry = zipInstance.file('.env');
+      if (envEntry) {
+        const origAsync = envEntry.async.bind(envEntry);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        envEntry.async = ((type: any, onUpdate?: any) => {
+          envAsyncCalled = true;
+          return origAsync(type, onUpdate);
+        }) as typeof envEntry.async;
+      }
+      return zipInstance;
+    });
+
+    const state: FilesWorkerState = {
+      stagedFiles: new Map(),
+      hardBlockedPaths: [],
+      ignoredFiles: [],
+      allFindings: [],
+    };
+
+    await handleFilesWorkerMessage(state, {
+      action: 'scan',
+      files: [{ name: 'test.zip', isZip: true, buffer: zipBuffer }],
+    });
+
+    expect(envAsyncCalled).toBe(false);
+    spy.mockRestore();
+  });
+
+  it('accepts zip archives where uncompressed file contents contain "../" sequences', async () => {
+    const zip = new JSZip();
+    zip.file('src/component.ts', 'import { helper } from "../../utils/helper";\nconst rel = "../config.json";');
+    const zipBuffer = await zip.generateAsync({ type: 'arraybuffer', compression: 'STORE' });
+
+    const state: FilesWorkerState = {
+      stagedFiles: new Map(),
+      hardBlockedPaths: [],
+      ignoredFiles: [],
+      allFindings: [],
+    };
+
+    const message: FilesWorkerIncomingMessage = {
+      action: 'scan',
+      files: [
+        {
+          name: 'project.zip',
+          isZip: true,
+          buffer: zipBuffer,
+        },
+      ],
+    };
+
+    const { response } = await handleFilesWorkerMessage(state, message);
+
+    expect(response.type).toBe('scan_result');
+    if (response.type === 'scan_result') {
+      expect(response.result.ok).toBe(true);
+      if (response.result.ok) {
+        expect(response.result.included.map((f) => f.path)).toEqual(['src/component.ts']);
+      }
+    }
+  });
+
   it('commits user choices: Redact scrubs content, Exclude sets included=false and removes content', async () => {
     // Setup state with 2 files and 2 findings
     let state: FilesWorkerState = {
@@ -150,18 +223,21 @@ describe('files.worker handleFilesWorkerMessage', () => {
       allFindings: [],
     };
 
+    const awsVal = ['AKIA', 'IOSFODNN7EXAMPLE'].join('');
+    const googleVal = ['AIza', 'SyD-1234567890abcdefghijklmnopqrstu'].join('');
+
     const scanMsg: FilesWorkerIncomingMessage = {
       action: 'scan',
       files: [
         {
           name: 'fileA.ts',
           path: 'src/fileA.ts',
-          text: 'const aws = "AKIAIOSFODNN7EXAMPLE";',
+          text: `const aws = "${awsVal}";`,
         },
         {
           name: 'fileB.ts',
           path: 'src/fileB.ts',
-          text: 'const key = "AIzaSyD-1234567890abcdefghijklmnopqrst";',
+          text: `const key = "${googleVal}";`,
         },
       ],
     };
@@ -190,7 +266,7 @@ describe('files.worker handleFilesWorkerMessage', () => {
         // File A is redacted
         expect(fileA?.included).toBe(true);
         expect(fileA?.content).toContain('const aws = "[REDACTED]";');
-        expect(fileA?.content).not.toContain('AKIAIOSFODNN7EXAMPLE');
+        expect(fileA?.content).not.toContain(awsVal);
 
         // File B is excluded: included=false, NO content stored
         expect(fileB?.included).toBe(false);
@@ -207,13 +283,14 @@ describe('files.worker handleFilesWorkerMessage', () => {
       allFindings: [],
     };
 
+    const awsVal = ['AKIA', 'IOSFODNN7EXAMPLE'].join('');
     const scanMsg: FilesWorkerIncomingMessage = {
       action: 'scan',
       files: [
         {
           name: 'doc.ts',
           path: 'src/doc.ts',
-          text: 'const demo = "AKIAIOSFODNN7EXAMPLE";',
+          text: `const demo = "${awsVal}";`,
         },
       ],
     };

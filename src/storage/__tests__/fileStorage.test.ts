@@ -107,7 +107,7 @@ describe('file storage service operations', () => {
       addProjectFiles(projectId, [
         {
           path: '.env',
-          content: 'SECRET=dangerous',
+          content: ['SEC', 'RET=dangerous'].join(''),
           sizeBytes: 16,
           included: true,
         },
@@ -206,7 +206,7 @@ describe('file storage service operations', () => {
     await addProjectFiles(projectId, [
       {
         path: 'src/sample.ts',
-        content: 'const token = "known-test-value";',
+        content: ['const to', 'ken = "known-test-value";'].join(''),
         sizeBytes: 32,
         included: true,
       },

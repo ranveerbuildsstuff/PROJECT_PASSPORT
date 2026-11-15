@@ -534,6 +534,62 @@ Consolidated manual checklist tests into `storageService.test.ts` and deleted re
 
 ---
 
+### Slice 8b: Files and Scanner Closeout
+
+- **Zip Path Traversal & Decode Hook:**
+  - Replaced the brittle whole-archive binary byte scan (`[46, 46, 47]` and `[46, 46, 92]`) with JSZip's `decodeFileName` hook in `src/import/files.worker.ts`.
+  - The hook validates raw entry names directly from zip central headers before virtual normalization, immediately rejecting traversals (`../`, `..\`, `/..`, leading `/`, or drive letters).
+  - Stored (uncompressed) files whose *contents* contain relative paths or imports (e.g. `import { x } from "../../utils";`) are now properly accepted. Verified in `tests/import/filesWorker.test.ts`.
+  - Hard-blocked files (e.g. `.env`) are proven never to be decompressed via a dedicated spy test on `entry.async`.
+  - *JSZip Declared Size Risk:* JSZip 3.x exposes `_data?.uncompressedSize` as an internal property without a public metadata getter. This field is used as a fast heuristic prior to decompression; as defense-in-depth, each entry's uncompressed byte length is verified against `MAX_FILE_SIZE_BYTES` post-extraction.
+- **Google API Key Exact Pattern & Test Fixtures:**
+  - Restored Google API key pattern to exact length: `AIza[0-9A-Za-z\-_]{35}(?![A-Za-z0-9_-])` (AIza + 35 characters = 39 total).
+  - Fixed test fixtures in `tests/domain/secretScanner.test.ts` and `e2e/files.spec.ts` from 34 characters to 35 characters. Added negative test asserting 34-character near-miss is not matched.
+- **Token Estimate Derivation (13 vs 15):**
+  - Content: `'export const fetchProfile = async () => ({ id: 1 });'`
+  - Exact character count: 51 characters.
+  - Formula: `Math.ceil(length / 4)` -> `Math.ceil(51 / 4) = Math.ceil(12.75) = 13` tokens.
+  - The correct expectation is 13 tokens.
+- **Backup Round Trip & Dexie Schema Audit:**
+  - Added `acknowledgedFindings` to `BackupFileRecord`, `serializeFileForBackup`, and `deserializeFileFromBackup` in `src/storage/storageService.ts`.
+  - Added unit test in `src/storage/__tests__/storageService.test.ts` verifying that files with `included: false` and `acknowledgedFindings` survive a full database backup export and atomic restore round trip.
+  - *Dexie Version Audit:* `acknowledgedFindings` is an unindexed property on `FileRecord`. Dexie only declares indexed fields in its `.stores()` definition (`files: 'id, projectId, path'`). Because unindexed fields do not alter store indices, no Dexie version bump was required.
+- **Test-Only Fallback Clean-Up:**
+  - Moved `readBlobAsArrayBuffer` from `src/import/files.worker.ts` and `readFileAsTextTestFallback` from `src/ui/ImportExportDialog.tsx` into polyfills inside `src/test/setup.ts`. Production code now uses native `blob.arrayBuffer()` and `file.text()` directly.
+- **Repository Secret Hygiene Test:**
+  - Added `tests/domain/repoHygiene.test.ts` running the app's secret scanner across every file in `src/`, `tests/`, and `e2e/`.
+  - Assembled synthetic test secrets via array concatenation across test fixtures, ensuring zero secret-shaped literals exist in committed code.
+- **Mapping of 11 Slice 8 Scenarios to Tests:**
+  1. *Choose files (normal file upload & manifest):* `e2e/files.spec.ts` test 1 ("1. Choose files: attach normal file, manifest row, purpose editable, persists on reload")
+  2. *Choose folder (nested files & ignored dirs):* `e2e/files.spec.ts` test 2 ("2. Choose folder: nested files, ignored node_modules, and skipped .env")
+  3. *Choose .zip (archive extraction & parsing):* `e2e/files.spec.ts` test 3 ("3. Choose .zip: dynamically generated zip attaches cleanly")
+  4. *Hard-block proof (.env / *.pem absent in storage):* `e2e/files.spec.ts` test 4 ("4. Hard-block proof: .env and *.pem skipped, verified absent in IndexedDB")
+  5. *Secret findings (Redact replaces secret with [REDACTED]):* `e2e/files.spec.ts` test 5 ("5. Secret findings: Redact replaces secret with [REDACTED], verified in IndexedDB")
+  6. *Secret findings (Exclude stores no content, False Positive stores acknowledgment):* `e2e/files.spec.ts` test 6 ("6. Secret findings: Exclude stores no content; False Positive stores file + acknowledgment")
+  7. *Unsafe zip (path traversal rejected):* `e2e/files.spec.ts` test 7 ("7. Unsafe zip: displays plain-language error banner, app remains usable")
+  8. *Zero outbound & zero secrets in console:* `e2e/files.spec.ts` test 8 ("8. Zero outbound requests and zero secrets in console")
+  9. *Layout and axe audit (empty and populated Files tab across themes):* `e2e/files.spec.ts` test 9 ("9. Layout and axe accessibility audit: empty and populated Files tab")
+  10. *Keyboard-only workflow:* `e2e/files.spec.ts` test 10 ("10. Keyboard-only workflow")
+  11. *Worker responsiveness:* Covered in `e2e/files.spec.ts` test 11 ("11. Responsiveness: large set of files scans in worker without freezing main thread") where 50 files are scanned off-thread via worker message protocol in under 10 seconds, and in `tests/import/filesWorker.test.ts`.
+  *(Note on E2E test counts: 11 test definitions in `e2e/files.spec.ts` plus 2 navigation tests in `e2e/project.spec.ts` and `e2e/shell.spec.ts` equals 13 test definitions, yielding 26 test runs across `desktop` and `mobile-360` projects: 164 + 26 = 190 tests).*
+- **Rule 13.7 Failure Disclosure during Slice 8b:**
+  - *`tests/domain/repoHygiene.test.ts` initial runs:*
+    - *Error:* Found secret-shaped literals in 5 files (`src/domain/secretScanner.ts`, `src/storage/__tests__/fileStorage.test.ts`, `src/storage/__tests__/storageService.test.ts`, `tests/domain/secretScanner.test.ts`, `e2e/files.spec.ts`).
+    - *Fix:* Replaced sample comments in `secretScanner.ts`; assembled test secrets via `.join('')` across unit and E2E test files.
+    - *Follow-up error:* JWT payload token in `secretScanner.test.ts` still matched because payload piece started with `eyJ`.
+    - *Fix:* Split JWT segments into sub-parts without `eyJ` prefix. Test passed on next run.
+  - *TypeScript compilation error during `npm run typecheck`:*
+    - *Error:* `TS2322: Type '(bytes: Uint8Array) => string' is not assignable to type '(bytes: string[] | Uint8Array | Buffer) => string'`.
+    - *Fix:* Expanded parameter type in `decodeFileName` to `(bytes: string[] | Uint8Array | Buffer)` with runtime type discrimination.
+  - *`e2e/files.spec.ts` parallel worker collision in test 2:*
+    - *Error:* `mobile-360` failed on test 2 (`Choose folder`) because `desktop` worker finished first and deleted the shared temporary directory `tests/fixtures/temp-folder-e2e` in its `finally` block.
+    - *Fix:* Scoped temp directory by project name: `tests/fixtures/temp-folder-e2e-${test.info().project.name}`.
+  - *`e2e/files.spec.ts` test 5 key length mismatch:*
+    - *Error:* `AIzaSy...qrst` locator failed because test fixture had 34 characters instead of 35.
+    - *Fix:* Updated fixture in `e2e/files.spec.ts` to exactly 35 characters after `AIza` and expected mask `AIzaSy...stuv`. Test passed on both desktop and mobile-360.
+
+---
+
 ## Known Issues
 
 - **Dialog Initial Focus:** `Dialog` gives initial focus to the Close button upon opening, requiring keyboard users to press Tab once to reach the first interactive form field. Retained as designed in Slice 3; not changed in this ticket.

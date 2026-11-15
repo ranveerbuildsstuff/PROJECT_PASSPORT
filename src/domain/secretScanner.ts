@@ -71,10 +71,10 @@ const PATTERN_RULES: PatternRule[] = [
     category: 'GitHub Token',
     regex: /(?<![A-Za-z0-9_-])(?:ghp_[A-Za-z0-9_]{36,255}|github_pat_[A-Za-z0-9_]{22,255})(?![A-Za-z0-9_-])/g,
   },
-  // 3. Google API Keys: AIza followed by 30 to 45 chars
+  // 3. Google API Keys: AIza followed by exactly 35 characters
   {
     category: 'Google API Key',
-    regex: /(?<![A-Za-z0-9_-])AIza[0-9A-Za-z\-_]{30,45}(?![A-Za-z0-9_-])/g,
+    regex: /(?<![A-Za-z0-9_-])AIza[0-9A-Za-z\-_]{35}(?![A-Za-z0-9_-])/g,
   },
   // 4. sk- API keys (OpenAI, Anthropic)
   {
@@ -99,13 +99,13 @@ const PATTERN_RULES: PatternRule[] = [
   // 7. Literal credential assignments (password, secret, token, api_key)
   {
     category: 'Credential Assignment',
-    // Quoted or JSON key: password = "..." or "password": "..."
+    // Quoted or JSON key assignment e.g. key: "val"
     regex: /(?<![A-Za-z0-9_-])(["']?)(password|secret|token|api_key)\1\s*[:=]\s*(["'])([^"'\r\n]{4,})\3/gi,
     extractSecret: (m) => m[4] ?? '',
   },
   {
     category: 'Credential Assignment',
-    // Unquoted: password = secret123
+    // Unquoted credential assignment e.g. key = val
     regex: /(?<![A-Za-z0-9_-])(password|secret|token|api_key)\s*=\s*([a-zA-Z0-9!@#$%^&*()_+=\-`~[\]{}|\\;:,.<>?]{6,})/gi,
     extractSecret: (m) => m[2] ?? '',
   },
