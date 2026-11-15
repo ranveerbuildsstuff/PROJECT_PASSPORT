@@ -144,11 +144,17 @@ describe('conversation storage service operations', () => {
     // Restore (Undo)
     await restoreConversation(removedData!.conversation, removedData!.ref);
 
-    // Verify record and ref are restored
+    // Verify record and ref are restored with identical conversation ID and turn text
     const restoredRecord = await getConversation(convId);
     expect(restoredRecord).not.toBeNull();
+    expect(restoredRecord?.id).toBe(convId);
+    expect(restoredRecord?.messages).toEqual(turns);
+    expect(restoredRecord?.messages.map((m) => m.text)).toEqual(turns.map((t) => t.text));
+
+    // Verify passport.conversations matches restored ref
     passport = await getPassport(projectId);
     expect(passport?.conversations).toHaveLength(1);
+    expect(passport?.conversations[0]).toEqual(removedData!.ref);
     expect(passport?.conversations[0]?.id).toBe(convId);
   });
 

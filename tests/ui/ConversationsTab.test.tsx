@@ -4,8 +4,10 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ToastProvider } from '../../src/ui/Toast';
 import { ConversationViewer } from '../../src/ui/ConversationViewer';
 import { PasteConversationDialog } from '../../src/ui/PasteConversationDialog';
+import { ReconstructPromptDialog } from '../../src/ui/ReconstructPromptDialog';
 import { ConversationsTab } from '../../src/pages/conversations/ConversationsTab';
 import { createEmptyPassport, type ConversationTurn } from '../../src/domain';
+import { db } from '../../src/storage/db';
 import { assertPlainLanguage } from '../import/pasteParser.test';
 
 function ViewerTestWrapper({
@@ -174,6 +176,9 @@ describe('ConversationViewer & Dialogs (RTL)', () => {
 
       const alert = screen.getByRole('alert');
       expect(alert).toHaveTextContent('This text is over 1 MB. Paste one conversation at a time.');
+      expect(
+        screen.getByText('This text is over 1 MB. Paste one conversation at a time.')
+      ).toBeInTheDocument();
       assertPlainLanguage(alert.textContent || '');
     });
 
@@ -257,6 +262,64 @@ describe('ConversationViewer & Dialogs (RTL)', () => {
       expect(screen.getByText(/4 messages/i)).toBeInTheDocument();
       expect(screen.getByText(/~450 tokens \(estimate\)/i)).toBeInTheDocument();
       expect(screen.getByRole('checkbox', { name: /Include Planning Discussion in export and reconstruct/i })).toBeChecked();
+    });
+  });
+
+  describe('ReconstructPromptDialog', () => {
+    beforeEach(async () => {
+      await db.conversations.clear();
+    });
+
+    it('displays exact numbers in reconstruct trim warning with a lowered cap fixture', async () => {
+      // 5 turns, each 400 chars -> 100 tokens each. Total = 500 tokens
+      const turns: ConversationTurn[] = Array.from({ length: 5 }, (_, i) => ({
+        id: `m-${i + 1}`,
+        role: (i % 2 === 0 ? 'user' : 'assistant') as 'user' | 'assistant',
+        text: `Message ${i + 1}. `.padEnd(400, 'X'),
+      }));
+
+      await db.conversations.put({
+        id: 'conv-trim-test',
+        projectId: 'p1',
+        title: 'Trim Test Conversation',
+        source: 'chatgpt',
+        messages: turns,
+        createdAt: new Date().toISOString(),
+      });
+
+      const passport = createEmptyPassport('Trim Test Project');
+      passport.project.id = 'p1';
+      passport.conversations = [
+        {
+          id: 'conv-trim-test',
+          title: 'Trim Test Conversation',
+          source: 'chatgpt',
+          messageCount: 5,
+          tokenEstimate: 500,
+          included: true,
+        },
+      ];
+
+      render(
+        <ToastProvider>
+          <ReconstructPromptDialog
+            isOpen={true}
+            onClose={() => {}}
+            passport={passport}
+            tokenCap={250}
+          />
+        </ToastProvider>
+      );
+
+      // Wait for loading to finish and warning banner to appear
+      await waitFor(() => {
+        expect(screen.getByRole('status')).toBeInTheDocument();
+      });
+
+      const warningText = screen.getByRole('status').textContent || '';
+      expect(warningText).toContain('This conversation is about 500 tokens (estimate), over the cap of 250.');
+      expect(warningText).toContain('The oldest 3 messages were left out of the prompt.');
+      assertPlainLanguage(warningText);
     });
   });
 });

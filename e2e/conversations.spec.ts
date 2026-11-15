@@ -110,19 +110,23 @@ test.describe('Slice 6: Conversation Paste Import & Reconstruct Prompt', () => {
     // Single message turn initially
     await expect(page.getByRole('group', { name: 'Message 1' })).toBeVisible();
 
-    // Place cursor in Message 1 textarea to split
+    // Place cursor in Message 1 textarea to split using real keyboard presses (no manual event dispatch)
     const textarea = page.getByLabel('Message 1 content');
-    await textarea.focus();
-    // Split near "Next Steps:" (approx index 145)
-    await textarea.evaluate((el: HTMLTextAreaElement) => {
-      const idx = el.value.indexOf('Next Steps:');
-      el.setSelectionRange(idx, idx);
-      document.dispatchEvent(new Event('selectionchange'));
-      el.dispatchEvent(new Event('click', { bubbles: true }));
-      el.dispatchEvent(new Event('keyup', { bubbles: true }));
-    });
-
     const splitBtn = page.getByRole('button', { name: 'Split Message 1' });
+
+    // Focus textarea: cursor at 0 (Control+Home) or End (Control+End) has Split disabled
+    await textarea.focus();
+    await page.keyboard.press('Control+Home');
+    await expect(splitBtn).toBeDisabled();
+
+    await page.keyboard.press('Control+End');
+    await expect(splitBtn).toBeDisabled();
+
+    // Move cursor into text using real ArrowRight key presses
+    await page.keyboard.press('Control+Home');
+    for (let i = 0; i < 40; i++) {
+      await page.keyboard.press('ArrowRight');
+    }
     await expect(splitBtn).toBeEnabled();
     await splitBtn.click();
 

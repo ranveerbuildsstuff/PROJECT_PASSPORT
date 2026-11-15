@@ -20,7 +20,8 @@ Current slice: none (Slice 4b & Ticket T2 complete)
 - [x] Tooling Ticket T2c: Autosave failure paths and verification gaps
 - [x] Slice 5a: Capture prompt, paste-back parsing and validation
 - [x] Slice 5b: Section-by-section merge UI, checkpoints and stale-write protection
-- [ ] Slice 6: Conversation paste import & reconstruct prompt
+- [x] Slice 6: Conversation paste import & reconstruct prompt
+- [x] Slice 6b: Conversation import closeout
 - [ ] Slice 7: ChatGPT / Claude export import
 - [ ] Slice 8: Project files + secret scanner
 - [ ] Slice 9: Checkpoints (timeline, compare, restore)
@@ -327,6 +328,42 @@ Consolidated manual checklist tests into `storageService.test.ts` and deleted re
 
 ---
 
+### Slice 6b: Conversation Import Closeout & Hygiene
+
+- **Undisclosed Failures from Slice 6 (Rule 13.7 Disclosure):**
+  - *Failing Vitest Runs & Remediations:*
+    - `tests/export/reconstructPrompt.test.ts`: Failed with `AssertionError: expected ... to contain 'the conversation below is the source of truth'` because the prompt used "The conversation below..." with capital "T". Remediated by updating the expectation to match case-insensitively (`.toLowerCase().toContain(...)`).
+    - `src/storage/__tests__/conversationStorage.test.ts`: Failed with `SchemaError: KeyPath [id+name+updatedAt+status] on object store passports is not indexed` and Dexie `DataError` because queries in `storageService.ts` attempted to query a non-existent compound index on `db.passports`. Remediated by replacing with direct primary key `db.passports.get(id)` reads and verifying passport fields in memory.
+    - `tests/ui/ConversationsTab.test.tsx`:
+      - Failed with `TestingLibraryElementError: Found multiple elements with the text: /~5 tokens (estimate)/i`. Remediated by using `getAllByText`.
+      - Failed on Escape key dialog dismissal due to modal backdrop querying. Remediated by verifying dialog unmounts cleanly and focus returns to trigger.
+      - Failed with `TestingLibraryElementError: Found multiple elements with the role "button" and name /Paste conversation/i` (matching both the tab toolbar button and the compact empty state action button). Remediated by using `getAllByRole`.
+    - `src/pages/__tests__/projectPage.test.tsx`: Failed with `Unable to find an element with the text: /Coming in a later slice/i` because Slice 6 replaced the placeholder Conversations tab with the fully functional `ConversationsTab` view. Remediated by asserting on the active Conversations tab heading instead of placeholder text.
+  - *Failed `npm run build`:*
+    - `tsc -b && vite build` failed with `e2e/conversations.spec.ts(226,30): error TS2339: Property 'toHaveTextContent' does not exist on type 'MakeMatchers<void, Locator, ...>'` and type import issues in `src/ui/PasteConversationDialog.tsx`. Remediated by replacing with Playwright's `toContainText(...)` and using explicit type imports (`import { type ConversationTurn, type ConversationSource }`).
+  - *Two Cancelled E2E Runs & Causes:*
+    - *Run 1 (task-764)*: Cancelled after 72 tests when log inspection revealed immediate regressions in `e2e/project.spec.ts` and `e2e/shell.spec.ts` (expecting the legacy Slice 3 placeholder heading `Conversations Tab`). Cancelled early to avoid redundant runtime before updating the tests to target the real tab and remaining placeholder (`Files Tab`).
+    - *Run 2 (task-366)*: Failed/cancelled immediately on startup because port 4179 had a lingering socket from a prior dev/test process (`Error: Process from config.webServer was not able to start. Exit code: 1`). Remediated by ensuring port 4179 is confirmed free before launching.
+- **`vite.config.ts` Vitest Timeout Change & Reversion:**
+  - *Old value:* default (no `testTimeout` declared, default 5,000 ms).
+  - *New value in Slice 6:* `testTimeout: 15000`.
+  - *Reason & Reversion:* During Slice 6, the agent observed `npm test` taking ~50s for the entire 27-file suite and mistakenly raised the per-test timeout to 15,000ms. In reality, the longest individual test in the suite (`PassportEditor.test.tsx`) executes in ~2.1s, and every test runs well within the 5,000ms threshold. Raising the timeout weakened test invariants under AGENTS §5.4. Reverted `testTimeout: 15000` in `vite.config.ts` back to default (5,000 ms) with zero regressions across the entire suite.
+- **Replacement Assertions Audit (`e2e/project.spec.ts` & `e2e/shell.spec.ts`):**
+  - Confirmed that `e2e/project.spec.ts` line 56 checks `await expect(page.getByRole('heading', { level: 2, name: 'Conversations' })).toBeVisible();`, which is strictly equivalent to the original heading check.
+  - Confirmed that `e2e/shell.spec.ts` tests 12g and 13g assert on `await expect(page.getByRole('heading', { name: 'Files Tab' })).toBeVisible();` and `expectNoSeriousA11y(page)`, preserving the exact placeholder tab contract and accessibility verification.
+- **Test Gaps Closed:**
+  - *Real Keyboard Split in E2E:* Replaced manual DOM event dispatching (`selectionchange`, `click`, `keyup`) in `e2e/conversations.spec.ts` test 2 with real keyboard commands: `page.keyboard.press('Control+Home')` (verifying Split is disabled at offset 0), `page.keyboard.press('Control+End')` (verifying Split is disabled at end of text), and `ArrowRight` keypresses into the body of the message (verifying Split becomes enabled and successfully splits into 2 turns).
+  - *`ConversationViewer.tsx` Document Listener Audit:* Confirmed that the `selectionchange` listener in `ConversationViewer.tsx` is properly removed on unmount and explicitly verifies `el === document.activeElement`, ignoring any selection events outside viewer textareas.
+  - *Over-1 MB Message in Paste Dialog:* Added explicit assertion in `tests/ui/ConversationsTab.test.tsx` verifying the over-1 MB alert copy (`This text is over 1 MB. Paste one conversation at a time.`) is rendered through `PasteConversationDialog`.
+  - *Shared Prompt Rules Constant:* Added unit test in `tests/export/reconstructPrompt.test.ts` proving `generateCapturePrompt` and `generateReconstructPrompt` embed the exact exported `SCHEMA_V1_RULES` constant.
+  - *`restoreConversation` Identity & Turn Text:* Added assertions in `src/storage/__tests__/conversationStorage.test.ts` proving `restoreConversation` restores the exact conversation ID, exact turn texts, and restores `passport.conversations` to match `removedData.ref`.
+  - *Exact Numbers in Reconstruct Trim Warning:* Added RTL test in `tests/ui/ConversationsTab.test.tsx` using a lowered cap fixture (`totalTokens = 500`, `tokenCap = 250`, `omittedTurns = 3`) asserting the exact copy: `"This conversation is about 500 tokens (estimate), over the cap of 250. The oldest 3 messages were left out of the prompt."`
+- **Rule 13.7 Failure Disclosure during Slice 6b:**
+  - *Run 1 of `npm run build`:* Failed with `tests/ui/ConversationsTab.test.tsx(288,9): error TS2353: Object literal may only specify known properties, and 'updatedAt' does not exist in type 'ConversationRecord'`. Remediated by removing non-existent `updatedAt` property from test fixture insert.
+  - *Run 1 of `e2e/conversations.spec.ts` (Test 2):* `expect(locator).toBeDisabled()` failed after `await page.keyboard.press('End')` because in a multi-line textarea, `End` navigates to end of line rather than end of text. Remediated by using `page.keyboard.press('Control+End')` and `Control+Home`.
+
+---
+
 ## Known Issues
 
-*None recorded yet.*
+- **Dialog Initial Focus:** `Dialog` gives initial focus to the Close button upon opening, requiring keyboard users to press Tab once to reach the first interactive form field. Retained as designed in Slice 3; not changed in this ticket.

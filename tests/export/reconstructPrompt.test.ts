@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  generateCapturePrompt,
   generateReconstructPrompt,
   RECONSTRUCT_PROMPT_VERSION,
   SCHEMA_V1_RULES,
@@ -33,6 +34,19 @@ describe('reconstruct prompt', () => {
     expect(result.prompt).toContain('Put uncertainty in openQuestions.');
     expect(result.prompt).toContain('Never include secrets (write [REDACTED]).');
     expect(result.prompt).toContain('Omit project id, timestamps, files and conversations.');
+  });
+
+  it('shares the exact SCHEMA_V1_RULES constant between capture and reconstruct prompts', () => {
+    const capturePrompt = generateCapturePrompt();
+    const reconstructEmpty = generateReconstructPrompt([]).prompt;
+    const reconstructWithTurns = generateReconstructPrompt([
+      { id: '1', role: 'user', text: 'Hello' },
+    ]).prompt;
+
+    expect(SCHEMA_V1_RULES.length).toBeGreaterThan(50);
+    expect(capturePrompt).toContain(SCHEMA_V1_RULES);
+    expect(reconstructEmpty).toContain(SCHEMA_V1_RULES);
+    expect(reconstructWithTurns).toContain(SCHEMA_V1_RULES);
   });
 
   it('is deterministic and contains no dates or timestamps', () => {
