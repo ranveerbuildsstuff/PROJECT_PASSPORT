@@ -20,10 +20,13 @@ import {
   validatePassport,
   migratePassport,
   newId,
+  applyEditorFields,
+  sha256Hex,
   type PassportV1,
   type ConversationTurn,
   type ConversationRef,
   type ConversationSource,
+  type CheckpointFileItem,
   conversationTokenEstimate,
   isHardBlocked,
 } from '../domain';
@@ -344,6 +347,7 @@ export async function applyMergeWithCheckpoint({
         id: checkpointId,
         projectId,
         createdAt: now,
+        type: 'before_merge',
         description: checkpointDescription,
         passport: JSON.parse(JSON.stringify(existingPassportRecord.passport)),
       };
@@ -374,49 +378,283 @@ export async function applyMergeWithCheckpoint({
   }
 }
 
-export async function restoreCheckpoint(checkpointId: string): Promise<PassportV1> {
+export interface CreateCheckpointOptions {
+  note?: string;
+  expectedUpdatedAt?: string;
+}
+
+/**
+ * Creates a named snapshot of the project passport with file SHA-256 hashes and conversation IDs.
+ *
+ * Invariants:
+ * - Computes file hashes OUTSIDE the Dexie transaction (SubtleCrypto non-blocking, never inside Dexie tx).
+ * - Excluded files receive sha256: null.
+ * - Writes project, passport, and checkpoint atomically inside one transaction.
+ * - If the project updatedAt changed during the hashing window, retries once before throwing StaleWrite.
+ * - Dispatches 'project-storage-updated'.
+ */
+export async function createCheckpoint(
+  projectId: string,
+  options?: CreateCheckpointOptions
+): Promise<string> {
+  await ensureAvailable();
+
+  const doSnapshot = async (isRetry = false): Promise<string> => {
+    const project = await db.projects.get(projectId);
+    if (!project) {
+      throw new ProjectNotFound(
+        `Project "${projectId}" was not found. It may have been deleted.`,
+        'Go back to your projects and try again.'
+      );
+    }
+
+    if (options?.expectedUpdatedAt && project.updatedAt !== options.expectedUpdatedAt) {
+      throw new StaleWrite();
+    }
+
+    const passportRecord = await db.passports.get(projectId);
+    if (!passportRecord) {
+      throw new ProjectNotFound(
+        `Passport for project "${projectId}" was not found.`,
+        'Go back to your projects and try again.'
+      );
+    }
+
+    const passport = passportRecord.passport;
+    const includedConvIds = passport.conversations
+      ? passport.conversations.filter((c) => c.included).map((c) => c.id)
+      : [];
+
+    const rawFiles = await db.files.where('projectId').equals(projectId).toArray();
+    const fileMap = new Map<string, FileRecord>();
+    for (const f of rawFiles) {
+      fileMap.set(f.path, f);
+    }
+
+    // Compute hashes outside the transaction
+    const checkpointFiles: CheckpointFileItem[] = [];
+    if (passport.files) {
+      for (const f of passport.files) {
+        let sha256: string | null = null;
+        if (f.included) {
+          const rec = fileMap.get(f.path);
+          if (rec) {
+            try {
+              sha256 = await sha256Hex(rec.content);
+            } catch {
+              sha256 = null;
+            }
+          }
+        }
+        checkpointFiles.push({
+          path: f.path,
+          purpose: f.purpose,
+          included: f.included,
+          sizeBytes: f.sizeBytes,
+          sha256,
+        });
+      }
+    }
+
+    let checkpointId = '';
+    const now = new Date().toISOString();
+
+    try {
+      await db.transaction('rw', [db.projects, db.passports, db.checkpoints], async () => {
+        const currentProj = await db.projects.get(projectId);
+        if (!currentProj) {
+          throw new ProjectNotFound(
+            `Project "${projectId}" was not found.`,
+            'Go back to your projects and try again.'
+          );
+        }
+
+        const baselineUpdatedAt = options?.expectedUpdatedAt || project.updatedAt;
+        if (currentProj.updatedAt !== baselineUpdatedAt) {
+          throw new StaleWrite();
+        }
+
+        checkpointId = newId();
+        const note = options?.note?.trim() || undefined;
+        const checkpoint: CheckpointRecord = {
+          id: checkpointId,
+          projectId,
+          createdAt: now,
+          type: 'manual',
+          note,
+          description: note || 'Manual checkpoint',
+          passport: JSON.parse(JSON.stringify(passport)),
+          conversationIds: includedConvIds,
+          files: checkpointFiles,
+        };
+
+        await db.checkpoints.put(checkpoint);
+      });
+    } catch (err) {
+      if (err instanceof StaleWrite && !isRetry && !options?.expectedUpdatedAt) {
+        // Retry once if concurrent edit occurred during external hash computation
+        return doSnapshot(true);
+      }
+      throw err;
+    }
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('project-storage-updated'));
+    }
+
+    return checkpointId;
+  };
+
+  try {
+    return await doSnapshot();
+  } catch (err) {
+    mapStorageError(err);
+  }
+}
+
+/**
+ * Lists all checkpoints for a project, sorted newest first.
+ */
+export async function listCheckpoints(projectId: string): Promise<CheckpointRecord[]> {
+  await ensureAvailable();
+  try {
+    const list = await db.checkpoints.where('projectId').equals(projectId).toArray();
+    return list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  } catch (err) {
+    mapStorageError(err);
+  }
+}
+
+/**
+ * Restores a checkpoint onto the project passport.
+ *
+ * Invariants (SPEC §10 & Slice 9 Restore Decision):
+ * - Restores editor-owned fields ONLY (via applyEditorFields), preserving all current files and conversations.
+ * - Always creates an automated "Before restore" checkpoint first in the SAME transaction.
+ * - Checks stale-write guard if expectedUpdatedAt is provided.
+ * - Fully rolls back if any write in the transaction fails.
+ * - Dispatches 'project-storage-updated'.
+ */
+export async function restoreCheckpoint(
+  checkpointId: string,
+  options?: { expectedUpdatedAt?: string }
+): Promise<PassportV1> {
   await ensureAvailable();
 
   try {
     let restoredPassport: PassportV1 | null = null;
 
-    await db.transaction('rw', [db.projects, db.passports, db.checkpoints], async () => {
-      const checkpoint = await db.checkpoints.get(checkpointId);
-      if (!checkpoint || !checkpoint.passport) {
-        throw new Error(`Checkpoint "${checkpointId}" not found or contains no passport data.`);
-      }
+    // 1. Fetch checkpoint
+    const checkpoint = await db.checkpoints.get(checkpointId);
+    if (!checkpoint || !checkpoint.passport) {
+      throw new ProjectNotFound(
+        `Checkpoint "${checkpointId}" not found or contains no passport data.`,
+        'Refresh your checkpoints timeline and try again.'
+      );
+    }
 
-      const projectId = checkpoint.projectId;
-      const existingProject = await db.projects.get(projectId);
-      if (!existingProject) {
+    const projectId = checkpoint.projectId;
+    const currentProject = await db.projects.get(projectId);
+    if (!currentProject) {
+      throw new ProjectNotFound(
+        `Project "${projectId}" was not found.`,
+        'Go back to your projects and try again.'
+      );
+    }
+
+    if (options?.expectedUpdatedAt && currentProject.updatedAt !== options.expectedUpdatedAt) {
+      throw new StaleWrite();
+    }
+
+    const currentPassportRecord = await db.passports.get(projectId);
+    if (!currentPassportRecord) {
+      throw new ProjectNotFound(
+        `Passport for project "${projectId}" was not found.`,
+        'Go back to your projects and try again.'
+      );
+    }
+
+    // 2. Pre-compute hashes and snapshot info OUTSIDE transaction for the "Before restore" checkpoint
+    const currentPassport = currentPassportRecord.passport;
+    const currentIncludedConvIds = currentPassport.conversations
+      ? currentPassport.conversations.filter((c) => c.included).map((c) => c.id)
+      : [];
+
+    const rawFiles = await db.files.where('projectId').equals(projectId).toArray();
+    const fileMap = new Map<string, FileRecord>();
+    for (const f of rawFiles) {
+      fileMap.set(f.path, f);
+    }
+
+    const currentCheckpointFiles: CheckpointFileItem[] = [];
+    if (currentPassport.files) {
+      for (const f of currentPassport.files) {
+        let sha256: string | null = null;
+        if (f.included) {
+          const rec = fileMap.get(f.path);
+          if (rec) {
+            try {
+              sha256 = await sha256Hex(rec.content);
+            } catch {
+              sha256 = null;
+            }
+          }
+        }
+        currentCheckpointFiles.push({
+          path: f.path,
+          purpose: f.purpose,
+          included: f.included,
+          sizeBytes: f.sizeBytes,
+          sha256,
+        });
+      }
+    }
+
+    // 3. Atomically write "Before restore" checkpoint and restored editor fields
+    await db.transaction('rw', [db.projects, db.passports, db.checkpoints], async () => {
+      const proj = await db.projects.get(projectId);
+      if (!proj) {
         throw new ProjectNotFound(
           `Project "${projectId}" was not found.`,
           'Go back to your projects and try again.'
         );
       }
 
-      const currentPassportRecord = await db.passports.get(projectId);
+      if (options?.expectedUpdatedAt && proj.updatedAt !== options.expectedUpdatedAt) {
+        throw new StaleWrite();
+      }
+
+      const pRecord = await db.passports.get(projectId);
+      if (!pRecord) {
+        throw new ProjectNotFound(
+          `Passport for project "${projectId}" was not found.`,
+          'Go back to your projects and try again.'
+        );
+      }
+
       const now = new Date().toISOString();
 
       // SPEC §10: Restoring a checkpoint ALWAYS creates an automated "Before restore" checkpoint first.
-      if (currentPassportRecord) {
-        await db.checkpoints.put({
-          id: newId(),
-          projectId,
-          createdAt: now,
-          description: 'Before restore',
-          passport: JSON.parse(JSON.stringify(currentPassportRecord.passport)),
-        });
-      }
+      await db.checkpoints.put({
+        id: newId(),
+        projectId,
+        createdAt: now,
+        type: 'before_restore',
+        description: 'Before restore',
+        passport: JSON.parse(JSON.stringify(pRecord.passport)),
+        conversationIds: currentIncludedConvIds,
+        files: currentCheckpointFiles,
+      });
 
-      restoredPassport = JSON.parse(JSON.stringify(checkpoint.passport)) as PassportV1;
+      // Restore editor-owned fields ONLY, preserving current files and conversations
+      restoredPassport = applyEditorFields(pRecord.passport, checkpoint.passport!);
       restoredPassport.project.updatedAt = now;
 
-      existingProject.name = restoredPassport.project.name;
-      existingProject.status = restoredPassport.project.status;
-      existingProject.updatedAt = now;
+      proj.name = restoredPassport.project.name;
+      proj.status = restoredPassport.project.status;
+      proj.updatedAt = now;
 
-      await db.projects.put(existingProject);
+      await db.projects.put(proj);
       await db.passports.put({
         projectId,
         passport: restoredPassport,

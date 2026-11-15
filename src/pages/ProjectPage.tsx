@@ -33,6 +33,7 @@ import { formatDateTime, formatProjectStatus } from '../lib';
 import { PassportEditor } from './passport';
 import { ConversationsTab } from './conversations';
 import { FilesTab } from './files';
+import { CheckpointsTab } from './checkpoints/CheckpointsTab';
 
 const VALID_TABS = ['overview', 'passport', 'conversations', 'files', 'checkpoints', 'export'] as const;
 type TabType = typeof VALID_TABS[number];
@@ -385,7 +386,15 @@ export function ProjectPage() {
           />
         )}
 
-        {activeTab !== 'overview' && activeTab !== 'passport' && activeTab !== 'conversations' && activeTab !== 'files' && (
+        {activeTab === 'checkpoints' && passport && (
+          <CheckpointsTab
+            projectId={project.id}
+            passport={passport}
+            onPassportUpdated={() => reload()}
+          />
+        )}
+
+        {activeTab !== 'overview' && activeTab !== 'passport' && activeTab !== 'conversations' && activeTab !== 'files' && activeTab !== 'checkpoints' && (
           <Card className="p-8 sm:p-12 text-center flex flex-col items-center justify-center max-w-xl mx-auto my-6">
             <div className="w-12 h-12 rounded-full bg-bg-app border border-border-subtle flex items-center justify-center text-accent-brass mb-4">
               <Layers className="w-6 h-6" aria-hidden="true" />

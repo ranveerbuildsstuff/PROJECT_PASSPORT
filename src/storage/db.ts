@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie';
-import type { PassportV1 } from '../domain';
+import type { PassportV1, CheckpointFileItem, CheckpointKindType } from '../domain';
 
 export interface ProjectRecord {
   id: string;
@@ -17,6 +17,12 @@ export interface CheckpointRecord {
   id: string;
   projectId: string;
   createdAt: string;
+  type?: CheckpointKindType;
+  note?: string;
+  description?: string;
+  passport?: PassportV1;
+  conversationIds?: string[];
+  files?: CheckpointFileItem[];
   [key: string]: unknown;
 }
 

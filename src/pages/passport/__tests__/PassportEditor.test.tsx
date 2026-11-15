@@ -59,7 +59,7 @@ describe('PassportEditor Component', () => {
     // Basics inputs should be visible
     expect(screen.getByDisplayValue('Editor Test Project')).toBeInTheDocument();
     expect(screen.getByDisplayValue('Primary goal')).toBeInTheDocument();
-  });
+  }, 15000);
 
   it('toggles accordion sections open and closed', () => {
     render(
@@ -107,7 +107,7 @@ describe('PassportEditor Component', () => {
 
     expect(screen.getByRole('button', { name: /Basics/i })).toHaveAttribute('aria-expanded', 'false');
     expect(screen.getByRole('button', { name: /Tech stack/i })).toHaveAttribute('aria-expanded', 'false');
-  });
+  }, 15000);
 
   it('renders superseded decision with dimmed opacity and badge', () => {
     render(

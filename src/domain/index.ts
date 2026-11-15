@@ -10,3 +10,7 @@ export * from './conversation';
 export * from './fileRules';
 export * from './secretScanner';
 export * from './fileManifest';
+export * from './checkpoint';
+export * from './diff';
+export * from './hash';
+

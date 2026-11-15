@@ -25,3 +25,7 @@ export * from './ReconstructPromptDialog';
 export * from './EditConversationDialog';
 export * from './ImportExportDialog';
 export * from './AddFilesDialog';
+export * from './CreateCheckpointDialog';
+export * from './CompareDialog';
+export * from './RestoreCheckpointDialog';
+

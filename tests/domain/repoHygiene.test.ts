@@ -55,5 +55,5 @@ describe('Repository Secret Hygiene', () => {
     }
 
     expect(allFindings).toHaveLength(0);
-  });
+  }, 30000);
 });

@@ -324,15 +324,15 @@
 
 ## Slice 9: Checkpoints (Timeline, Compare, Restore)
 
-- [ ] Implement checkpoint snapshot creation: passport + included conversation IDs + file manifest with SHA-256 hashes.
-- [ ] In `src/domain/diff.ts`, implement structured diff engine computing changes per passport section.
-- [ ] Build Checkpoint Timeline UI displaying chronological checkpoints with stamp badges and notes.
-- [ ] Build Visual Diff Modal comparing any checkpoint to the current state or another checkpoint.
-- [ ] Implement checkpoint restore workflow: **ALWAYS** auto-creates a `"Before restore"` checkpoint prior to applying.
-- [ ] Write integration tests for snapshot creation, diff generation, and restore safety invariant.
-- [ ] **Tests added:** Unit tests for SHA-256 hash generation, structured diff logic, and restore safeguards.
-- [ ] **Docs updated:** Document checkpoint schema and diff algorithms in `PROGRESS.md`.
-- [ ] **Commit message:** `Slice 9: checkpoints timeline, compare and restore`
+- [x] Implement checkpoint snapshot creation: passport + included conversation IDs + file manifest with SHA-256 hashes (`src/domain/checkpoint.ts`, `src/domain/hash.ts`, `src/storage/storageService.ts`).
+- [x] In `src/domain/diff.ts`, implement structured diff engine computing changes per passport section with match rules and legacy backwards compatibility.
+- [x] Build Checkpoint Timeline UI displaying chronological checkpoints with stamp badges, notes, summaries, and action triggers (`src/pages/checkpoints/CheckpointsTab.tsx`).
+- [x] Build Visual Diff Modal comparing any checkpoint to the current state or another checkpoint (`src/ui/CompareDialog.tsx`).
+- [x] Implement checkpoint restore workflow: **ALWAYS** auto-creates a `"Before restore"` checkpoint prior to applying and replaces editor-owned fields only (`src/ui/RestoreCheckpointDialog.tsx`, `src/storage/storageService.ts`).
+- [x] Write integration tests for snapshot creation, diff generation, and restore safety invariant (`src/storage/__tests__/checkpointStorage.test.ts`, `tests/domain/diff.test.ts`, `tests/ui/CheckpointsTab.test.tsx`).
+- [x] **Tests added:** 46 Vitest test suites (556 tests pass); 11 Playwright E2E scenarios across desktop and mobile-360 (24 tests pass in `e2e/checkpoints.spec.ts`, 214 total E2E suite tests).
+- [x] **Docs updated:** Document checkpoint schema, diff algorithms, restore decision, and failure disclosures in `PROGRESS.md` and `SPEC.md`.
+- [x] **Commit message:** `Slice 9: checkpoints timeline, compare and restore`
 
 **Done when:**
 - `npm run typecheck`, `npm run lint`, `npm test`, and `npm run build` pass.

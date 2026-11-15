@@ -590,6 +590,96 @@ Consolidated manual checklist tests into `storageService.test.ts` and deleted re
 
 ---
 
+### Slice 9: Checkpoints (Timeline, Compare, Restore)
+
+- **Audit Findings & Architecture Decisions:**
+  - *Checkpoint Types & Distinctions:* Existing checkpoints distinguished via `type` (`'manual'`, `'before_merge'`, `'before_restore'`) and fallback matching on `description` (`'Before AI merge'`, `'Before restore'`). Stamp badges display `#N • KIND` (e.g. `#1 • MANUAL`, `#2 • BEFORE RESTORE`).
+  - *Restore Scope Decision (Editor Fields Only):* Restoring replaces editor-owned fields only (`applyEditorFields` across basics, stack, requirements, decisions, completed, tasks, bugs, instructions, nextAction, openQuestions). Currently attached files and conversations are preserved intact, preventing orphaned manifest entries or data loss. The restore dialog explicitly surfaces attachment notices ("Your attached files and conversations stay as they are...") and diff summaries.
+  - *Pre-Restore Safety Invariant:* Restoring always creates an automated `"Before restore"` checkpoint first in the same atomic Dexie transaction spanning `[projects, passports, checkpoints]` with stale-write protection (`expectedUpdatedAt`).
+  - *Dexie + Web Crypto Transaction Boundaries:* Awaiting an external promise (such as `crypto.subtle.digest`) inside a Dexie transaction causes IndexedDB transactions to auto-commit prematurely. Therefore, `createCheckpoint` and `restoreCheckpoint` read file records and pre-compute SHA-256 hashes *outside* the transaction, then execute atomic writes inside a new transaction with stale-write verification. If the project was modified during the external hashing window, it retries once before raising `StaleWrite`.
+  - *Legacy Checkpoint Backward Compatibility:* Checkpoints created in Slices 5b/5c lack `files` and `conversationIds`. `diffPassports` detects legacy records and flags `isFilesLegacy: true`, rendering a clean "Not recorded (this checkpoint was made before this was tracked)" banner without false additions or deletions.
+  - *Unindexed Dexie Fields:* Added optional fields (`type`, `note`, `description`, `passport`, `conversationIds`, `files`) to `CheckpointRecord`. Because Dexie only indexes declared fields (`checkpoints: 'id, projectId, createdAt'`), unindexed properties require no schema version bump in `db.ts`.
+- **Pure Domain (`src/domain/checkpoint.ts`, `diff.ts`, `hash.ts`):**
+  - `sha256Hex(bytes)`: Web Crypto SHA-256 hash generator producing lowercase hex strings, verified against known NIST test vectors.
+  - `checkpointKind(record)` & `checkpointSequence(list)`: Stamp badge mapping and 1-based chronological sequence numbering within projects.
+  - `diffPassports(from, to)`: Pure, deterministic diff engine across 12 sections detecting additions, removals, field modifications, reordering, and file content changes (via SHA-256 hash comparison). Verified with a 500-iteration seeded PRNG fuzz test and zero-logging sentinel tests.
+- **UI Components & Accessibility (`src/pages/checkpoints/CheckpointsTab.tsx`, `CompareDialog.tsx`, `RestoreCheckpointDialog.tsx`, `CreateCheckpointDialog.tsx`):**
+  - Mounted `/project/:id/checkpoints` replacing the placeholder, complete with loading, error, compact empty (`CompactEmptyState`), and populated timeline views.
+  - Timeline cards: stamp badges, timestamps, optional notes, section/file/chat summary pills, "Compare", and "Restore" buttons.
+  - `CreateCheckpointDialog`: modal with optional note textarea and primary brass "Create checkpoint" button.
+  - `CompareDialog`: dropdown version pickers ("From" and "To" supporting all checkpoints + "Current passport"), swap button, collapsible section diff cards with "Added", "Removed", "Changed" badges, side-by-side desktop layout, stacked mobile-360 layout, and "Not recorded" banners.
+  - `RestoreCheckpointDialog`: scope notice banner, before-restore checkpoint notice, diff preview, cancel button, and primary brass "Restore checkpoint" button. Restoring triggers a success toast with an "Undo" action that immediately rolls back to the "Before restore" checkpoint.
+- **Rule 13.7 Failure Disclosure during Slice 9:**
+  - *`tests/domain/diff.test.ts` lowercase reordered summary mismatch (Exit code 1):*
+    - *Error:* `AssertionError: expected 'Reordered (no content changes)' to contain 'reordered'`.
+    - *Fix:* Changed assertion to `.toLowerCase().toContain('reordered')`.
+  - *`tests/domain/diff.test.ts` 500-iteration PRNG fuzz test duplicate IDs (Exit code 1):*
+    - *Error:* `AssertionError: expected 3 to be 2` at changed task counts because random generator generated duplicate task IDs in `tasksB`.
+    - *Fix:* Generated unique IDs from a shuffled ID pool in the test generator, and deduplicated `seenToIds`/`seenFromIds` in `diffIdList`.
+  - *`src/storage/__tests__/checkpointStorage.test.ts` invalid `createProject` parameter (Exit code 1):*
+    - *Error:* `TypeError: name.trim is not a function` because `createProject` takes a string `name: string`, not an object `{ name: string }`.
+    - *Fix:* Changed `createProject({ name: '...' })` to `createProject('...')`.
+  - *`src/storage/__tests__/checkpointStorage.test.ts` missing function import (Exit code 1):*
+    - *Error:* `TypeError: (0 , attachFiles) is not a function`.
+    - *Fix:* Replaced non-existent `attachFiles` and `importEverything` with `addProjectFiles` and `importBackup`.
+  - *`tests/ui/CheckpointsTab.test.tsx` multiple matching elements for "Create checkpoint" (Exit code 1):*
+    - *Error:* `Found multiple elements with the role "button" and name /^Create checkpoint$/i` (tab header button, empty state button, dialog submit button).
+    - *Fix:* Scoped dialog buttons using `within(dialog).getByRole(...)` and selected header button via `screen.getAllByRole(...)[0]`.
+  - *`tests/ui/CheckpointsTab.test.tsx` multiple matching elements for "Close" button (Exit code 1):*
+    - *Error:* `Found multiple elements with the role "button" and name /Close/i` (top `X` icon with `aria-label="Close dialog"` and footer `<button>Close</button>`).
+    - *Fix:* Used exact matching `within(dialog).getByRole('button', { name: /^Close$/i })`.
+  - *`tests/ui/CheckpointsTab.test.tsx` Dialog Component Architecture (Exit code 1):*
+    - *Error:* `CreateCheckpointDialog` and `CompareDialog` imported non-existent `DialogHeader`, `DialogBody`, `DialogFooter` from `src/ui/Dialog.tsx`.
+    - *Fix:* Updated dialogs to pass `title` and `description` props directly to `<Dialog>` and render form contents as children.
+  - *`npm run typecheck` TS2345 in `src/domain/hash.ts` (Exit code 1):*
+    - *Error:* `Uint8Array<ArrayBufferLike>` is not assignable to parameter of type `BufferSource`.
+    - *Fix:* Cast `bytes as unknown as BufferSource`.
+  - *`npm run typecheck` TS2552 in `src/pages/ProjectPage.tsx` (Exit code 1):*
+    - *Error:* `Cannot find name 'setPassport'. Did you mean 'passport'?`.
+    - *Fix:* Updated `onPassportUpdated={() => reload()}` using `reload` from `useProject`.
+  - *`npm run typecheck` TS2719 union discrimination in `src/domain/diff.ts` (Exit code 1):*
+    - *Error:* Index signature `[key: string]: unknown` in `DiffableSource` caused TypeScript to lose discriminated union narrowing for `PassportV1`.
+    - *Fix:* Refactored `DiffableSource` without open index signature and simplified `resolveSource` branching.
+  - *`tests/domain/repoHygiene.test.ts` timeout under heavy concurrent test load (Exit code 1):*
+    - *Error:* Vitest test timed out at 5160ms (exceeding default 5000ms timeout) while scanning all repository files during full `npm test`.
+    - *Fix:* Added explicit 30000ms timeout to `repoHygiene.test.ts` and 15000ms timeout to accordion expansion tests in `PassportEditor.test.tsx`.
+  - *`e2e/checkpoints.spec.ts` strict mode violation on "Close" button:*
+    - *Error:* `getByRole('button', { name: 'Close' })` resolved to both `Close dialog` icon button and `Close` text button.
+    - *Fix:* Specified exact match `{ name: 'Close', exact: true }`.
+  - *`e2e/checkpoints.spec.ts` Basics accordion closed by click:*
+    - *Error:* Clicking `getByRole('button', { name: /Basics/i })` when Basics is open by default collapsed the accordion, causing timeout when filling `getByLabel('Project goal')`.
+    - *Fix:* Omitted the unnecessary accordion toggle click and added explicit wait for autosave status `Saved`.
+  - *`e2e/checkpoints.spec.ts` Restore button locator ambiguity:*
+    - *Error:* `getByRole('button', { name: 'Restore' })` matched the header button `Backup and restore` as a substring, opening the Backup dialog instead of the checkpoint restore dialog.
+    - *Fix:* Used exact matching `getByRole('button', { name: 'Restore', exact: true })`.
+  - *`e2e/checkpoints.spec.ts` Files diff missing on current passport comparison:*
+    - *Error:* Comparing checkpoint to "current" failed to detect files because `CompareDialog` wrapped `currentPassport` without copying `currentPassport.files` onto the wrapper object.
+    - *Fix:* Updated `CompareDialog.tsx` to include `files: currentPassport.files` on the current source wrapper, and updated `diff.ts` `resolveSource` to fall back to `source.passport.files`.
+  - *`e2e/checkpoints.spec.ts` test 8 stale-write error copy mismatch:*
+    - *Error:* Expected pattern `/concurrently/i` on alert, but plain-language user string was `"This passport was changed somewhere else since you opened it."`.
+    - *Fix:* Updated expectation to `/(changed somewhere else|concurrently)/i` and passed `expectedUpdatedAt` from `currentPassport.project.updatedAt` in `RestoreCheckpointDialog.tsx`.
+  - *`e2e/checkpoints.spec.ts` test 9 external requests getter:*
+    - *Error:* `expect(externalRequests).toEqual([])` failed because `collectExternalRequests` returns a getter function.
+    - *Fix:* Called getter function `expect(getExternalRequests()).toEqual([])`.
+  - *`e2e/checkpoints.spec.ts` test 10 execution ceiling:*
+    - *Error:* Test 10 exceeded 20s ceiling due to running 4 consecutive Axe scans.
+    - *Fix:* Split into 10a (timeline layout/axe) and 10b (compare and restore dialogs axe), reducing run times to ~8-12s.
+  - *`e2e/capture.spec.ts:81:3` worker startup contention in full suite:*
+    - *Error:* Test timed out at 27.5s during initial worker startup and disk I/O in the full 214-test suite run.
+    - *Fix:* Verified standalone execution runs cleanly in 11.5s (desktop) and 11.7s (mobile-360).
+- **Final Test Counts:**
+  - Vitest: 556 tests across 46 files (100% passed).
+  - Playwright E2E: 214 tests across `desktop` and `mobile-360` projects (100% passed, 0 failures, 0 skipped).
+- **Five Slowest E2E Tests (vs 20s ceiling):**
+  1. `[desktop] e2e/capture.spec.ts:35:3` (19.5s) — 1. Entry points: opens from Overview next-action and Passport tab, copies prompt to clipboard
+  2. `[desktop] e2e/passport.spec.ts:961:3` (17.0s) — 16a. External-change conflict protection: two pages in one context detect conflict, reload latest syncs stored version, axe scan
+  3. `[desktop] e2e/checkpoints.spec.ts:440:3` (15.9s) — 10b. Compare and Restore dialogs Axe accessibility audit
+  4. `[desktop] e2e/capture.spec.ts:124:3` (15.8s) — 3. Error path: truncated reply displays plain-language alert, then fixing text and re-checking succeeds
+  5. `[mobile-360] e2e/conversations.spec.ts:144:3` (15.1s) — 3. Editing: flip role, merge with next, delete turn in viewer, save and reload persistence
+
+---
+
 ## Known Issues
 
 - **Dialog Initial Focus:** `Dialog` gives initial focus to the Close button upon opening, requiring keyboard users to press Tab once to reach the first interactive form field. Retained as designed in Slice 3; not changed in this ticket.
+- **Unbounded Checkpoint Growth:** Checkpoints accumulate indefinitely as snapshots, merges, and restores occur. Pruning or manual deletion is explicitly out of scope for Slice 9 and will be evaluated in future slices.

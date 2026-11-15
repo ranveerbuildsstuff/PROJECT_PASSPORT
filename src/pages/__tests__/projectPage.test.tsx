@@ -110,9 +110,17 @@ describe('ProjectPage Component Tests', () => {
       expect(screen.getByText('src/index.ts')).toBeInTheDocument();
     });
 
-    // Check placeholder on remaining future tabs (e.g. Checkpoints)
+    // Check Checkpoints tab renders real content
     const checkpointsTab = screen.getByRole('tab', { name: /Checkpoints/i });
     fireEvent.click(checkpointsTab);
+
+    await waitFor(() => {
+      expect(screen.getByText(/No checkpoints yet/i)).toBeInTheDocument();
+    });
+
+    // Check placeholder on remaining future tabs (e.g. Export)
+    const exportTab = screen.getByRole('tab', { name: /Export/i });
+    fireEvent.click(exportTab);
 
     await waitFor(() => {
       expect(screen.getByText(/Coming in a later slice/i)).toBeInTheDocument();

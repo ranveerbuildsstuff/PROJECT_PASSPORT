@@ -229,13 +229,21 @@ Readiness measures handoff preparedness across 7 equally-weighted checks:
 
 ## 10. Checkpoints
 
-- **Snapshot Contents:**
-  Current passport state + included conversation IDs + file manifest including SHA-256 content hashes.
-- **Comparison Engine:**
-  Structured visual diff generated per passport section.
-- **Safety Invariant:**
-  - Restoring a checkpoint **ALWAYS** creates an automated *"Before restore"* checkpoint first.
-  - Applying a paste-back merge **ALWAYS** creates an automated checkpoint before mutations take effect.
+- **Snapshot Contents & Extra Metadata:**
+  - Full passport state (`PassportV1`).
+  - `conversationIds`: Array of IDs of conversations with `included: true`.
+  - `files`: File manifest items including lowercase hex `sha256` hash computed via Web Crypto (`crypto.subtle.digest`), or `null` for excluded/unstored files.
+  - Optional `type` (`'manual'`, `'before_merge'`, `'before_restore'`), `note`, and `description`.
+- **Pure Comparison Engine:**
+  - Deterministic structured visual diff (`diffPassports`) across all 12 sections (basics, stack, requirements, decisions, completed, tasks, bugs, instructions, nextAction, openQuestions, files, conversations).
+  - Matches items by ID, stack by normalized name, strings by normalized value, files by path, and conversations by ID.
+  - Detects additions, removals, field changes, reordering, and file content modifications (via SHA-256 hash comparison).
+  - Backward compatibility: Legacy checkpoints created before Slice 9 display "Not recorded (this checkpoint was made before this was tracked)" for files and conversations without false diffs.
+- **Safety Invariants & Restore Scope:**
+  - **Restore Scope (Editor Fields Only):** Restoring a checkpoint applies only editor-owned fields (`applyEditorFields`). Currently attached files and conversations are preserved intact to prevent dangling references or attachment data loss. The restore dialog explicitly communicates preserved attachments.
+  - **Automated Pre-Restore Checkpoint:** Restoring a checkpoint **ALWAYS** creates an automated *"Before restore"* checkpoint first within the same atomic Dexie transaction spanning `[projects, passports, checkpoints]`.
+  - **Automated Merge Checkpoint:** Applying a paste-back merge **ALWAYS** creates an automated *"Before AI merge"* checkpoint before mutations take effect.
+  - **Concurrency & Stale-Write Protection:** Both creation and restore flows pre-compute hashes outside transactions and write inside atomic transactions guarded by `expectedUpdatedAt`, preventing corrupt overwrites during concurrent edits. Restoring provides an immediate "Undo" toast action to quickly revert back to the pre-restore state.
 
 ## 11. Export (Handoff Package)
 
