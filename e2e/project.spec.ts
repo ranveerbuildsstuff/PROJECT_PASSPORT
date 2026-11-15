@@ -53,7 +53,7 @@ test.describe('Project Page E2E Flows', () => {
     // Click Conversations tab
     await page.getByRole('tab', { name: 'Conversations' }).click();
     await expect(page).toHaveURL(new RegExp(`/project/${projectId}/conversations`));
-    await expect(page.getByRole('heading', { name: 'Conversations Tab' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 2, name: 'Conversations' })).toBeVisible();
 
     // Click Files tab
     await page.getByRole('tab', { name: 'Files' }).click();

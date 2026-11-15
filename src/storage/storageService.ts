@@ -13,6 +13,7 @@ import {
   BackupInvalid,
   ProjectNotFound,
   StaleWrite,
+  ConversationNotFound,
 } from './errors';
 import {
   createEmptyPassport,
@@ -20,6 +21,10 @@ import {
   migratePassport,
   newId,
   type PassportV1,
+  type ConversationTurn,
+  type ConversationRef,
+  type ConversationSource,
+  conversationTokenEstimate,
 } from '../domain';
 import {
   uint8ArrayToBase64,
@@ -441,11 +446,249 @@ export async function getCheckpoint(checkpointId: string): Promise<CheckpointRec
 // Conversation Operations
 // ----------------------------------------------------------------------------
 
+export interface AddPastedConversationInput {
+  title: string;
+  source: ConversationSource;
+  turns: ConversationTurn[];
+  included?: boolean;
+}
+
+export interface RemoveConversationResult {
+  conversation: ConversationRecord;
+  ref: ConversationRef;
+}
+
+/**
+ * Converts a stored ConversationRecord into pure ConversationTurn domain models.
+ */
+export function recordToTurns(record: ConversationRecord): ConversationTurn[] {
+  return record.messages.map((m, idx) => ({
+    id: m.id || `turn-${idx}`,
+    role: m.role === 'assistant' ? 'assistant' : 'user',
+    text: m.text,
+  }));
+}
+
 export async function addConversation(conversation: ConversationRecord): Promise<string> {
   await ensureAvailable();
   try {
     await db.conversations.put(conversation);
     return conversation.id;
+  } catch (err) {
+    mapStorageError(err);
+  }
+}
+
+/**
+ * Adds a pasted conversation, atomically persisting the ConversationRecord,
+ * linking the ConversationRef in passport.conversations, and bumping project.updatedAt.
+ * Protected by the atomic stale-write guard.
+ */
+export async function addPastedConversation(
+  projectId: string,
+  input: AddPastedConversationInput,
+  options?: { expectedUpdatedAt?: string }
+): Promise<string> {
+  await ensureAvailable();
+  let conversationId = '';
+
+  try {
+    await db.transaction('rw', [db.projects, db.passports, db.conversations], async () => {
+      const project = await db.projects.get(projectId);
+      if (!project) {
+        throw new ProjectNotFound(
+          `Project "${projectId}" was not found. It may have been deleted.`,
+          'Go back to your projects and try again.'
+        );
+      }
+
+      if (options?.expectedUpdatedAt && project.updatedAt !== options.expectedUpdatedAt) {
+        throw new StaleWrite();
+      }
+
+      const passportRecord = await db.passports.get(projectId);
+      if (!passportRecord) {
+        throw new ProjectNotFound(
+          `Passport for project "${projectId}" was not found.`,
+          'Go back to your projects and try again.'
+        );
+      }
+
+      conversationId = newId();
+      const now = new Date().toISOString();
+
+      const convRecord: ConversationRecord = {
+        id: conversationId,
+        projectId,
+        title: input.title.trim() || 'Untitled conversation',
+        source: input.source,
+        messages: input.turns.map((t) => ({
+          id: t.id,
+          role: t.role,
+          text: t.text,
+        })),
+        createdAt: now,
+      };
+      await db.conversations.put(convRecord);
+
+      const tokenEstimate = conversationTokenEstimate(input.turns);
+      const ref: ConversationRef = {
+        id: conversationId,
+        title: convRecord.title,
+        source: input.source,
+        messageCount: input.turns.length,
+        tokenEstimate,
+        included: input.included ?? true,
+      };
+
+      const passport = passportRecord.passport;
+      passport.conversations = [...(passport.conversations || []), ref];
+      passport.project.updatedAt = now;
+      project.updatedAt = now;
+
+      await db.passports.put({ projectId, passport });
+      await db.projects.put(project);
+    });
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('project-storage-updated'));
+    }
+
+    return conversationId;
+  } catch (err) {
+    mapStorageError(err);
+  }
+}
+
+/**
+ * Updates the turns of an existing conversation in one atomic transaction,
+ * updating message count and token estimate on the linked passport reference.
+ */
+export async function updateConversationTurns(
+  conversationId: string,
+  turns: ConversationTurn[],
+  options?: { expectedUpdatedAt?: string; title?: string }
+): Promise<void> {
+  await ensureAvailable();
+  try {
+    await db.transaction('rw', [db.projects, db.passports, db.conversations], async () => {
+      const conv = await db.conversations.get(conversationId);
+      if (!conv) {
+        throw new ConversationNotFound();
+      }
+
+      const project = await db.projects.get(conv.projectId);
+      if (!project) {
+        throw new ProjectNotFound(
+          `Project "${conv.projectId}" was not found.`,
+          'Go back to your projects and try again.'
+        );
+      }
+
+      if (options?.expectedUpdatedAt && project.updatedAt !== options.expectedUpdatedAt) {
+        throw new StaleWrite();
+      }
+
+      const passportRecord = await db.passports.get(conv.projectId);
+      if (!passportRecord) {
+        throw new ProjectNotFound(
+          `Passport for project "${conv.projectId}" was not found.`,
+          'Go back to your projects and try again.'
+        );
+      }
+
+      const now = new Date().toISOString();
+      conv.messages = turns.map((t) => ({
+        id: t.id,
+        role: t.role,
+        text: t.text,
+      }));
+      if (options?.title) {
+        conv.title = options.title.trim();
+      }
+      await db.conversations.put(conv);
+
+      const tokenEstimate = conversationTokenEstimate(turns);
+      const passport = passportRecord.passport;
+      passport.conversations = passport.conversations.map((ref) => {
+        if (ref.id === conversationId) {
+          return {
+            ...ref,
+            title: options?.title ? options.title.trim() : ref.title,
+            messageCount: turns.length,
+            tokenEstimate,
+          };
+        }
+        return ref;
+      });
+
+      passport.project.updatedAt = now;
+      project.updatedAt = now;
+
+      await db.passports.put({ projectId: conv.projectId, passport });
+      await db.projects.put(project);
+    });
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('project-storage-updated'));
+    }
+  } catch (err) {
+    mapStorageError(err);
+  }
+}
+
+/**
+ * Toggles or updates the `included` flag for a conversation reference.
+ */
+export async function setConversationIncluded(
+  conversationId: string,
+  included: boolean,
+  options?: { expectedUpdatedAt?: string }
+): Promise<void> {
+  await ensureAvailable();
+  try {
+    await db.transaction('rw', [db.projects, db.passports, db.conversations], async () => {
+      const conv = await db.conversations.get(conversationId);
+      if (!conv) {
+        throw new ConversationNotFound();
+      }
+
+      const project = await db.projects.get(conv.projectId);
+      if (!project) {
+        throw new ProjectNotFound(
+          `Project "${conv.projectId}" was not found.`,
+          'Go back to your projects and try again.'
+        );
+      }
+
+      if (options?.expectedUpdatedAt && project.updatedAt !== options.expectedUpdatedAt) {
+        throw new StaleWrite();
+      }
+
+      const passportRecord = await db.passports.get(conv.projectId);
+      if (!passportRecord) {
+        throw new ProjectNotFound(
+          `Passport for project "${conv.projectId}" was not found.`,
+          'Go back to your projects and try again.'
+        );
+      }
+
+      const passport = passportRecord.passport;
+      passport.conversations = passport.conversations.map((ref) =>
+        ref.id === conversationId ? { ...ref, included } : ref
+      );
+
+      const now = new Date().toISOString();
+      passport.project.updatedAt = now;
+      project.updatedAt = now;
+
+      await db.passports.put({ projectId: conv.projectId, passport });
+      await db.projects.put(project);
+    });
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('project-storage-updated'));
+    }
   } catch (err) {
     mapStorageError(err);
   }
@@ -470,10 +713,119 @@ export async function getConversation(id: string): Promise<ConversationRecord | 
   }
 }
 
-export async function removeConversation(id: string): Promise<void> {
+/**
+ * Removes a conversation record and its reference from passport.conversations in one transaction.
+ * Returns the removed record and reference to enable full Undo restoration.
+ */
+export async function removeConversation(
+  id: string,
+  options?: { expectedUpdatedAt?: string }
+): Promise<RemoveConversationResult | null> {
+  await ensureAvailable();
+  let removedData: RemoveConversationResult | null = null;
+
+  try {
+    await db.transaction('rw', [db.projects, db.passports, db.conversations], async () => {
+      const conv = await db.conversations.get(id);
+      if (!conv) {
+        return;
+      }
+
+      const project = await db.projects.get(conv.projectId);
+      if (!project) {
+        throw new ProjectNotFound(
+          `Project "${conv.projectId}" was not found.`,
+          'Go back to your projects and try again.'
+        );
+      }
+
+      if (options?.expectedUpdatedAt && project.updatedAt !== options.expectedUpdatedAt) {
+        throw new StaleWrite();
+      }
+
+      const passportRecord = await db.passports.get(conv.projectId);
+      if (!passportRecord) {
+        throw new ProjectNotFound(
+          `Passport for project "${conv.projectId}" was not found.`,
+          'Go back to your projects and try again.'
+        );
+      }
+
+      const passport = passportRecord.passport;
+      const ref = passport.conversations.find((r) => r.id === id);
+
+      if (ref) {
+        removedData = { conversation: conv, ref: { ...ref } };
+        passport.conversations = passport.conversations.filter((r) => r.id !== id);
+      }
+
+      const now = new Date().toISOString();
+      passport.project.updatedAt = now;
+      project.updatedAt = now;
+
+      await db.conversations.delete(id);
+      await db.passports.put({ projectId: conv.projectId, passport });
+      await db.projects.put(project);
+    });
+
+    if (removedData && typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('project-storage-updated'));
+    }
+
+    return removedData;
+  } catch (err) {
+    mapStorageError(err);
+  }
+}
+
+/**
+ * Restores a previously removed conversation record and reference (e.g. for Toast Undo).
+ */
+export async function restoreConversation(
+  conversation: ConversationRecord,
+  ref: ConversationRef,
+  options?: { expectedUpdatedAt?: string }
+): Promise<void> {
   await ensureAvailable();
   try {
-    await db.conversations.delete(id);
+    await db.transaction('rw', [db.projects, db.passports, db.conversations], async () => {
+      const project = await db.projects.get(conversation.projectId);
+      if (!project) {
+        throw new ProjectNotFound(
+          `Project "${conversation.projectId}" was not found.`,
+          'Go back to your projects and try again.'
+        );
+      }
+
+      if (options?.expectedUpdatedAt && project.updatedAt !== options.expectedUpdatedAt) {
+        throw new StaleWrite();
+      }
+
+      const passportRecord = await db.passports.get(conversation.projectId);
+      if (!passportRecord) {
+        throw new ProjectNotFound(
+          `Passport for project "${conversation.projectId}" was not found.`,
+          'Go back to your projects and try again.'
+        );
+      }
+
+      const passport = passportRecord.passport;
+      if (!passport.conversations.some((r) => r.id === ref.id)) {
+        passport.conversations.push(ref);
+      }
+
+      const now = new Date().toISOString();
+      passport.project.updatedAt = now;
+      project.updatedAt = now;
+
+      await db.conversations.put(conversation);
+      await db.passports.put({ projectId: conversation.projectId, passport });
+      await db.projects.put(project);
+    });
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('project-storage-updated'));
+    }
   } catch (err) {
     mapStorageError(err);
   }

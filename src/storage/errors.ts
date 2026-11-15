@@ -85,12 +85,29 @@ export class ProjectNotFound extends Error {
   }
 }
 
+export class ConversationNotFound extends Error {
+  readonly nextStep: string;
+
+  constructor(
+    message = 'The requested conversation was not found. It may have been deleted.',
+    nextStep = 'Go back to your conversations and try again.'
+  ) {
+    super(message);
+    this.name = 'ConversationNotFound';
+    this.nextStep = nextStep;
+  }
+}
+
 /**
  * Maps any storage error to human-readable plain language with no raw IDs or stack traces.
  */
 export function describeStorageError(err: unknown): string {
   if (err instanceof ProjectNotFound) {
     return 'This project was not found. It may have been deleted. Go back to your projects and try again.';
+  }
+
+  if (err instanceof ConversationNotFound) {
+    return 'This conversation was not found. It may have been deleted.';
   }
 
   if (err instanceof ValidationFailed) {

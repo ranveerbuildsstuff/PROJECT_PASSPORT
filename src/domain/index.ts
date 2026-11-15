@@ -6,3 +6,4 @@ export * from './migrate';
 export * from './editor';
 export * from './passportImport';
 export * from './merge';
+export * from './conversation';

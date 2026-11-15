@@ -1,0 +1,5 @@
+User:
+Explain how we can maintain zero outbound network requests in our application.
+
+Model:
+To enforce zero outbound requests, all static assets and fonts should be bundled locally using npm packages rather than loading from external CDNs. In automated Playwright testing, intercept network events with route handlers and assert that zero requests match external hosts.

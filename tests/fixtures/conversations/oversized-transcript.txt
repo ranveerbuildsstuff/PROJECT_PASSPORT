@@ -1,0 +1,17 @@
+User:
+Can you describe the design principles of Project Passport?
+
+Assistant:
+Certainly! Project Passport is founded on several key principles. First, the AI is replaceable; the project is not. Context should be preserved as structured metadata rather than ephemeral chat threads. Second, zero outbound data transmission: user data never leaves the browser. Third, single source of truth: Zod schemas define all domain entities.
+
+User:
+What are the performance requirements for parsing large transcripts?
+
+Assistant:
+Parsing is capped at 1,000,000 characters and runs in strict linear time on the main thread. By using single-pass regex matching and avoiding recursion, transcripts process in under 100 milliseconds without requiring Web Worker overhead for typical conversation lengths.
+
+User:
+How does the reconstruct prompt behave when history exceeds destination limits?
+
+Assistant:
+When history exceeds the token budget (such as 30,000 tokens for ChatGPT), newest turns are prioritized and preserved first. The oldest messages are omitted from the prompt, and an explicit notice is rendered detailing how many messages were trimmed. If even the newest message exceeds the cap on its own, it is truncated with a clear marker.

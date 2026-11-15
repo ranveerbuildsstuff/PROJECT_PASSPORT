@@ -1,0 +1,27 @@
+You said:
+How should we structure local storage for our offline document passport tool?
+
+ChatGPT said:
+We should use Dexie as an IndexedDB wrapper. IndexedDB provides structured, transactional storage in the browser without remote dependencies.
+
+Here is an architectural recommendation:
+```typescript
+export class PassportDatabase extends Dexie {
+  projects!: Table<ProjectRecord, string>;
+  passports!: Table<PassportRecord, string>;
+  conversations!: Table<ConversationRecord, string>;
+}
+```
+
+You said:
+What about atomic rollbacks when writing both project metadata and passport content?
+
+ChatGPT said:
+Dexie transactions support multi-table atomic read-write operations:
+```typescript
+await db.transaction('rw', [db.projects, db.passports], async () => {
+  await db.projects.put(project);
+  await db.passports.put(passport);
+});
+```
+If an exception occurs within the transaction callback, all table writes are rolled back automatically.

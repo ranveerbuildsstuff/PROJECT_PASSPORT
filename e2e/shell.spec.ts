@@ -244,8 +244,8 @@ test.describe('App Shell, Accessibility & Visuals', () => {
   test('12g. Dark theme axe scan: Placeholder tab', async ({ page }) => {
     await seedProjects(page, 1);
     await page.getByRole('link', { name: /Project Alpha/i }).click();
-    await page.getByRole('tab', { name: 'Conversations' }).click();
-    await expect(page.getByRole('heading', { name: 'Conversations Tab' })).toBeVisible();
+    await page.getByRole('tab', { name: 'Files' }).click();
+    await expect(page.getByRole('heading', { name: 'Files Tab' })).toBeVisible();
     await expectNoSeriousA11y(page);
   });
 
@@ -333,8 +333,8 @@ test.describe('App Shell, Accessibility & Visuals', () => {
     });
     await seedProjects(page, 1);
     await page.getByRole('link', { name: /Project Alpha/i }).click();
-    await page.getByRole('tab', { name: 'Conversations' }).click();
-    await expect(page.getByRole('heading', { name: 'Conversations Tab' })).toBeVisible();
+    await page.getByRole('tab', { name: 'Files' }).click();
+    await expect(page.getByRole('heading', { name: 'Files Tab' })).toBeVisible();
     await expectNoSeriousA11y(page);
   });
 

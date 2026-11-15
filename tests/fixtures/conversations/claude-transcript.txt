@@ -1,0 +1,11 @@
+Human:
+Can you suggest a strategy for trimming conversation history to fit target LLM context windows?
+
+Claude:
+A reliable approach is newest-first retention. Start from the most recent turns and work backwards until the cumulative token estimate reaches the budget threshold. Any remaining older turns are omitted with a clear summary note indicating how many turns were dropped.
+
+Human:
+What if the target model has a 30,000 token limit?
+
+Claude:
+With a 30,000 token budget, you can fit dozens of detailed technical exchanges. Keeping newest turns ensures the active task and recent bugs remain in context while historical discussions are safely omitted.

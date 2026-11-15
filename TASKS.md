@@ -253,23 +253,28 @@
 
 ---
 
-## Slice 6: Conversation Paste Import
+## Slice 6: Conversation Paste Import & Reconstruct Prompt
 
-- [ ] In `src/import/pasteParser.ts`, implement speaker marker detection at line start (`You said:`, `ChatGPT said:`, `User:`, `Assistant:`, etc.).
-- [ ] Implement fallback single-block parser when no known speaker markers are present.
-- [ ] In `src/ui/`, build Conversation Viewer displaying parsed message turns with role badges.
-- [ ] Implement manual message editing tools: role flipping (User ↔ Assistant), message splitting, and merging.
-- [ ] Implement token estimation per message and total conversation token counter (labeled "estimate").
-- [ ] Store imported conversation in Dexie and link reference to the active passport.
-- [ ] **Tests added:** Unit tests for speaker detection regexes, role flipping, splitting/merging operations, and conversation token estimation.
-- [ ] **Docs updated:** Document conversation data structure and parser rules in `PROGRESS.md`.
-- [ ] **Commit message:** `Slice 6: conversation paste import`
+- [x] In `src/import/pasteParser.ts`, implement $O(n)$ speaker marker detection at line start (`You said:`, `ChatGPT said:`, `User:`, `Assistant:`, `Human:`, `Claude:`, `Gemini:`, `Me:`, `Model:`), vendor source detection, CRLF normalization, and 1 MB cap.
+- [x] Implement fallback single-block parser when no known speaker markers are present, capturing pre-marker text into first turn notes.
+- [x] In `src/domain/conversation.ts`, implement pure turn operations (`flipRole`, `splitTurn`, `mergeWithNext`, `removeTurn`) and token estimation with conservation invariants.
+- [x] In `src/export/prompts.ts`, implement `generateReconstructPrompt` (version 1) sharing Schema v1 rules with capture prompt, token cap budgeting (default 30,000 tokens estimate), newest-first inclusion, and structured delimiter protection.
+- [x] In `src/storage/storageService.ts`, implement atomic storage operations (`addPastedConversation`, `updateConversationTurns`, `setConversationIncluded`, `removeConversation`, `restoreConversation`) in single transactions across `[projects, passports, conversations]` with stale-write protection.
+- [x] In `src/ui/ConversationViewer.tsx`, build accessible Conversation Viewer displaying turns with role badges, token estimates, 44px min-target controls (Flip role, Split, Merge with next, Delete), and native selection tracking.
+- [x] Implement `PasteConversationDialog.tsx` with 2-step review flow, `ReconstructPromptDialog.tsx` with copy toast and trim warnings, and `EditConversationDialog.tsx`.
+- [x] Implement `/project/:id/conversations` tab with compact empty state, attached conversation cards, include toggles, view/edit action, and removal with toast Undo.
+- [x] Update project overview and passport attached-context summaries dynamically on conversation attach/removal.
+- [x] **Tests added:** 98 new Vitest unit tests (328 total across 27 files) covering parser matrix (25+ cases), fuzzing (500 seeded mutations), turn operations, token math, reconstruct prompt, and storage rollback/stale-write guards; 18 Playwright E2E tests in `e2e/conversations.spec.ts` (152 total across suite) passing across desktop and mobile-360 with zero axe violations.
+- [x] **Docs updated:** Update `SPEC.md` §7 and §8, `PROGRESS.md`, and record failure disclosures and design decisions.
+- [x] **Commit message:** `Slice 6: conversation paste import and reconstruct prompt`
 
 **Done when:**
-- `npm run typecheck`, `npm run lint`, `npm test`, and `npm run build` pass.
-- Pasted transcripts from ChatGPT, Claude, and Gemini parse cleanly into structured message lists.
-- Users can correct speaker roles and split/merge turns in the UI.
-- npm run test:e2e, a Playwright spec per UI flow, and an axe scan per new screen
+- `npm run typecheck`, `npm run lint`, `npm test`, `npm run build`, and `npm run test:e2e` pass with zero errors.
+- Pasted transcripts from ChatGPT, Claude, Gemini, and plain text parse cleanly into structured message lists.
+- Users can correct speaker roles, split turns at cursor positions, and merge turns via mouse and keyboard.
+- Reconstruct prompt generates deterministic Schema v1 instructions bounded by token cap.
+- All axe accessibility scans pass with zero violations across desktop and mobile-360 viewports.
+- Port 4179 is confirmed free.
 
 ---
 

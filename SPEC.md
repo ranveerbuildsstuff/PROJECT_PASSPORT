@@ -132,7 +132,11 @@ Readiness measures handoff preparedness across 7 equally-weighted checks:
   - Define an explicit `nextAction`.
   - **Never** include secrets, credentials, API keys, or passwords.
 - **Reconstruct Prompt:**
-  Used when the original AI conversation is no longer accessible. It packages selected imported conversation turns (bounded by a token cap with a clear warning) and asks a destination AI to synthesize the initial Passport Schema v1 JSON.
+  Used when the original AI conversation is no longer accessible. It packages selected imported conversation turns (bounded by an adjustable token cap, default 30,000 tokens estimate) and asks a destination AI to synthesize the initial Passport Schema v1 JSON.
+  - Shares the identical Schema v1 instruction rules and constraints as the Capture Prompt via shared rule constants.
+  - Inclusion strategy: newest turns that fit under the cap are included first, with oldest turns omitted and explicitly reported in `omittedTurns`. If even the newest single turn exceeds the cap, it is included in truncated form with an omission note.
+  - Enclosed with structured delimiters (`=== BEGIN MESSAGE N (...) ===` and `=== END MESSAGE N ===`) so the recipient AI cannot confuse conversation text with instructions.
+  - Generates vendor-neutral, deterministic prompt output.
 - **Paste-back Processing:**
   - Extracts JSON from markdown fenced code blocks (` ```json `, ` ```JSON `, or bare ` ``` `) or raw unescaped text via an iterative $O(n)$ string-aware scanner (capped at 1,000,000 characters; never recursive).
   - Handles one-level unwrap of `{"passport": {...}}`. Any `schemaVersion` other than 1 is rejected with a plain-language error.
@@ -164,8 +168,14 @@ Readiness measures handoff preparedness across 7 equally-weighted checks:
 - **Pasted Text:**
   - Detects common speaker markers at line beginnings (case-insensitive):
     `"You said:"`, `"ChatGPT said:"`, `"User:"`, `"Assistant:"`, `"Human:"`, `"Claude:"`, `"Gemini:"`, `"Me:"`, `"Model:"`.
-  - If no speaker markers are detected, the input is preserved as a single message turn with manual split controls.
-  - Users can flip roles (User ↔ Assistant) and split or merge messages manually.
+  - Speaker mapping: `You said:`, `User:`, `Human:`, `Me:` map to `user`. `ChatGPT said:`, `Assistant:`, `Claude:`, `Gemini:`, `Model:` map to `assistant`.
+  - Text on the marker line belongs to that turn; mid-line markers are treated as literal text. Line-start markers inside code blocks are treated as markers for deterministic $O(n)$ linear parsing.
+  - Text before the first marker is preserved as an import note and added to the first message rather than dropped.
+  - Source detection: `chatgpt` (`You said:` / `ChatGPT said:`), `claude` (`Human:` / `Claude:`), `gemini` (`Gemini:` / `Model:`), otherwise `paste`. Mixed vendor markers default to `paste`.
+  - Fallback: with no speaker markers, input is preserved as a single `user` turn with an informational note and manual split controls.
+  - Input limits: Capped at 1,000,000 characters (1 MB). Over 1 MB returns a friendly error without freezing or crashing.
+  - Invariants: Pure edit operations (`flipRole`, `splitTurn`, `mergeWithNext`, `removeTurn`). Split followed by merge reproduces the exact original text. Text length and order are strictly conserved across operations. Out-of-range operations are safe no-ops.
+  - Dexie storage synchronization: `conversations` records hold full turn arrays; `passport.conversations` stores lightweight synchronization references (`id`, `title`, `source`, `messageCount`, `tokenEstimate`, `included`). Operations execute atomically within transactions on `[projects, passports, conversations]`, protected by stale-write guards.
 - **ChatGPT Export (`conversations.json` / sharded `conversations-000.json`):**
   - Traverses the conversation tree: each item has `title`, `create_time`, `mapping`, and `current_node`.
   - Reconstructs the active branch by walking `current_node` up through parent pointers, then reversing.

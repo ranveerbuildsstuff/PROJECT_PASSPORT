@@ -291,6 +291,42 @@ Consolidated manual checklist tests into `storageService.test.ts` and deleted re
 
 ---
 
+### Slice 6: Conversation Paste Import and Reconstruct Prompt
+
+- **Architecture & Pure Domain Modules:**
+  - `src/domain/conversation.ts`: Implemented `ConversationTurnSchema` and pure immutable operations: `flipRole`, `splitTurn`, `mergeWithNext`, and `removeTurn`. All operations treat out-of-range indexes as no-ops. Added `turnTokenEstimate` and `conversationTokenEstimate` using the shared estimation formula (`estimateTokens`). Invariant verified: `splitTurn` followed by `mergeWithNext` perfectly reproduces original turn text without character loss or reordering.
+  - `src/import/pasteParser.ts`: Implemented linear $O(n)$ deterministic parser. Detects line-start speaker markers (`You said:`, `ChatGPT said:`, `User:`, `Assistant:`, `Human:`, `Claude:`, `Gemini:`, `Me:`, `Model:`), maps to `user` or `assistant` roles, preserves pre-marker text as an import note on the first turn, normalizes CRLF to LF, and classifies sources (`chatgpt`, `claude`, `gemini`, `paste`). Caps input at 1,000,000 characters. Single-turn fallback when no markers are detected.
+  - `src/export/prompts.ts`: Exported `RECONSTRUCT_PROMPT_VERSION = 1`, shared `SCHEMA_V1_RULES` constant between capture and reconstruct prompts, and implemented `generateReconstructPrompt`. Default token budget cap: 30,000 tokens (estimate). Employs newest-first inclusion strategy, trimming oldest turns into `omittedTurns`. Structured delimiters (`=== BEGIN MESSAGE N (...) ===` and `=== END MESSAGE N ===`) prevent prompt injection.
+- **Storage Layer & Synchronization (`src/storage/storageService.ts`):**
+  - Implemented transactional mutations: `addPastedConversation`, `updateConversationTurns`, `setConversationIncluded`, `removeConversation`, and `restoreConversation`.
+  - All operations execute in single Dexie transactions on `[projects, passports, conversations]`, updating stored turns and keeping `passport.conversations` references in sync while updating `project.updatedAt`.
+  - Enforced atomic stale-write validation via `SavePassportOptions.expectedUpdatedAt`.
+  - Dispatches `project-storage-updated` custom window event to notify active views and editor instances.
+- **Decisions & Deviations:**
+  - *Removal Undo (Option A selected)*: Atomic deletion from `conversations` table and `passport.conversations` reference on remove, paired with `restoreConversation` invoked if the user clicks "Undo" in the removal toast. Simpler and cleaner than soft deletion, avoiding tombstone state cleanup complexity while preserving exact record state.
+  - *Web Worker Scope Rationale*: Input is strictly capped at 1,000,000 characters (1 MB). Main-thread benchmarks confirmed 1 MB parsing executes in under 20 ms. Per ticket scope, heavy background parsing is deferred to Slice 7 (ChatGPT/Claude bulk JSON file archives).
+  - *Code Block Speaker Markers*: Markers at line start within code blocks are treated as speaker markers to maintain pure linear $O(n)$ scanning without markdown AST parser overhead.
+- **UI Components:**
+  - `src/ui/ConversationViewer.tsx`: Accessible message groups (`role="group"`, `aria-label="Message N"`), role badges, per-turn token estimates, 44px min-dimension controls (Flip role, Split, Merge with next, Delete), and native document-level `selectionchange` tracking for accurate cursor-based splitting.
+  - `src/ui/PasteConversationDialog.tsx`: 2-step modal dialog with textarea paste input, live character/token estimation, and preview before attaching.
+  - `src/ui/ReconstructPromptDialog.tsx`: Dialog showing token cap, included/omitted message counts, trim warnings, monospace prompt preview, and copy button with clipboard fallback.
+  - `src/ui/EditConversationDialog.tsx`: Modal dialog for inspecting and editing turns of attached conversations.
+  - `src/pages/conversations/ConversationsTab.tsx`: Mounted in `/project/:id/conversations`, replacing placeholder with loading, empty, and populated states. Updates readiness scores and attached context summaries immediately.
+- **Test Integrity & Failure Disclosure (Rule 13.7):**
+  - *Compilation TS2339 in `e2e/conversations.spec.ts`*: Failed with `Property 'toHaveTextContent' does not exist on type 'MakeMatchers<void, Locator, ...>'`. *Fix*: Replaced `toHaveTextContent(...)` with Playwright standard `toContainText(...)`.
+  - *Compilation in `tests/ui/ConversationsTab.test.tsx`*: Failed `tsc -b` because `createEmptyPassport` was called with 2 arguments (`'p1', 'Empty Proj'`) when it accepts only 1 argument (`name`). *Fix*: Changed to `const passport = createEmptyPassport('Empty Proj'); passport.project.id = 'p1';`.
+  - *Axe Scan Failure on Attached Conversation Rows*: `e2e/conversations.spec.ts` failed axe-core scan with `[SERIOUS] label-content-name-mismatch: Elements must have their visible text as part of their accessible name` on the "View/edit" button. *Root cause*: Button had visible text `<span>View/edit</span>` but `aria-label="View or edit ${conv.title}"` (visible text substring "View/edit" was missing). *Fix*: Updated `aria-label` in `ConversationsTab.tsx` to `aria-label={`View/edit ${conv.title}`}`.
+  - *Run 1 of `e2e/conversations.spec.ts` (Test 2)*: Failed on `expect(locator).toBeEnabled()` for `Split Message 1`. *Root cause*: `el.setSelectionRange(...)` dispatched `select`, but React 18 and the component tracked `click`, `keyup`, and React `onSelect`. *Fix*: Added document `selectionchange` listener to `ConversationViewer.tsx` and dispatched `selectionchange`, `click`, and `keyup` in the test.
+  - *Run 1 of `e2e/conversations.spec.ts` (Test 5)*: Failed on `expect(largeAlert).toContainText('This text is over 1 MB...')` receiving empty paste error. *Root cause*: Setting `el.value = 'A'.repeat(1_000_001)` in `evaluate` bypassed React's synthetic input tracker. *Fix*: Used native value setter (`Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set?.call(el, ...)`) before dispatching `input` event.
+  - *Run 1 of `e2e/conversations.spec.ts` (Test 7)*: Failed with Playwright strict mode violation on `getByRole('button', { name: 'Close' })` matching both the "Close dialog" (X) and "Close" (secondary button). *Fix*: Added `{ exact: true }`: `page.getByRole('button', { name: 'Close', exact: true }).click()`.
+  - *Run 1 of `e2e/conversations.spec.ts` (Test 9)*: Failed keyboard-only attach flow because typing immediately after dialog open typed onto the Close button (which received initial focus), offsetting subsequent Tab navigation. *Fix*: Added `await page.keyboard.press('Tab')` after dialog open to advance focus from the Close button to the Title input.
+  - *Run 1 of full E2E suite (`npm run test:e2e`)*: Tests in `e2e/project.spec.ts` and `e2e/shell.spec.ts` (tests 12g and 13g) failed expecting the old Slice 3 placeholder heading `Conversations Tab`. *Root cause*: Slice 6 replaced the Conversations placeholder with the real Conversations tab. *Fix*: Updated `project.spec.ts` to assert on level-2 heading `Conversations`, and updated `shell.spec.ts` (12g and 13g) to assert on the remaining `Files` placeholder tab (`Files Tab`).
+- **Final Test Counts:**
+  - Vitest: 328 tests across 27 files (100% passed).
+  - Playwright E2E: 152 tests across `desktop` and `mobile-360` projects (100% passed, 0 failures, 0 skipped).
+
+---
+
 ## Known Issues
 
 *None recorded yet.*

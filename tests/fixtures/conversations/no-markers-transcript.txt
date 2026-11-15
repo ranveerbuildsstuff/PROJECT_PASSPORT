@@ -1,0 +1,7 @@
+Project Architecture Meeting Minutes
+
+We decided to implement single-project editing with an offline-first architecture. All state is maintained locally in IndexedDB using Dexie.
+
+Next Steps:
+1. Finish the conversation import view and allow manual turn splitting.
+2. Verify that readiness score updates dynamically when conversations are attached.
