@@ -215,6 +215,7 @@ export function CheckpointsTab({
         onClose={() => setComparingCheckpointId(null)}
         checkpoints={checkpoints}
         currentPassport={passport}
+        projectId={projectId}
         initialFromId={comparingCheckpointId || undefined}
         initialToId="current"
       />

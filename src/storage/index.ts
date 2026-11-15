@@ -10,6 +10,8 @@ export {
   applyMergeWithCheckpoint,
   restoreCheckpoint,
   getCheckpoint,
+  listCheckpoints,
+  getCurrentFileHashes,
   type ApplyMergeOptions,
   type ApplyMergeResult,
   addConversation,

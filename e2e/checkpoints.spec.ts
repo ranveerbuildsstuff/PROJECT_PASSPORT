@@ -393,7 +393,7 @@ test.describe('Slice 9: Checkpoints Timeline, Compare and Restore', () => {
     await restoreDialog.getByRole('button', { name: 'Restore checkpoint' }).click();
 
     // Verify dialog alert surfaced safely without uncaught exception
-    await expect(restoreDialog.getByRole('alert')).toContainText(/(changed somewhere else|concurrently)/i);
+    await expect(restoreDialog.getByRole('alert')).toContainText('Another tab changed this passport. Reload the latest version before restoring.');
     await restoreDialog.getByRole('button', { name: 'Cancel' }).click();
     await expect(restoreDialog).not.toBeVisible();
 

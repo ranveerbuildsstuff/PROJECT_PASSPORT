@@ -384,6 +384,47 @@ export interface CreateCheckpointOptions {
 }
 
 /**
+ * Retrieves the current project files from the database with calculated SHA-256 hashes.
+ * Follows the same hashing logic as checkpoint creation (excluded files have sha256: null).
+ */
+export async function getCurrentFileHashes(projectId: string): Promise<CheckpointFileItem[]> {
+  const passport = await getPassport(projectId);
+  if (!passport || !passport.files || passport.files.length === 0) {
+    return [];
+  }
+
+  const rawFiles = await db.files.where('projectId').equals(projectId).toArray();
+  const fileMap = new Map<string, FileRecord>();
+  for (const f of rawFiles) {
+    fileMap.set(f.path, f);
+  }
+
+  const checkpointFiles: CheckpointFileItem[] = [];
+  for (const f of passport.files) {
+    let sha256: string | null = null;
+    if (f.included) {
+      const rec = fileMap.get(f.path);
+      if (rec) {
+        try {
+          sha256 = await sha256Hex(rec.content);
+        } catch {
+          sha256 = null;
+        }
+      }
+    }
+    checkpointFiles.push({
+      path: f.path,
+      purpose: f.purpose,
+      included: f.included,
+      sizeBytes: f.sizeBytes,
+      sha256,
+    });
+  }
+
+  return checkpointFiles;
+}
+
+/**
  * Creates a named snapshot of the project passport with file SHA-256 hashes and conversation IDs.
  *
  * Invariants:

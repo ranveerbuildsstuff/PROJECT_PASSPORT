@@ -1,7 +1,28 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, it, expect } from 'vitest';
-import { scanText, type SecretFinding } from '../../src/domain/secretScanner';
+import { scanText } from '../../src/domain/secretScanner';
+
+const IGNORED_DIRS = new Set([
+  'node_modules',
+  'dist',
+  'build',
+  '.git',
+  '.next',
+  'coverage',
+  'test-results',
+  'playwright-report',
+  'e2e-results',
+  '.turbo',
+  '.cache',
+  '.vite',
+]);
+
+const IGNORED_FILES = new Set([
+  'package-lock.json',
+  'pnpm-lock.yaml',
+  'yarn.lock',
+]);
 
 function getAllSourceFiles(dir: string, fileList: string[] = []): string[] {
   if (!fs.existsSync(dir)) return fileList;
@@ -9,10 +30,11 @@ function getAllSourceFiles(dir: string, fileList: string[] = []): string[] {
   for (const entry of entries) {
     const fullPath = path.join(dir, entry.name);
     if (entry.isDirectory()) {
-      if (entry.name !== 'node_modules' && entry.name !== 'dist' && entry.name !== '.git') {
+      if (!IGNORED_DIRS.has(entry.name)) {
         getAllSourceFiles(fullPath, fileList);
       }
     } else {
+      if (IGNORED_FILES.has(entry.name)) continue;
       const ext = path.extname(entry.name).toLowerCase();
       if (['.ts', '.tsx', '.js', '.jsx', '.json', '.md', '.css', '.html'].includes(ext)) {
         fileList.push(fullPath);
@@ -23,25 +45,24 @@ function getAllSourceFiles(dir: string, fileList: string[] = []): string[] {
 }
 
 describe('Repository Secret Hygiene', () => {
-  it('scans all committed src/, tests/, and e2e/ files with the app secret scanner and finds zero secrets', () => {
+  it('scans all committed src/, tests/, and e2e/ files with the app secret scanner and finds zero secrets', async () => {
     const rootDir = process.cwd();
     const targetDirs = ['src', 'tests', 'e2e'].map((d) => path.join(rootDir, d));
     const allFiles = targetDirs.flatMap((d) => getAllSourceFiles(d));
 
-    const allFindings: Array<{ file: string; findings: SecretFinding[] }> = [];
+    // Filter out this test file itself to avoid any self-referential false alarms
+    const filesToScan = allFiles.filter((filePath) => !filePath.endsWith('repoHygiene.test.ts'));
 
-    for (const filePath of allFiles) {
-      // Skip this test file itself to avoid any self-referential false alarms
-      if (filePath.endsWith('repoHygiene.test.ts')) continue;
+    const fileResults = await Promise.all(
+      filesToScan.map(async (filePath) => {
+        const content = await fs.promises.readFile(filePath, 'utf-8');
+        const relPath = path.relative(rootDir, filePath).replace(/\\/g, '/');
+        const findings = scanText(content, relPath);
+        return { file: relPath, findings };
+      })
+    );
 
-      const content = fs.readFileSync(filePath, 'utf-8');
-      const relPath = path.relative(rootDir, filePath).replace(/\\/g, '/');
-      const findings = scanText(content, relPath);
-
-      if (findings.length > 0) {
-        allFindings.push({ file: relPath, findings });
-      }
-    }
+    const allFindings = fileResults.filter((r) => r.findings.length > 0);
 
     if (allFindings.length > 0) {
       const summary = allFindings
@@ -55,5 +76,5 @@ describe('Repository Secret Hygiene', () => {
     }
 
     expect(allFindings).toHaveLength(0);
-  }, 30000);
+  });
 });

@@ -679,6 +679,64 @@ Consolidated manual checklist tests into `storageService.test.ts` and deleted re
 
 ---
 
+### Slice 9b: Checkpoints Closeout
+
+- **Audit Findings & Architecture Enhancements:**
+  - *Vitest Timeout Resolution:*
+    - Diagnosed `tests/domain/repoHygiene.test.ts` slowdown under test runner concurrency: refactored file walking to skip build/distribution directories (`node_modules`, `dist`, `build`, `.git`, `.next`, `coverage`, `test-results`, `playwright-report`, `e2e-results`, `.turbo`, `.cache`, `.vite`) and lockfiles (`package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`), and parallelized read operations via `Promise.all` with `fs.promises.readFile`. Reverted test timeout from 30,000ms to default (5,000ms) with execution completing in ~119ms.
+    - Diagnosed `src/pages/passport/__tests__/PassportEditor.test.tsx` accordion test slowdown: reverted explicit 15,000ms timeouts to default (5,000ms); tests complete in ~750-870ms.
+  - *E2E Slowdown Diagnostics & Benchmarks:*
+    - Recorded baseline machine state (TotalVisibleMemorySize = 6,237,832 KB, FreePhysicalMemory = 1,554,232 KB (~1.55 GB free)).
+    - Re-ran `capture.spec.ts` test 1, `capture.spec.ts:81` (test 2), and `passport.spec.ts:961` (16a) 3 times standalone.
+    - Diagnosed cause: `capture.spec.ts:35` combined dialog launch, clipboard copy, tab switching, and full Axe accessibility scan in a single test; split into `1a` (overview copy) and `1b` (passport tab toolbar entry + axe scan), reducing duration from 19.5s to 9.1s / 14.5s.
+    - Diagnosed cause: `capture.spec.ts:81` included redundant full-page Axe audit after extensive DOM diff rendering (already covered in dedicated test 5); removed redundant scan, reducing duration from 23.9s timeout to 7.2s.
+    - Diagnosed cause: `passport.spec.ts:961` (16a) mounted two browser tabs simultaneously, performed storage mutations and polling, and ran a full Axe scan on Page B while Page A was still mounted; split into `16a` (conflict detection and sync) and `16c` (conflict UI layout and Axe scan), reducing execution from 38s timeout to 10.1s (16a) and 8.9s (16c).
+  - *Stale-Write Copy Standardization:*
+    - Replaced all restore conflict string variations with the single exact specification string: `"Another tab changed this passport. Reload the latest version before restoring."`.
+    - Updated `RestoreCheckpointDialog.tsx` to display this exact message upon catching `StaleWrite` or when `flushActiveAutosave()` reports `{ ok: false, reason: 'conflict' }`.
+    - Made `e2e/checkpoints.spec.ts` assertion exact without alternation.
+    - Added service-level test in `checkpointStorage.test.ts` verifying that `restoreCheckpoint` rejects with `StaleWrite` and modifies zero records when `expectedUpdatedAt` is stale.
+  - *Duplicate IDs in Diff Handling:*
+    - Documented duplicate-ID matching invariant in `src/domain/diff.ts`: first occurrence of an ID is matched; subsequent items with the same ID are discarded to preserve deterministic diff mapping.
+    - Added dedicated test suite in `tests/domain/diff.test.ts` verifying deduplication and the mathematical symmetry invariant: `diff(A, B).added === diff(B, A).removed`.
+  - *Current-Side Content Hashes in Compare:*
+    - Added `getCurrentFileHashes(projectId: string)` to storage service layer, computing SHA-256 digests for all stored files matching the project manifest (with `sha256: null` for excluded files).
+    - Updated `src/ui/CompareDialog.tsx` to accept `projectId` and asynchronously hash stored content when comparing against `"current"`.
+    - Added tests in `tests/ui/CheckpointsTab.test.tsx` proving that identical stored content produces no "Content changed" notification, while modified stored content at the same path triggers the `Content changed (SHA-256)` badge.
+  - *Hash Robustness & Retry Logic:*
+    - Added test in `tests/domain/hash.test.ts` proving `sha256Hex` accurately digests `Uint8Array` subarray views (`subarray(offset, length)`).
+    - Added tests in `src/storage/__tests__/checkpointStorage.test.ts` proving `createCheckpoint` retries once if a concurrent update occurs during the external hashing window, succeeding if stable on retry, or throwing `StaleWrite` if concurrent mutations persist.
+  - *Autosave Conflict Protection:*
+    - Added unit test in `tests/ui/CheckpointsTab.test.tsx` proving that attempting to restore while autosave is in a conflict state immediately halts with `"Another tab changed this passport. Reload the latest version before restoring."` without modifying stored checkpoints or overwriting local draft edits.
+
+- **Rule 13.7 Failure Disclosure during Slice 9b:**
+  - *`tests/domain/repoHygiene.test.ts` unused import (Exit code 1):*
+    - *Error:* `error TS6133: 'SecretFinding' is declared but its value is never read.`
+    - *Fix:* Removed unused import `SecretFinding` from `tests/domain/repoHygiene.test.ts`.
+  - *`src/storage/__tests__/checkpointStorage.test.ts` missing named import (Exit code 1):*
+    - *Error:* `ReferenceError: getProject is not defined`.
+    - *Fix:* Added `getProject` to named imports from `../storageService`.
+  - *`e2e/capture.spec.ts:81` Run 1 failure on desktop:*
+    - *Error:* `Test timeout of 20000ms exceeded` (ran 23.9s).
+    - *Fix:* Removed redundant Axe scan from test 2 (test 5 already covers this state) and split test 1 into 1a and 1b.
+  - *`e2e/passport.spec.ts:961` 16a timeout failure (Exit code 1):*
+    - *Error:* `Test timeout of 20000ms exceeded` (ran ~38-40s).
+    - *Fix:* Split 16a into 16a (conflict logic) and 16c (layout and Axe scan).
+  - *`tests/ui/CheckpointsTab.test.tsx` Run 1 (Exit code 1):*
+    - *Error:* `Unable to find an element with the text: Files` because `CompareDialog` shows the global "No differences found" banner when all sections are identical.
+    - *Fix:* Added a non-file change (`currentPass.project.goal`) so that section cards render, exposing the Files section with `(No changes)`.
+  - *`tests/ui/CheckpointsTab.test.tsx` Run 2 (Exit code 1):*
+    - *Error:* `Unable to find an element with the text: Files` because `CompareDialog` filters out unchanged sections (`if (!sec.hasChanges && !sec.notRecorded) return null`).
+    - *Fix:* Updated assertion in Case A to verify `queryByText('Files')` and `queryByText('Content changed (SHA-256)')` are null, and in Case B (after file content is modified) `getByText('Files')` and `getByText('Content changed (SHA-256)')` are present.
+  - *TypeScript compilation errors during `npm run typecheck` in Slice 9b (Exit code 1):*
+    - *Error:* `src/ui/RestoreCheckpointDialog.tsx(10,29): error TS2724: '"../storage"' has no exported member named 'listCheckpoints'`; `src/ui/RestoreCheckpointDialog.tsx(82,50): error TS7006: Parameter 'c' implicitly has an 'any' type`; `src/storage/__tests__/checkpointStorage.test.ts: error TS2345: mockImplementation return type mismatch with Dexie PromiseExtended`.
+    - *Fix:* Re-exported `listCheckpoints` from `src/storage/index.ts`; typed `(c: CheckpointRecord)` in `RestoreCheckpointDialog.tsx`; cast `mockImplementation` handler in `checkpointStorage.test.ts`.
+  - *ESLint `@typescript-eslint/no-explicit-any` in Slice 9b (Exit code 1):*
+    - *Error:* `src/storage/__tests__/checkpointStorage.test.ts: error Unexpected any. Specify a different type @typescript-eslint/no-explicit-any`.
+    - *Fix:* Replaced `any` casts with `as unknown as typeof db.projects.get` and typed parameter `(id: string)`.
+
+---
+
 ## Known Issues
 
 - **Dialog Initial Focus:** `Dialog` gives initial focus to the Close button upon opening, requiring keyboard users to press Tab once to reach the first interactive form field. Retained as designed in Slice 3; not changed in this ticket.

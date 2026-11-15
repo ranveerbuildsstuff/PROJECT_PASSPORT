@@ -958,7 +958,7 @@ test.describe('Passport Editor E2E Tests', () => {
     expect(savedIndex).toBeGreaterThan(savingIndex);
   });
 
-  test('16a. External-change conflict protection: two pages in one context detect conflict, reload latest syncs stored version, axe scan', async ({
+  test('16a. External-change conflict protection: two pages in one context detect conflict, reload latest syncs stored version', async ({
     page,
     context,
   }) => {
@@ -1069,9 +1069,6 @@ test.describe('Passport Editor E2E Tests', () => {
     }, projectId!);
     expect(storedGoal).toBe('Goal set by Page A');
 
-    // Axe scan of the conflict state in Page B (desktop + mobile-360)
-    await expectNoSeriousA11y(pageB);
-
     // Scenario 1: Click "Reload latest" in Page B -> shows A's value
     await reloadBtn.click();
     await expect(autosaveStatusB).toContainText('Saved');
@@ -1131,5 +1128,101 @@ test.describe('Passport Editor E2E Tests', () => {
     await expect(pageB.getByRole('textbox', { name: 'Project goal' })).toHaveValue('Decisive Goal from Page B');
 
     await pageB.close();
+  });
+
+  test('16c. External-change conflict protection: conflict alert layout, touch targets, and axe scan', async ({
+    page,
+  }) => {
+    collectConsoleErrors(page);
+    const projectId = '16161616-1616-4616-8616-161616161618';
+    await page.evaluate(async (pId: string) => {
+      const now = new Date().toISOString();
+      const pRecord = {
+        id: pId,
+        name: 'Concurrent Conflict Axe Project',
+        createdAt: now,
+        updatedAt: now,
+      };
+      const passRecord = {
+        projectId: pId,
+        schemaVersion: 1,
+        passport: {
+          schemaVersion: 1,
+          project: {
+            id: pId,
+            name: 'Concurrent Conflict Axe Project',
+            goal: 'Baseline goal',
+            summary: '',
+            status: 'idea',
+            createdAt: now,
+            updatedAt: now,
+          },
+          stack: [],
+          requirements: [],
+          decisions: [],
+          completed: [],
+          tasks: [],
+          bugs: [],
+          bugsReviewed: false,
+          instructions: [],
+          nextAction: '',
+          openQuestions: [],
+          files: [],
+          conversations: [],
+        },
+      };
+      const req = indexedDB.open('ProjectPassportDB');
+      await new Promise<void>((resolve, reject) => {
+        req.onsuccess = () => {
+          const db = req.result;
+          const tx = db.transaction(['projects', 'passports'], 'readwrite');
+          tx.objectStore('projects').put(pRecord);
+          tx.objectStore('passports').put(passRecord);
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => reject(tx.error);
+        };
+        req.onerror = () => reject(req.error);
+      });
+    }, projectId);
+
+    await page.goto(`/project/${projectId}/passport`);
+    await expect(page.getByRole('heading', { level: 1, name: 'Concurrent Conflict Axe Project' })).toBeVisible();
+    await expect(page.getByRole('status', { name: 'Autosave status' })).toContainText('Saved');
+
+    // Simulate external update directly in IndexedDB (as if saved by another tab)
+    await page.evaluate(async (pId: string) => {
+      const later = new Date(Date.now() + 5000).toISOString();
+      const req = indexedDB.open('ProjectPassportDB');
+      await new Promise<void>((resolve, reject) => {
+        req.onsuccess = () => {
+          const db = req.result;
+          const tx = db.transaction(['projects', 'passports'], 'readwrite');
+          const getReq = tx.objectStore('passports').get(pId);
+          getReq.onsuccess = () => {
+            const rec = getReq.result;
+            rec.passport.project.goal = 'Updated by external tab';
+            rec.passport.project.updatedAt = later;
+            tx.objectStore('passports').put(rec);
+            tx.objectStore('projects').put({ id: pId, name: 'Concurrent Conflict Axe Project', updatedAt: later });
+          };
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => reject(tx.error);
+        };
+        req.onerror = () => reject(req.error);
+      });
+    }, projectId);
+
+    // Edit local draft to trigger autosave check
+    const goalInput = page.getByRole('textbox', { name: 'Project goal' });
+    await goalInput.fill('Local conflict edit');
+
+    // Conflict banner appears
+    const autosaveStatus = page.getByRole('status', { name: 'Autosave status' });
+    await expect(autosaveStatus).toContainText('This passport was changed somewhere else');
+    await expect(page.getByRole('button', { name: 'Reload latest' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Keep my version' })).toBeVisible();
+
+    await auditPageLayoutAndTouchTargets(page, 'conflict-state');
+    await expectNoSeriousA11y(page);
   });
 });

@@ -4,7 +4,8 @@ import { BrowserRouter } from 'react-router-dom';
 import { CheckpointsTab } from '../../src/pages/checkpoints/CheckpointsTab';
 import { ToastProvider } from '../../src/ui/Toast';
 import { db } from '../../src/storage/db';
-import { createProject, createCheckpoint } from '../../src/storage/storageService';
+import { createProject, createCheckpoint, addProjectFiles } from '../../src/storage/storageService';
+import { registerAutosaveFlusher } from '../../src/lib';
 import type { PassportV1 } from '../../src/domain/passport.schema';
 
 const mockPassport: PassportV1 = {
@@ -196,5 +197,132 @@ describe('CheckpointsTab Component', () => {
     await waitFor(() => {
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
+  });
+
+  it('hashes stored content for Current side: same content is not content changed, different content at same path is', async () => {
+    const proj = await createProject('Hash Compare Project');
+    await addProjectFiles(proj.id, [
+      {
+        path: 'src/app.ts',
+        purpose: 'Application',
+        content: 'console.log("version 1");',
+        sizeBytes: 25,
+        included: true,
+      },
+    ]);
+
+    // Create checkpoint #1 with the initial content
+    await createCheckpoint(proj.id, { note: 'CP 1' });
+
+    const passportRecord = await db.passports.get(proj.id);
+    const currentPass = passportRecord!.passport;
+
+    // Render tab
+    const { unmount } = renderCheckpointsTab(proj.id, currentPass);
+
+    // Case A: Same file content (with a change in project goal so sections render)
+    currentPass.project.goal = 'Updated Goal to Trigger Section Render';
+    await db.passports.update(proj.id, { passport: currentPass });
+
+    // Open Compare dialog
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Compare/i })).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Compare/i }));
+
+    let dialog!: HTMLElement;
+    await waitFor(() => {
+      dialog = screen.getByRole('dialog', { name: /Compare versions/i });
+      expect(dialog).toBeInTheDocument();
+    });
+
+    // Case A assertions: Files section has no changes (returns null, not rendered) and no Content changed badge
+    await waitFor(() => {
+      expect(within(dialog).queryByText('Files')).not.toBeInTheDocument();
+      expect(within(dialog).queryByText('Content changed (SHA-256)')).not.toBeInTheDocument();
+    });
+
+    // Close dialog
+    fireEvent.click(within(dialog).getByRole('button', { name: /^Close$/i }));
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+    unmount();
+
+    // Case B: Update stored content in db.files to different content at the same path
+    const fileId = `${proj.id}:src/app.ts`;
+    const existingFile = await db.files.get(fileId);
+    await db.files.put({
+      ...existingFile!,
+      content: 'console.log("version 2 modified content");',
+      sizeBytes: 39,
+    });
+    // Update size in current passport
+    currentPass.files = [
+      { path: 'src/app.ts', purpose: 'Application', included: true, sizeBytes: 39 },
+    ];
+    await db.passports.update(proj.id, { passport: currentPass });
+
+    renderCheckpointsTab(proj.id, currentPass);
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Compare/i })).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Compare/i }));
+
+    await waitFor(() => {
+      dialog = screen.getByRole('dialog', { name: /Compare versions/i });
+      expect(dialog).toBeInTheDocument();
+    });
+
+    // Case B assertion: Current side hash was re-computed from stored content and differs from CP1
+    await waitFor(() => {
+      expect(within(dialog).getByText('Content changed (SHA-256)')).toBeInTheDocument();
+      expect(within(dialog).getByText('(1 changed)')).toBeInTheDocument();
+    });
+  });
+
+  it('restoring while autosave is in conflict state blocks with the message and loses no edits', async () => {
+    const proj = await createProject('Conflict Restore Project');
+    await createCheckpoint(proj.id, { note: 'Safe Checkpoint' });
+
+    // Register an active flusher simulating conflict state
+    registerAutosaveFlusher(async () => ({ ok: false, reason: 'conflict' }));
+
+    try {
+      renderCheckpointsTab(proj.id);
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /^Restore$/i })).toBeInTheDocument();
+      });
+
+      // Click restore on the checkpoint
+      fireEvent.click(screen.getByRole('button', { name: /^Restore$/i }));
+
+      let dialog!: HTMLElement;
+      await waitFor(() => {
+        dialog = screen.getByRole('dialog', { name: /Restore checkpoint/i });
+        expect(dialog).toBeInTheDocument();
+      });
+
+      // Submit restore
+      const restoreSubmitBtn = within(dialog).getByRole('button', { name: /^Restore checkpoint$/i });
+      fireEvent.click(restoreSubmitBtn);
+
+      // Verify that it blocked with the exact stale conflict message
+      await waitFor(() => {
+        expect(
+          within(dialog).getByText(
+            'Another tab changed this passport. Reload the latest version before restoring.'
+          )
+        ).toBeInTheDocument();
+      });
+
+      // Verify checkpoint table count was not changed by a restore
+      const cps = await db.checkpoints.where('projectId').equals(proj.id).toArray();
+      // Only the initial checkpoint exists; no "Before restore" checkpoint was created
+      expect(cps).toHaveLength(1);
+      expect(cps[0]!.note).toBe('Safe Checkpoint');
+    } finally {
+      registerAutosaveFlusher(null);
+    }
   });
 });

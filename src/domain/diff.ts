@@ -466,6 +466,17 @@ function diffStack(fromList: StackItem[], toList: StackItem[]): SectionDiff<Stac
   };
 }
 
+/**
+ * Compares two lists of items keyed by unique `id`.
+ *
+ * Duplicate ID Handling:
+ * If either list contains multiple items with the identical `id` (e.g. from malformed imports),
+ * the diff engine matches the first occurrence in each list (`fromMap` / `toMap`) and ignores
+ * subsequent duplicate IDs (`seenToIds` / `seenFromIds`). This ensures:
+ * 1. Each unique ID appears at most once across `added`, `removed`, and `changed`.
+ * 2. Symmetry invariant holds: `diff(A, B).added` matches `diff(B, A).removed`,
+ *    and `diff(A, B).removed` matches `diff(B, A).added`.
+ */
 function diffIdList<T extends { id: string }>(
   sectionId: DiffSectionId,
   title: string,

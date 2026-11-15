@@ -7,7 +7,7 @@ import type { CheckpointRecord } from '../storage/db';
 import type { PassportV1 } from '../domain/passport.schema';
 import { checkpointKind } from '../domain/checkpoint';
 import { diffPassports } from '../domain/diff';
-import { restoreCheckpoint, listCheckpoints } from '../storage/storageService';
+import { restoreCheckpoint, listCheckpoints, StaleWrite } from '../storage';
 import { flushActiveAutosave } from '../lib';
 import { useToast } from './useToast';
 
@@ -58,7 +58,11 @@ export function RestoreCheckpointDialog({
 
     try {
       // Step 1: Flush any pending debounced autosave edits
-      await flushActiveAutosave();
+      const flushResult = (await flushActiveAutosave()) as { ok: boolean; reason?: string } | undefined;
+      if (flushResult && !flushResult.ok && flushResult.reason === 'conflict') {
+        setError('Another tab changed this passport. Reload the latest version before restoring.');
+        return;
+      }
 
       // Step 2: Restore editor fields (creates automatic "Before restore" checkpoint atomically)
       const restored = await restoreCheckpoint(checkpoint.id, {
@@ -75,7 +79,7 @@ export function RestoreCheckpointDialog({
           onClick: async () => {
             try {
               const list = await listCheckpoints(checkpoint.projectId);
-              const beforeRestoreCp = list.find((c) => c.type === 'before_restore' || c.description === 'Before restore');
+              const beforeRestoreCp = list.find((c: CheckpointRecord) => c.type === 'before_restore' || c.description === 'Before restore');
               if (beforeRestoreCp) {
                 await flushActiveAutosave();
                 const unDone = await restoreCheckpoint(beforeRestoreCp.id);
@@ -94,8 +98,12 @@ export function RestoreCheckpointDialog({
         onRestored(restored);
       }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to restore checkpoint.';
-      setError(msg);
+      if (err instanceof StaleWrite || (err instanceof Error && err.name === 'StaleWrite')) {
+        setError('Another tab changed this passport. Reload the latest version before restoring.');
+      } else {
+        const msg = err instanceof Error ? err.message : 'Failed to restore checkpoint.';
+        setError(msg);
+      }
     } finally {
       setIsRestoring(false);
     }

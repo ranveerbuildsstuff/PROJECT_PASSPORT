@@ -1,7 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import Dexie from 'dexie';
 import { db, type CheckpointRecord } from '../db';
 import {
   createProject,
+  getProject,
   createCheckpoint,
   listCheckpoints,
   restoreCheckpoint,
@@ -95,6 +97,35 @@ describe('Checkpoint Storage Service', () => {
         expectedUpdatedAt: '2020-01-01T00:00:00.000Z',
       })
     ).rejects.toThrow(StaleWrite);
+  });
+
+  it('restoreCheckpoint throws StaleWrite and writes nothing when expectedUpdatedAt is stale', async () => {
+    const proj = await createProject('Restore Stale Project');
+    const cpId = await createCheckpoint(proj.id, { note: 'Initial CP' });
+
+    // Modify passport in storage
+    const passRec = await db.passports.get(proj.id);
+    const originalGoal = passRec!.passport.project.goal;
+    const originalUpdatedAt = passRec!.passport.project.updatedAt;
+    const initialCheckpointCount = (await listCheckpoints(proj.id)).length;
+
+    // Call restoreCheckpoint with a stale expectedUpdatedAt
+    await expect(
+      restoreCheckpoint(cpId, {
+        expectedUpdatedAt: '2020-01-01T00:00:00.000Z',
+      })
+    ).rejects.toThrow(StaleWrite);
+
+    // Verify nothing was written
+    const postPassRec = await db.passports.get(proj.id);
+    expect(postPassRec!.passport.project.goal).toBe(originalGoal);
+    expect(postPassRec!.passport.project.updatedAt).toBe(originalUpdatedAt);
+
+    const postProj = await getProject(proj.id);
+    expect(postProj!.updatedAt).toBe(proj.updatedAt);
+
+    const postCheckpointList = await listCheckpoints(proj.id);
+    expect(postCheckpointList).toHaveLength(initialCheckpointCount);
   });
 
   it('restores checkpoint: replaces editor fields only, keeps files & conversations, creates "Before restore" checkpoint', async () => {
@@ -238,5 +269,60 @@ describe('Checkpoint Storage Service', () => {
     expect(restoredCps[0]!.id).toBe(cpId);
     expect(restoredCps[0]!.note).toBe('Backup snapshot');
     expect(restoredCps[0]!.files?.[0]?.path).toBe('src/app.ts');
+  });
+
+  it('retries once and succeeds if concurrent change happened during hash computation on first try', async () => {
+    const proj = await createProject('Retry Success Project');
+
+    let txCount = 0;
+    const originalGet = db.projects.get.bind(db.projects);
+    const getSpy = vi.spyOn(db.projects, 'get').mockImplementation(((async (id: string) => {
+      const res = await originalGet(id);
+      if (res && Dexie.currentTransaction) {
+        txCount++;
+        if (txCount === 1) {
+          // Simulate concurrent edit during first transaction check
+          return {
+            ...res,
+            updatedAt: '2026-01-01T99:99:99.000Z',
+          };
+        }
+      }
+      return res;
+    }) as unknown as typeof db.projects.get));
+
+    try {
+      const cpId = await createCheckpoint(proj.id);
+      expect(cpId).toBeDefined();
+      expect(txCount).toBe(2); // First failed and retried, second succeeded
+    } finally {
+      getSpy.mockRestore();
+    }
+  });
+
+  it('retries once and then throws StaleWrite when the project changes between read and write on retry', async () => {
+    const proj = await createProject('Retry Stale Project');
+
+    let txCount = 0;
+    const originalGet = db.projects.get.bind(db.projects);
+    const getSpy = vi.spyOn(db.projects, 'get').mockImplementation(((async (id: string) => {
+      const res = await originalGet(id);
+      if (res && Dexie.currentTransaction) {
+        txCount++;
+        // Always simulate concurrent edit inside transaction
+        return {
+          ...res,
+          updatedAt: `2026-01-01T00:00:${String(txCount).padStart(2, '0')}.000Z`,
+        };
+      }
+      return res;
+    }) as unknown as typeof db.projects.get));
+
+    try {
+      await expect(createCheckpoint(proj.id)).rejects.toThrow(StaleWrite);
+      expect(txCount).toBe(2); // Attempted once, retried once, then threw StaleWrite
+    } finally {
+      getSpy.mockRestore();
+    }
   });
 });

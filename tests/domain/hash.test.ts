@@ -19,4 +19,12 @@ describe('hash domain module', () => {
     expect(hash1).toBe('ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad');
     expect(hash1).toBe(hash2);
   });
+
+  it('handles Uint8Array subarray view correctly', async () => {
+    // Array: [0, 1, 97, 98, 99, 2, 3] where indices 2..4 are 97, 98, 99 ("abc")
+    const buffer = new Uint8Array([0, 1, 97, 98, 99, 2, 3]);
+    const subarray = buffer.subarray(2, 5);
+    const hash = await sha256Hex(subarray);
+    expect(hash).toBe('ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad');
+  });
 });

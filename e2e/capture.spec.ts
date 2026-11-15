@@ -32,7 +32,7 @@ test.describe('Slice 5a: Capture From AI Dialog & Paste-Back Flow', () => {
     await expect(page.getByRole('heading', { level: 1, name: 'AI Capture Project' })).toBeVisible();
   });
 
-  test('1. Entry points: opens from Overview next-action and Passport tab, copies prompt to clipboard', async ({
+  test('1a. Entry point: opens from Overview next-action and copies prompt to clipboard', async ({
     page,
     context,
   }) => {
@@ -67,7 +67,9 @@ test.describe('Slice 5a: Capture From AI Dialog & Paste-Back Flow', () => {
     // Close dialog with Escape
     await page.keyboard.press('Escape');
     await expect(dialog).not.toBeVisible();
+  });
 
+  test('1b. Entry point: opens from Passport tab toolbar with axe scan', async ({ page }) => {
     // 2. Open from Passport tab toolbar
     await page.getByRole('tab', { name: 'Passport' }).click();
     const passportCaptureBtn = page.getByRole('button', { name: 'Capture from AI' }).first();
@@ -118,7 +120,6 @@ test.describe('Slice 5a: Capture From AI Dialog & Paste-Back Flow', () => {
 
     // Assert zero console errors
     expect(consoleErrors).toEqual([]);
-    await expectNoSeriousA11y(page);
   });
 
   test('3. Error path: truncated reply displays plain-language alert, then fixing text and re-checking succeeds', async ({

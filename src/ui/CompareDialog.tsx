@@ -6,14 +6,17 @@ import { Select } from './Select';
 import { ArrowLeftRight, CheckCircle2, ChevronDown, ChevronRight } from 'lucide-react';
 import type { CheckpointRecord } from '../storage/db';
 import type { PassportV1 } from '../domain/passport.schema';
-import { checkpointKind, checkpointSequence } from '../domain/checkpoint';
+import { checkpointKind, checkpointSequence, type CheckpointFileItem } from '../domain/checkpoint';
 import { diffPassports, type DiffSectionId, type SectionDiff } from '../domain/diff';
+import { getCurrentFileHashes } from '../storage';
 
 export interface CompareDialogProps {
   isOpen: boolean;
   onClose: () => void;
   checkpoints: CheckpointRecord[];
   currentPassport: PassportV1 | null;
+  projectId?: string;
+  currentFiles?: CheckpointFileItem[];
   initialFromId?: string;
   initialToId?: string;
 }
@@ -23,6 +26,8 @@ export function CompareDialog({
   onClose,
   checkpoints,
   currentPassport,
+  projectId,
+  currentFiles,
   initialFromId,
   initialToId = 'current',
 }: CompareDialogProps): React.ReactElement {
@@ -32,6 +37,9 @@ export function CompareDialog({
   const defaultFrom = initialFromId || (checkpoints.length > 0 ? checkpoints[0]!.id : 'current');
   const [fromId, setFromId] = useState<string>(defaultFrom);
   const [toId, setToId] = useState<string>(initialToId);
+  const [loadedCurrentFiles, setLoadedCurrentFiles] = useState<CheckpointFileItem[] | null>(
+    currentFiles ?? null
+  );
 
   // Sync when initialFromId changes
   React.useEffect(() => {
@@ -39,6 +47,33 @@ export function CompareDialog({
       setFromId(initialFromId);
     }
   }, [initialFromId]);
+
+  // Fetch current file hashes when comparing against current
+  React.useEffect(() => {
+    if (currentFiles) {
+      setLoadedCurrentFiles(currentFiles);
+      return;
+    }
+    if (isOpen && projectId && (fromId === 'current' || toId === 'current')) {
+      let isMounted = true;
+      getCurrentFileHashes(projectId)
+        .then((files) => {
+          if (isMounted) {
+            setLoadedCurrentFiles(files);
+          }
+        })
+        .catch(() => {
+          if (isMounted) {
+            setLoadedCurrentFiles(null);
+          }
+        });
+      return () => {
+        isMounted = false;
+      };
+    }
+  }, [isOpen, projectId, fromId, toId, currentFiles]);
+
+  const effectiveCurrentFiles = currentFiles ?? loadedCurrentFiles ?? currentPassport?.files;
 
   // Build select options
   const versionOptions = useMemo(() => {
@@ -67,7 +102,11 @@ export function CompareDialog({
 
   // Resolve from and to sources
   const fromSource = useMemo(() => {
-    if (fromId === 'current') return currentPassport ? { passport: currentPassport, files: currentPassport.files } : null;
+    if (fromId === 'current') {
+      return currentPassport
+        ? { passport: currentPassport, files: effectiveCurrentFiles }
+        : null;
+    }
     const cp = checkpoints.find((c) => c.id === fromId);
     if (!cp || !cp.passport) return null;
     return {
@@ -77,10 +116,14 @@ export function CompareDialog({
       files: cp.files,
       conversationIds: cp.conversationIds,
     };
-  }, [fromId, currentPassport, checkpoints]);
+  }, [fromId, currentPassport, checkpoints, effectiveCurrentFiles]);
 
   const toSource = useMemo(() => {
-    if (toId === 'current') return currentPassport ? { passport: currentPassport, files: currentPassport.files } : null;
+    if (toId === 'current') {
+      return currentPassport
+        ? { passport: currentPassport, files: effectiveCurrentFiles }
+        : null;
+    }
     const cp = checkpoints.find((c) => c.id === toId);
     if (!cp || !cp.passport) return null;
     return {
@@ -90,7 +133,7 @@ export function CompareDialog({
       files: cp.files,
       conversationIds: cp.conversationIds,
     };
-  }, [toId, currentPassport, checkpoints]);
+  }, [toId, currentPassport, checkpoints, effectiveCurrentFiles]);
 
   // Compute diff
   const diff = useMemo(() => {

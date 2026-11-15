@@ -249,6 +249,68 @@ describe('diffPassports Engine', () => {
     expect(bugs.changed.some((c) => c.id === 'bugsReviewed')).toBe(true);
   });
 
+  describe('Duplicate IDs handling and symmetry', () => {
+    it('matches duplicate IDs by first occurrence and ignores subsequent duplicates', () => {
+      const pA = createMockPassport({
+        tasks: [
+          { id: 'dup-1', text: 'Original 1', status: 'todo', priority: 'medium' },
+          { id: 'dup-1', text: 'Duplicate in A', status: 'done', priority: 'high' },
+        ],
+      });
+      const pB = createMockPassport({
+        tasks: [
+          { id: 'dup-1', text: 'Updated 1', status: 'doing', priority: 'medium' },
+          { id: 'dup-1', text: 'Duplicate in B', status: 'done', priority: 'low' },
+          { id: 'dup-2', text: 'New task', status: 'todo', priority: 'low' },
+          { id: 'dup-2', text: 'Duplicate of new task', status: 'todo', priority: 'high' },
+        ],
+      });
+
+      const diffAB = diffPassports(pA, pB);
+      // dup-2 is added exactly once (first occurrence)
+      expect(diffAB.sections.tasks.added).toHaveLength(1);
+      expect(diffAB.sections.tasks.added[0]!.text).toBe('New task');
+
+      // dup-1 is changed exactly once (first occurrence compared)
+      expect(diffAB.sections.tasks.changed).toHaveLength(1);
+      expect(diffAB.sections.tasks.changed[0]!.before.text).toBe('Original 1');
+      expect(diffAB.sections.tasks.changed[0]!.after.text).toBe('Updated 1');
+
+      // nothing removed
+      expect(diffAB.sections.tasks.removed).toHaveLength(0);
+    });
+
+    it('enforces added/removed symmetry invariant even with duplicate IDs', () => {
+      const pA = createMockPassport({
+        requirements: [
+          { id: 'req-dup', text: 'Req in A 1', priority: 'must' },
+          { id: 'req-dup', text: 'Req in A 2', priority: 'should' },
+          { id: 'req-only-a', text: 'Only in A', priority: 'could' },
+          { id: 'req-only-a', text: 'Only in A dup', priority: 'could' },
+        ],
+      });
+      const pB = createMockPassport({
+        requirements: [
+          { id: 'req-dup', text: 'Req in B 1', priority: 'must' },
+          { id: 'req-dup', text: 'Req in B 2', priority: 'should' },
+          { id: 'req-only-b', text: 'Only in B', priority: 'must' },
+          { id: 'req-only-b', text: 'Only in B dup', priority: 'must' },
+        ],
+      });
+
+      const diffAB = diffPassports(pA, pB);
+      const diffBA = diffPassports(pB, pA);
+
+      const addedIdsAB = diffAB.sections.requirements.added.map((r) => r.id);
+      const removedIdsBA = diffBA.sections.requirements.removed.map((r) => r.id);
+      expect(addedIdsAB).toEqual(removedIdsBA);
+
+      const removedIdsAB = diffAB.sections.requirements.removed.map((r) => r.id);
+      const addedIdsBA = diffBA.sections.requirements.added.map((r) => r.id);
+      expect(removedIdsAB).toEqual(addedIdsBA);
+    });
+  });
+
   it('detects Instructions and Open Questions (string list normalization & reordering)', () => {
     const pA = createMockPassport({
       instructions: ['Alpha rule', 'Beta rule'],

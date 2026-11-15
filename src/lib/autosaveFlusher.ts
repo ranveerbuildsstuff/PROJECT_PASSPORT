@@ -6,8 +6,9 @@ export function registerAutosaveFlusher(flusher: Flusher | null): void {
   activeFlusher = flusher;
 }
 
-export async function flushActiveAutosave(): Promise<void> {
+export async function flushActiveAutosave(): Promise<unknown> {
   if (activeFlusher) {
-    await activeFlusher();
+    return await activeFlusher();
   }
+  return undefined;
 }
