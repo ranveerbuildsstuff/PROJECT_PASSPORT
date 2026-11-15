@@ -1,0 +1,45 @@
+[
+  {
+    "id": "shard-conv-1",
+    "conversation_id": "shard-conv-1",
+    "title": "Shard One Conversation",
+    "create_time": 1700100000,
+    "mapping": {
+      "node-s1-root": {
+        "id": "node-s1-root",
+        "parent": null,
+        "children": ["node-s1-u1"],
+        "message": null
+      },
+      "node-s1-u1": {
+        "id": "node-s1-u1",
+        "parent": "node-s1-root",
+        "children": ["node-s1-a1"],
+        "message": {
+          "id": "msg-s1-u1",
+          "author": { "role": "user" },
+          "create_time": 1700100010,
+          "content": {
+            "content_type": "text",
+            "parts": ["Message in shard 1."]
+          }
+        }
+      },
+      "node-s1-a1": {
+        "id": "node-s1-a1",
+        "parent": "node-s1-u1",
+        "children": [],
+        "message": {
+          "id": "msg-s1-a1",
+          "author": { "role": "assistant" },
+          "create_time": 1700100020,
+          "content": {
+            "content_type": "text",
+            "parts": ["Response in shard 1."]
+          }
+        }
+      }
+    },
+    "current_node": "node-s1-a1"
+  }
+]

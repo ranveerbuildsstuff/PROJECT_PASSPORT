@@ -219,7 +219,8 @@ ${SCHEMA_V1_SKELETON}
   const renderedTurns = included
     .map((turn, index) => {
       const turnNumber = index + 1;
-      const roleLabel = turn.role === 'user' ? 'USER' : 'ASSISTANT';
+      const roleLabel =
+        turn.role === 'user' ? 'USER' : turn.role === 'assistant' ? 'ASSISTANT' : 'SYSTEM';
       return `--- BEGIN MESSAGE ${turnNumber} (${roleLabel}) ---
 ${turn.text}
 --- END MESSAGE ${turnNumber} ---`;

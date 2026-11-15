@@ -1,0 +1,154 @@
+[
+  {
+    "id": "chatgpt-conv-1",
+    "conversation_id": "chatgpt-conv-1",
+    "title": "Architectural Design Discussion",
+    "create_time": 1700000000,
+    "update_time": 1700001000,
+    "mapping": {
+      "node-root": {
+        "id": "node-root",
+        "parent": null,
+        "children": ["node-sys"],
+        "message": null
+      },
+      "node-sys": {
+        "id": "node-sys",
+        "parent": "node-root",
+        "children": ["node-u1"],
+        "message": {
+          "id": "msg-sys",
+          "author": { "role": "system" },
+          "create_time": 1700000001,
+          "content": {
+            "content_type": "text",
+            "parts": ["System prompt instructions."]
+          },
+          "metadata": {}
+        }
+      },
+      "node-u1": {
+        "id": "node-u1",
+        "parent": "node-sys",
+        "children": ["node-a1", "node-alt"],
+        "message": {
+          "id": "msg-u1",
+          "author": { "role": "user" },
+          "create_time": 1700000010,
+          "content": {
+            "content_type": "text",
+            "parts": ["How should we design the database schema for the passport application?"]
+          },
+          "metadata": {}
+        }
+      },
+      "node-alt": {
+        "id": "node-alt",
+        "parent": "node-u1",
+        "children": [],
+        "message": {
+          "id": "msg-alt",
+          "author": { "role": "assistant" },
+          "create_time": 1700000015,
+          "content": {
+            "content_type": "text",
+            "parts": ["Alternative dead branch that should not be in active tree."]
+          },
+          "metadata": {}
+        }
+      },
+      "node-a1": {
+        "id": "node-a1",
+        "parent": "node-u1",
+        "children": ["node-u2"],
+        "message": {
+          "id": "msg-a1",
+          "author": { "role": "assistant" },
+          "create_time": 1700000020,
+          "content": {
+            "content_type": "text",
+            "parts": ["We should use an indexed document model in Dexie IndexedDB with strict Zod validation."]
+          },
+          "metadata": {}
+        }
+      },
+      "node-u2": {
+        "id": "node-u2",
+        "parent": "node-a1",
+        "children": ["node-a2"],
+        "message": {
+          "id": "msg-u2",
+          "author": { "role": "user" },
+          "create_time": 1700000030,
+          "content": {
+            "content_type": "text",
+            "parts": ["What about file storage?"]
+          },
+          "metadata": {}
+        }
+      },
+      "node-a2": {
+        "id": "node-a2",
+        "parent": "node-u2",
+        "children": [],
+        "message": {
+          "id": "msg-a2",
+          "author": { "role": "assistant" },
+          "create_time": 1700000040,
+          "content": {
+            "content_type": "text",
+            "parts": ["Store binary files in a separate files table with path indexes."]
+          },
+          "metadata": {}
+        }
+      }
+    },
+    "current_node": "node-a2"
+  },
+  {
+    "id": "chatgpt-conv-2",
+    "conversation_id": "chatgpt-conv-2",
+    "title": "Mobile Touch Targets",
+    "create_time": 1700050000,
+    "update_time": 1700051000,
+    "mapping": {
+      "node-2-root": {
+        "id": "node-2-root",
+        "parent": null,
+        "children": ["node-2-u1"],
+        "message": null
+      },
+      "node-2-u1": {
+        "id": "node-2-u1",
+        "parent": "node-2-root",
+        "children": ["node-2-a1"],
+        "message": {
+          "id": "msg-2-u1",
+          "author": { "role": "user" },
+          "create_time": 1700050010,
+          "content": {
+            "content_type": "text",
+            "parts": ["All buttons must satisfy the 44px touch target invariant."]
+          },
+          "metadata": {}
+        }
+      },
+      "node-2-a1": {
+        "id": "node-2-a1",
+        "parent": "node-2-u1",
+        "children": [],
+        "message": {
+          "id": "msg-2-a1",
+          "author": { "role": "assistant" },
+          "create_time": 1700050020,
+          "content": {
+            "content_type": "text",
+            "parts": ["Understood. We will enforce min-h-[44px] and min-w-[44px] on all interactive elements."]
+          },
+          "metadata": {}
+        }
+      }
+    },
+    "current_node": "node-2-a1"
+  }
+]

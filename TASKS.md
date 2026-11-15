@@ -280,17 +280,17 @@
 
 ## Slice 7: ChatGPT & Claude Export Import
 
-- [ ] In `src/import/chatgptParser.ts`, implement tree traversal for ChatGPT `conversations.json` (mapping nodes via `current_node`).
-- [ ] Implement node filtering to exclude empty, system, and hidden messages (with toggle control).
-- [ ] Implement placeholder substitution for non-text parts (e.g. `[image]`).
-- [ ] In `src/import/claudeParser.ts`, implement parsing for Claude export format (`uuid`, `chat_messages`).
-- [ ] Implement diagnostic fallback panel when unknown or malformed export formats are detected.
-- [ ] Move heavy JSON parsing to a Web Worker (`src/import/parser.worker.ts`) to avoid UI freeze.
-- [ ] Implement memory check and warning banner when file size exceeds 300 MB.
-- [ ] Implement conversation selection modal allowing users to attach specific conversations to the passport.
-- [ ] **Tests added:** Unit tests for ChatGPT tree reconstruction, Claude JSON parsing, worker communication, and malformed JSON diagnostic reporting.
-- [ ] **Docs updated:** Document export schemas and parser edge-cases in `PROGRESS.md`.
-- [ ] **Commit message:** `Slice 7: ChatGPT and Claude export import`
+- [x] In `src/import/chatgptParser.ts`, implement tree traversal for ChatGPT `conversations.json` (mapping nodes via `current_node`).
+- [x] Implement node filtering to exclude empty, system, and hidden messages (with toggle control).
+- [x] Implement placeholder substitution for non-text parts (e.g. `[image]`).
+- [x] In `src/import/claudeParser.ts`, implement parsing for Claude export format (`uuid`, `chat_messages`).
+- [x] Implement diagnostic fallback panel when unknown or malformed export formats are detected.
+- [x] Move heavy JSON parsing to a Web Worker (`src/import/parser.worker.ts`) to avoid UI freeze.
+- [x] Implement memory check and warning banner when file size exceeds 300 MB.
+- [x] Implement conversation selection modal allowing users to attach specific conversations to the passport.
+- [x] **Tests added:** Unit tests for ChatGPT tree reconstruction, Claude JSON parsing, worker communication, and malformed JSON diagnostic reporting.
+- [x] **Docs updated:** Document export schemas and parser edge-cases in `PROGRESS.md`.
+- [x] **Commit message:** `Slice 7: ChatGPT and Claude export import`
 
 **Done when:**
 - `npm run typecheck`, `npm run lint`, `npm test`, and `npm run build` pass.

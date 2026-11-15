@@ -153,7 +153,15 @@ export function ConversationViewer({
               {/* Turn header: badge, label, tokens */}
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <div className="flex items-center gap-2">
-                  <Badge variant={turn.role === 'user' ? 'brass' : 'default'}>
+                  <Badge
+                    variant={
+                      turn.role === 'user'
+                        ? 'brass'
+                        : turn.role === 'system'
+                          ? 'warning'
+                          : 'default'
+                    }
+                  >
                     {turn.role.toUpperCase()}
                   </Badge>
                   <span className="text-xs font-medium text-text-muted">
@@ -207,8 +215,13 @@ export function ConversationViewer({
                     variant="ghost"
                     size="sm"
                     onClick={() => handleFlip(index)}
+                    disabled={turn.role === 'system'}
                     aria-label={`Flip role for Message ${index + 1}`}
-                    title="Flip role between User and Assistant"
+                    title={
+                      turn.role === 'system'
+                        ? 'System role cannot be flipped'
+                        : 'Flip role between User and Assistant'
+                    }
                     className="min-h-[44px] min-w-[44px] gap-1 text-xs"
                   >
                     <ArrowLeftRight className="w-3.5 h-3.5" aria-hidden="true" />

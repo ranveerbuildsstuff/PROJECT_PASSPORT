@@ -9,6 +9,7 @@ import {
   removeConversation,
   restoreConversation,
   getConversation,
+  addImportedConversations,
   StaleWrite,
 } from '../index';
 import { db } from '../db';
@@ -227,5 +228,102 @@ describe('conversation storage service operations', () => {
     expect(merged.project.goal).toBe('Updated draft goal');
     expect(merged.conversations).toHaveLength(1);
     expect(merged.conversations[0]?.id).toBe('c-1');
+  });
+
+  it('addImportedConversations attaches multiple conversations atomically', async () => {
+    const project = await createProject('Project Imported');
+    const projectId = project.id;
+
+    const items = [
+      {
+        id: 'imp-1',
+        title: 'Imported Chat 1',
+        source: 'chatgpt' as const,
+        turns: [{ id: 't1', role: 'user' as const, text: 'Hello 1' }],
+      },
+      {
+        id: 'imp-2',
+        title: 'Imported Chat 2',
+        source: 'claude' as const,
+        turns: [{ id: 't2', role: 'assistant' as const, text: 'Hello 2' }],
+      },
+    ];
+
+    const result = await addImportedConversations(projectId, items);
+    expect(result.importedIds).toHaveLength(2);
+    expect(result.skippedCount).toBe(0);
+
+    const pass = await getPassport(projectId);
+    expect(pass?.conversations).toHaveLength(2);
+    expect(pass?.conversations.map((c) => c.title)).toEqual([
+      'Imported Chat 1',
+      'Imported Chat 2',
+    ]);
+
+    const conv1 = await getConversation(result.importedIds[0] ?? '');
+    expect(conv1?.messages[0]?.text).toBe('Hello 1');
+  });
+
+  it('addImportedConversations respects 5c optimistic concurrency stale-write guard', async () => {
+    const project = await createProject('Project Stale Guard');
+    const projectId = project.id;
+
+    await expect(
+      addImportedConversations(
+        projectId,
+        [{ title: 'Will Fail', source: 'chatgpt', turns: [] }],
+        { expectedUpdatedAt: '2000-01-01T00:00:00.000Z' }
+      )
+    ).rejects.toThrow(StaleWrite);
+  });
+
+  it('addImportedConversations detects duplicates and skips them when requested', async () => {
+    const project = await createProject('Project Duplicates');
+    const projectId = project.id;
+
+    const items = [
+      {
+        id: 'dup-1',
+        title: 'Duplicate Conv',
+        source: 'chatgpt' as const,
+        turns: [{ id: 't1', role: 'user' as const, text: 'Test' }],
+      },
+    ];
+
+    const firstResult = await addImportedConversations(projectId, items);
+    expect(firstResult.importedIds).toHaveLength(1);
+
+    // Re-importing same conversation with skipExisting: true
+    const secondResult = await addImportedConversations(projectId, items, {
+      skipExisting: true,
+    });
+    expect(secondResult.importedIds).toHaveLength(0);
+    expect(secondResult.skippedCount).toBe(1);
+
+    const pass = await getPassport(projectId);
+    expect(pass?.conversations).toHaveLength(1);
+  });
+
+  it('addImportedConversations failure injection: attaching 20 conversations completely rolls back if transaction fails', async () => {
+    const project = await createProject('Project Rollback 20');
+    const projectId = project.id;
+
+    const items20 = Array.from({ length: 20 }, (_, i) => ({
+      id: `batch-${i}`,
+      title: `Batch Chat ${i}`,
+      source: 'chatgpt' as const,
+      turns: [{ id: `t-${i}`, role: 'user' as const, text: `Batch text ${i}` }],
+    }));
+
+    // Inject failure by corrupting passport before transaction
+    await db.passports.delete(projectId);
+
+    await expect(
+      addImportedConversations(projectId, items20)
+    ).rejects.toThrow();
+
+    // Verify 0 of the 20 conversations landed in storage
+    const allConvs = await db.conversations.where('projectId').equals(projectId).toArray();
+    expect(allConvs).toHaveLength(0);
   });
 });

@@ -1,0 +1,26 @@
+{
+  "conversations": [
+    {
+      "uuid": "claude-obj-1",
+      "name": "Object Wrapped Claude Export",
+      "created_at": "2026-11-03T09:00:00.000Z",
+      "chat_messages": [
+        {
+          "uuid": "c-msg-1",
+          "sender": "human",
+          "content": [
+            { "type": "text", "text": "Testing content block structure." },
+            { "type": "image", "source": {} }
+          ]
+        },
+        {
+          "uuid": "c-msg-2",
+          "sender": "assistant",
+          "content": [
+            { "type": "text", "text": "Received text and image placeholder." }
+          ]
+        }
+      ]
+    }
+  ]
+}

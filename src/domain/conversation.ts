@@ -6,7 +6,7 @@ import { estimateTokens } from './tokens';
  * Zod schema defining a single conversation turn.
  * Single source of truth for runtime validation and static TypeScript types.
  */
-export const ConversationTurnRoleSchema = z.enum(['user', 'assistant']);
+export const ConversationTurnRoleSchema = z.enum(['user', 'assistant', 'system']);
 export type ConversationTurnRole = z.infer<typeof ConversationTurnRoleSchema>;
 
 export const ConversationTurnSchema = z.object({
@@ -45,6 +45,9 @@ export function flipRole(
   }
   return turns.map((turn, index) => {
     if (index === i) {
+      if (turn.role === 'system') {
+        return { ...turn };
+      }
       return {
         ...turn,
         role: turn.role === 'user' ? 'assistant' : 'user',

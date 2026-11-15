@@ -453,6 +453,25 @@ export interface AddPastedConversationInput {
   included?: boolean;
 }
 
+export interface AddImportedConversationItem {
+  id?: string;
+  title: string;
+  source: 'chatgpt' | 'claude';
+  createdAt?: string;
+  turns: ConversationTurn[];
+  included?: boolean;
+}
+
+export interface AddImportedConversationsOptions {
+  expectedUpdatedAt?: string;
+  skipExisting?: boolean;
+}
+
+export interface AddImportedConversationsResult {
+  importedIds: string[];
+  skippedCount: number;
+}
+
 export interface RemoveConversationResult {
   conversation: ConversationRecord;
   ref: ConversationRef;
@@ -555,6 +574,120 @@ export async function addPastedConversation(
     }
 
     return conversationId;
+  } catch (err) {
+    mapStorageError(err);
+  }
+}
+
+/**
+ * Atomically stores selected imported conversations and links their references in passport.conversations.
+ *
+ * Invariants:
+ * - Full transactional atomicity: all selected conversations land or none do.
+ * - Enforces the 5c optimistic concurrency stale-write guard.
+ * - Detects already-attached conversations and skips duplicates without failure when requested.
+ * - Dispatches 'project-storage-updated' event upon commit.
+ */
+export async function addImportedConversations(
+  projectId: string,
+  items: AddImportedConversationItem[],
+  options?: AddImportedConversationsOptions
+): Promise<AddImportedConversationsResult> {
+  await ensureAvailable();
+  const importedIds: string[] = [];
+  let skippedCount = 0;
+
+  try {
+    await db.transaction('rw', [db.projects, db.passports, db.conversations], async () => {
+      const project = await db.projects.get(projectId);
+      if (!project) {
+        throw new ProjectNotFound(
+          `Project "${projectId}" was not found. It may have been deleted.`,
+          'Go back to your projects and try again.'
+        );
+      }
+
+      if (options?.expectedUpdatedAt && project.updatedAt !== options.expectedUpdatedAt) {
+        throw new StaleWrite();
+      }
+
+      const passportRecord = await db.passports.get(projectId);
+      if (!passportRecord) {
+        throw new ProjectNotFound(
+          `Passport for project "${projectId}" was not found.`,
+          'Go back to your projects and try again.'
+        );
+      }
+
+      const passport = passportRecord.passport;
+      const existingRefs = passport.conversations || [];
+      const existingIds = new Set(existingRefs.map((c) => c.id));
+      const newRefs: ConversationRef[] = [];
+      const now = new Date().toISOString();
+
+      for (const item of items) {
+        const candidateId = item.id
+          ? item.id.includes(projectId)
+            ? item.id
+            : `${projectId}:${item.id}`
+          : newId();
+
+        const isDuplicate =
+          existingIds.has(candidateId) || (item.id !== undefined && existingIds.has(item.id));
+
+        if (isDuplicate) {
+          if (options?.skipExisting !== false) {
+            skippedCount++;
+            continue;
+          }
+        }
+
+        const convId = candidateId;
+        const convRecord: ConversationRecord = {
+          id: convId,
+          projectId,
+          title: item.title.trim() || 'Untitled conversation',
+          source: item.source,
+          messages: item.turns.map((t) => ({
+            id: t.id,
+            role: t.role,
+            text: t.text,
+          })),
+          createdAt: item.createdAt || now,
+        };
+
+        await db.conversations.put(convRecord);
+
+        const tokenEstimate = conversationTokenEstimate(item.turns);
+        const ref: ConversationRef = {
+          id: convId,
+          title: convRecord.title,
+          source: item.source,
+          messageCount: item.turns.length,
+          tokenEstimate,
+          included: item.included ?? true,
+        };
+
+        newRefs.push(ref);
+        existingIds.add(convId);
+        importedIds.push(convId);
+      }
+
+      if (importedIds.length > 0) {
+        passport.conversations = [...existingRefs, ...newRefs];
+        passport.project.updatedAt = now;
+        project.updatedAt = now;
+
+        await db.passports.put({ projectId, passport });
+        await db.projects.put(project);
+      }
+    });
+
+    if (importedIds.length > 0 && typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('project-storage-updated'));
+    }
+
+    return { importedIds, skippedCount };
   } catch (err) {
     mapStorageError(err);
   }

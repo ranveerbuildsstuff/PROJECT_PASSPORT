@@ -178,16 +178,23 @@ Readiness measures handoff preparedness across 7 equally-weighted checks:
   - Dexie storage synchronization: `conversations` records hold full turn arrays; `passport.conversations` stores lightweight synchronization references (`id`, `title`, `source`, `messageCount`, `tokenEstimate`, `included`). Operations execute atomically within transactions on `[projects, passports, conversations]`, protected by stale-write guards.
 - **ChatGPT Export (`conversations.json` / sharded `conversations-000.json`):**
   - Traverses the conversation tree: each item has `title`, `create_time`, `mapping`, and `current_node`.
-  - Reconstructs the active branch by walking `current_node` up through parent pointers, then reversing.
-  - Skips empty, system, and hidden messages by default (configurable via toggle).
-  - Replaces non-text parts (e.g. image payloads) with readable placeholders like `[image]`.
+  - Reconstructs the active branch by walking `current_node` up through parent pointers, then reversing. Uses a visited node set and a 100,000-step loop ceiling to prevent hanging on broken or cyclic mappings.
+  - If `current_node` is missing or dangling, falls back to the leaf node with the latest `create_time` and appends an import note.
+  - Skips empty, system, and visually hidden messages (`is_visually_hidden_from_conversation`) by default, with a user toggle to include them.
+  - Replaces non-text parts (e.g. image payloads, assets) with readable placeholders: `[image]` for image pointers and `[non-text content]` for other content.
+  - Extended role model: `ConversationTurnRoleSchema` includes `system` alongside `user` and `assistant`. System/tool messages map to `system`. Role flipping remains strictly user/assistant.
 - **Claude Export:**
-  - Parses export objects containing `uuid`, `name`, `created_at`, and `chat_messages` (`sender: 'human' | 'assistant'`, `text`, `content[]`).
+  - Parses export objects containing `uuid`, `name`, `created_at`, and `chat_messages` (`sender: 'human' | 'assistant'`, `text`, `content[]`). Supports both raw arrays of conversations and `{ conversations: [...] }` wrapper formats.
+  - Maps `human` to `user` and joins structured text content blocks while substituting non-text blocks with readable placeholders.
+- **Multi-File & De-duplication:**
+  - Multiple selected files (shards) are merged in alphabetical file-name order, with automatic conversation ID de-duplication.
+  - Importing already attached conversations detects matching source IDs and offers to skip them to prevent duplicate entries.
 - **Resilience & Parsing Safety:**
   - Export formats change over time; parsers must be defensively tolerant.
-  - Unknown or partially malformed formats must **NEVER** crash the application. Instead, display a diagnostics panel showing detected top-level keys versus expected structure.
-  - Heavy parsing tasks run off-thread inside a Web Worker.
-  - Display a prominent memory warning for files exceeding 300 MB.
+  - Unknown or partially malformed formats must **NEVER** crash the application. Instead, display a diagnostics panel showing detected top-level keys versus expected structure without ever leaking raw JSON values or conversation contents.
+  - Heavy parsing tasks run off-thread inside a Web Worker (`src/import/parser.worker.ts`) using a 2-step protocol: step 1 parses lightweight summaries (`id`, `title`, `messageCount`, `tokenEstimate`) to minimize memory; step 2 extracts full turns only for selected conversations.
+  - Prominent memory warning banner displayed when total selected file size exceeds 300 MB.
+  - Dexie storage attachment executes atomically via `addImportedConversations` on `[projects, passports, conversations]` with stale-write protection and full rollback verification.
 
 ## 9. Project Files & Secret Scanner
 

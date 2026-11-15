@@ -1,0 +1,42 @@
+[
+  {
+    "uuid": "claude-conv-1",
+    "name": "Frontend Architecture Review",
+    "created_at": "2026-11-01T10:00:00.000Z",
+    "updated_at": "2026-11-01T10:30:00.000Z",
+    "chat_messages": [
+      {
+        "uuid": "claude-msg-1",
+        "sender": "human",
+        "text": "How should we organize our React components?",
+        "created_at": "2026-11-01T10:01:00.000Z"
+      },
+      {
+        "uuid": "claude-msg-2",
+        "sender": "assistant",
+        "text": "Keep domain logic in src/domain, UI primitives in src/ui, and screen views in src/pages.",
+        "created_at": "2026-11-01T10:02:00.000Z"
+      }
+    ]
+  },
+  {
+    "uuid": "claude-conv-2",
+    "name": "Design Tokens and Typography",
+    "created_at": "2026-11-02T14:00:00.000Z",
+    "updated_at": "2026-11-02T14:20:00.000Z",
+    "chat_messages": [
+      {
+        "uuid": "claude-msg-3",
+        "sender": "human",
+        "text": "Which monospace font should we use for code and numbers?",
+        "created_at": "2026-11-02T14:01:00.000Z"
+      },
+      {
+        "uuid": "claude-msg-4",
+        "sender": "assistant",
+        "text": "Self-hosted JetBrains Mono via @fontsource/jetbrains-mono.",
+        "created_at": "2026-11-02T14:02:00.000Z"
+      }
+    ]
+  }
+]

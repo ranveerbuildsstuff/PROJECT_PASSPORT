@@ -22,7 +22,7 @@ Current slice: none (Slice 4b & Ticket T2 complete)
 - [x] Slice 5b: Section-by-section merge UI, checkpoints and stale-write protection
 - [x] Slice 6: Conversation paste import & reconstruct prompt
 - [x] Slice 6b: Conversation import closeout
-- [ ] Slice 7: ChatGPT / Claude export import
+- [x] Slice 7: ChatGPT / Claude export import
 - [ ] Slice 8: Project files + secret scanner
 - [ ] Slice 9: Checkpoints (timeline, compare, restore)
 - [ ] Slice 10: Export package, destination presets, import package
@@ -361,6 +361,63 @@ Consolidated manual checklist tests into `storageService.test.ts` and deleted re
 - **Rule 13.7 Failure Disclosure during Slice 6b:**
   - *Run 1 of `npm run build`:* Failed with `tests/ui/ConversationsTab.test.tsx(288,9): error TS2353: Object literal may only specify known properties, and 'updatedAt' does not exist in type 'ConversationRecord'`. Remediated by removing non-existent `updatedAt` property from test fixture insert.
   - *Run 1 of `e2e/conversations.spec.ts` (Test 2):* `expect(locator).toBeDisabled()` failed after `await page.keyboard.press('End')` because in a multi-line textarea, `End` navigates to end of line rather than end of text. Remediated by using `page.keyboard.press('Control+End')` and `Control+Home`.
+
+---
+
+### Slice 7: ChatGPT & Claude Export Import
+
+- **Pure Domain & Parsing (`src/import/`):**
+  - `chatgptParser.ts`: Traverses ChatGPT export trees by walking `current_node` up through `parent` pointers and reversing. Employs a visited `Set<string>` and a 100,000-step ceiling preventing infinite loops on broken/cyclic trees. Falls back to leaf node with latest `create_time` if `current_node` is missing/dangling. Filters empty, system, and visually hidden messages (`is_visually_hidden_from_conversation`) by default, with a toggle to include them. Replaces non-text items with `[image]` and `[non-text content]`.
+  - `claudeParser.ts`: Supports both raw array and `{ conversations: [...] }` wrapper exports. Maps `human` to `user` role. Extracts text from `text` or joins text blocks in `content[]`, mapping non-text blocks to `[image]` or `[non-text content]`.
+  - `exportDetector.ts`: Sniffs format (`chatgpt` | `claude` | `unknown`). When `unknown`, returns safe diagnostics listing only detected key names and expected key names, strictly preventing any message text or raw values from leaking.
+  - `parseExport.ts`: Handles single/multi-file parsing, sorts shards in alphabetical order, de-duplicates by conversation ID, estimates tokens per conversation with `conversationTokenEstimate`, and returns typed error codes (`empty`, `not_json`, `unknown_format`, `zip_not_supported`, `out_of_memory`).
+  - Extended role schema: `ConversationTurnRoleSchema` in `src/domain/conversation.ts` includes `system` for tool and system messages. `flipRole` strictly flips between `user` and `assistant`. Reconstruct prompt and Conversation Viewer support `system` role badges.
+- **Web Worker Architecture (`src/import/parser.worker.ts`):**
+  - Offloads JSON reading and parsing to an isolated Web Worker bundled natively by Vite (`type: "module"`).
+  - Two-step protocol: `parse` returns lightweight summaries (`id`, `title`, `createdAt`, `messageCount`, `tokenEstimate`, `source`, `notes`) to keep memory minimal; `extract` returns full turn arrays only for user-selected IDs.
+  - Exposes pure `handleWorkerMessage` state reducer enabling deterministic unit testing in Vitest without browser worker instantiation. In jsdom/Node environments, `ImportExportDialog` falls back to direct execution of `handleWorkerMessage`.
+- **Atomic Storage Integration (`src/storage/storageService.ts`):**
+  - `addImportedConversations`: Inserts turns into `conversations` table and updates `passport.conversations` references in a single atomic transaction on `[projects, passports, conversations]`.
+  - Stale-write guarded via `SavePassportOptions.expectedUpdatedAt`. Dispatches `project-storage-updated`.
+  - Failure-injection tests verify full atomic rollback: attaching 20 conversations either all succeed or none do.
+- **UI Components & Accessibility (`src/ui/ImportExportDialog.tsx` & `ConversationsTab.tsx`):**
+  - Added secondary "Import export file" button in Conversations tab toolbar.
+  - Modal with file input accepting `.json`, multi-file selection support, and 300 MB total size warning banner.
+  - Informative diagnostics panel for unrecognized, corrupted, or `.zip` files (advising users to extract first and choose `conversations.json`).
+  - Selection list with per-row checkboxes, search/filter query input, "Select all" / "Clear" buttons, running selection token tally, "Include system and hidden messages" toggle, and duplicate detection alerting users to skip already-imported conversations.
+  - Accessible names, full keyboard navigation, and WCAG AA contrast.
+- **Rule 13.7 Failure Disclosure during Slice 7:**
+  - *TypeScript Compilation (TS2353/TS6133/TS18048) in new files:*
+    - *Error:* Unused `nodeId` in `chatgptParser.ts`, `WorkerGlobalScope` not found in `parser.worker.ts`, missing export `addImportedConversations` in `storage/index.ts`, `fileList[i]` possibly undefined in `ImportExportDialog.tsx`.
+    - *Fix:* Removed unused variable, replaced `WorkerGlobalScope` check with `'postMessage' in self`, exported `addImportedConversations`, and converted file iteration to `Array.from(fileList)`.
+  - *ESLint `@typescript-eslint/no-explicit-any` in `ImportExportDialog.tsx`:*
+    - *Error:* `turns: any[];` on line 305.
+    - *Fix:* Typed as `turns: ConversationTurn[];` imported from `../domain`.
+  - *Vitest RTL failure in `tests/ui/ImportExportDialog.test.tsx`:*
+    - *Error:* `Could not read the selected file.` when calling `file.text()` in jsdom.
+    - *Root cause:* jsdom does not implement `File.prototype.text()`.
+    - *Fix:* Added `readFileAsText` helper with `FileReader` fallback when `file.text` is not available.
+  - *Vitest failure in `fuzzExport.test.ts`:*
+    - *Error:* `TypeError: conv.title.trim is not a function` when fuzz mutation passed a number for title.
+    - *Fix:* Added `typeof conv.title === 'string'` type check in `chatgptParser.ts` and `claudeParser.ts`.
+  - *TypeScript compilation error during `npm run build`:*
+    - *Error:* `TS2532: Object is possibly 'undefined'` in tests under `noUncheckedIndexedAccess: true` for `result[0].title` and `turns[0].text`. Also unused `cards` locator in `e2e/import-export.spec.ts`.
+    - *Fix:* Added non-null assertions `result[0]!.` and `turns[0]!.` in test files and removed unused `cards` variable.
+  - *Playwright strict mode violation in `e2e/import-export.spec.ts` test 4:*
+    - *Error:* `getByText('Unrecognized export format')` resolved to both `<h3>` and `<p>`.
+    - *Fix:* Changed locator to `getByRole('heading', { name: 'Unrecognized export format' })`.
+  - *ESLint `@typescript-eslint/no-explicit-any` in tests:*
+    - *Error:* `Record<string, any>` in `chatgptParser.test.ts` and `as any` in `parserWorker.test.ts`.
+    - *Fix:* Typed mapping as `Record<string, ChatGptNode>` and cast unknown action as `WorkerIncomingMessage`.
+- **Final Test Counts:**
+  - Vitest: 396 tests across 34 files (100% passed).
+  - Playwright E2E: 164 tests across `desktop` and `mobile-360` projects (100% passed in 7.9m, 0 failures, 0 skipped).
+- **Five Slowest E2E Tests (vs 20s ceiling):**
+  1. `[mobile-360] e2e/conversations.spec.ts:144:3` (14.4s) — Editing: flip role, merge with next, delete turn in viewer, save and reload persistence
+  2. `[mobile-360] e2e/conversations.spec.ts:320:3` (11.7s) — Layout and axe audit: verifies 44px touch targets and no horizontal overflow across themes
+  3. `[mobile-360] e2e/conversations.spec.ts:344:3` (11.5s) — Keyboard-only navigation: complete paste, split, and attach workflow without mouse pointer
+  4. `[desktop] e2e/capture.spec.ts:35:3` (11.0s) — Entry points: opens from Overview next-action and Passport tab, copies prompt to clipboard
+  5. `[mobile-360] e2e/passport.spec.ts:84:3` (10.9s) — 2a. Add items to stack, requirements, decisions, completed, and next action; reload; all persist
 
 ---
 

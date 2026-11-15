@@ -18,6 +18,7 @@ import {
   PasteConversationDialog,
   ReconstructPromptDialog,
   EditConversationDialog,
+  ImportExportDialog,
   useToast,
 } from '../../ui';
 import {
@@ -28,6 +29,7 @@ import {
   MessageSquare,
   AlertCircle,
   Check,
+  Upload,
 } from 'lucide-react';
 
 export interface ConversationsTabProps {
@@ -42,6 +44,7 @@ export function ConversationsTab({
   const { showToast } = useToast();
 
   const [isPasteOpen, setIsPasteOpen] = useState(false);
+  const [isImportOpen, setIsImportOpen] = useState(false);
   const [isReconstructOpen, setIsReconstructOpen] = useState(false);
   const [editingRef, setEditingRef] = useState<ConversationRef | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -106,6 +109,17 @@ export function ConversationsTab({
           >
             <Sparkles className="w-4 h-4 text-accent-brass" aria-hidden="true" />
             <span>Reconstruct passport</span>
+          </Button>
+
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={() => setIsImportOpen(true)}
+            className="min-h-[44px] gap-1.5"
+          >
+            <Upload className="w-4 h-4" aria-hidden="true" />
+            <span>Import export file</span>
           </Button>
 
           <Button
@@ -237,6 +251,14 @@ export function ConversationsTab({
         isOpen={isPasteOpen}
         onClose={() => setIsPasteOpen(false)}
         projectId={projectId}
+      />
+
+      {/* Import Export File Dialog */}
+      <ImportExportDialog
+        isOpen={isImportOpen}
+        onClose={() => setIsImportOpen(false)}
+        projectId={projectId}
+        existingConversations={conversations}
       />
 
       {/* Reconstruct Prompt Dialog */}

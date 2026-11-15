@@ -1,0 +1,74 @@
+[
+  {
+    "id": "shard-conv-1",
+    "conversation_id": "shard-conv-1",
+    "title": "Shard One Conversation Duplicate",
+    "create_time": 1700100000,
+    "mapping": {
+      "node-s1-root": {
+        "id": "node-s1-root",
+        "parent": null,
+        "children": ["node-s1-u1"],
+        "message": null
+      },
+      "node-s1-u1": {
+        "id": "node-s1-u1",
+        "parent": "node-s1-root",
+        "children": [],
+        "message": {
+          "id": "msg-s1-u1",
+          "author": { "role": "user" },
+          "create_time": 1700100010,
+          "content": {
+            "content_type": "text",
+            "parts": ["Duplicate message in shard 2."]
+          }
+        }
+      }
+    },
+    "current_node": "node-s1-u1"
+  },
+  {
+    "id": "shard-conv-2",
+    "conversation_id": "shard-conv-2",
+    "title": "Shard Two Unique Conversation",
+    "create_time": 1700200000,
+    "mapping": {
+      "node-s2-root": {
+        "id": "node-s2-root",
+        "parent": null,
+        "children": ["node-s2-u1"],
+        "message": null
+      },
+      "node-s2-u1": {
+        "id": "node-s2-u1",
+        "parent": "node-s2-root",
+        "children": ["node-s2-a1"],
+        "message": {
+          "id": "msg-s2-u1",
+          "author": { "role": "user" },
+          "create_time": 1700200010,
+          "content": {
+            "content_type": "text",
+            "parts": ["Message in shard 2 unique."]
+          }
+        }
+      },
+      "node-s2-a1": {
+        "id": "node-s2-a1",
+        "parent": "node-s2-u1",
+        "children": [],
+        "message": {
+          "id": "msg-s2-a1",
+          "author": { "role": "assistant" },
+          "create_time": 1700200020,
+          "content": {
+            "content_type": "text",
+            "parts": ["Response in shard 2 unique."]
+          }
+        }
+      }
+    },
+    "current_node": "node-s2-a1"
+  }
+]
