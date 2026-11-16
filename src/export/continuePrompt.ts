@@ -79,7 +79,7 @@ export function generateContinuePrompt(plan: ExportPlan, format: 'lite' | 'full'
 
   // Closing reiteration of next action & pause
   sections.push('---');
-  sections.push(`### Next Action:\n${filteredPassport.nextAction?.trim() || 'Awaiting instruction.'}`);
+  sections.push(`### Next Action:\n${filteredPassport.nextAction.trim() || 'Awaiting instruction.'}`);
   sections.push(`\n*Remember: Pause and confirm the 5 points above before writing or altering any project code.*`);
 
   return sections.join('\n\n');
@@ -106,7 +106,7 @@ function generateFullBundleContinuePrompt(plan: ExportPlan): string {
 - \`conversations/\`: ${includedConversations.length} conversation transcripts formatted as Markdown.`);
 
   sections.push('---');
-  sections.push(`## Current Target\nNext Action: **${filteredPassport.nextAction?.trim() || 'Review project state.'}**`);
+  sections.push(`## Current Target\nNext Action: **${filteredPassport.nextAction.trim() || 'Review project state.'}**`);
   sections.push(`\n*Please review \`PROJECT_STATE.md\` and \`project-passport.json\`, then confirm your understanding of the 5 points above.*`);
 
   return sections.join('\n\n');

@@ -2,8 +2,6 @@ import { describe, it, expect } from 'vitest';
 import {
   DESTINATION_PRESETS,
   validateCustomBudget,
-  MIN_CUSTOM_BUDGET,
-  MAX_CUSTOM_BUDGET,
 } from '../../src/export/presets';
 
 describe('export presets module', () => {
@@ -24,24 +22,24 @@ describe('export presets module', () => {
     expect(validateCustomBudget('  25000  ')).toEqual({ isValid: true, budget: 25_000 });
   });
 
-  it('rejects values below 1,000 with plain-language error', () => {
+  it('rejects values below 1,000 with exact plain-language error', () => {
     const res = validateCustomBudget(999);
     expect(res.isValid).toBe(false);
-    expect(res.error).toContain(`must be at least ${MIN_CUSTOM_BUDGET.toLocaleString()}`);
+    expect(res.error).toBe('Enter a whole number between 1,000 and 2,000,000.');
   });
 
-  it('rejects values above 2,000,000 with plain-language error', () => {
+  it('rejects values above 2,000,000 with exact plain-language error', () => {
     const res = validateCustomBudget(2_000_001);
     expect(res.isValid).toBe(false);
-    expect(res.error).toContain(`cannot exceed ${MAX_CUSTOM_BUDGET.toLocaleString()}`);
+    expect(res.error).toBe('Enter a whole number between 1,000 and 2,000,000.');
   });
 
-  it('rejects non-numbers, negative numbers, decimals, and empty inputs cleanly', () => {
-    expect(validateCustomBudget('').isValid).toBe(false);
-    expect(validateCustomBudget(null).isValid).toBe(false);
-    expect(validateCustomBudget(undefined).isValid).toBe(false);
-    expect(validateCustomBudget('abc').error).toContain('must be a valid whole number');
-    expect(validateCustomBudget('-500').error).toContain('must be a valid whole number');
-    expect(validateCustomBudget('1234.56').error).toContain('must be a valid whole number');
+  it('rejects non-numbers, negative numbers, decimals, and empty inputs with exact error', () => {
+    expect(validateCustomBudget('').error).toBe('Enter a whole number between 1,000 and 2,000,000.');
+    expect(validateCustomBudget(null).error).toBe('Enter a whole number between 1,000 and 2,000,000.');
+    expect(validateCustomBudget(undefined).error).toBe('Enter a whole number between 1,000 and 2,000,000.');
+    expect(validateCustomBudget('abc').error).toBe('Enter a whole number between 1,000 and 2,000,000.');
+    expect(validateCustomBudget('-500').error).toBe('Enter a whole number between 1,000 and 2,000,000.');
+    expect(validateCustomBudget('1234.56').error).toBe('Enter a whole number between 1,000 and 2,000,000.');
   });
 });

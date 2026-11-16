@@ -5,6 +5,7 @@ import {
   collectConsoleErrors,
   collectExternalRequests,
   expectNoSeriousA11y,
+  shot,
 } from './helpers';
 
 test.describe('Slice 10: Export Package, Destination Presets, and Package Import', () => {
@@ -72,16 +73,15 @@ test.describe('Slice 10: Export Package, Destination Presets, and Package Import
 
     // Test minimum boundary (less than 1,000)
     await customInput.fill('500');
-    await expect(page.getByText('Token budget must be at least 1,000 tokens.')).toBeVisible();
+    await expect(page.getByText('Enter a whole number between 1,000 and 2,000,000.')).toBeVisible();
 
     // Test maximum boundary (greater than 2,000,000)
     await customInput.fill('2500000');
-    await expect(page.getByText('Token budget cannot exceed 2,000,000 tokens.')).toBeVisible();
+    await expect(page.getByText('Enter a whole number between 1,000 and 2,000,000.')).toBeVisible();
 
     // Test valid custom input
     await customInput.fill('75000');
-    await expect(page.getByText('Token budget must be at least 1,000 tokens.')).not.toBeVisible();
-    await expect(page.getByText('Token budget cannot exceed 2,000,000 tokens.')).not.toBeVisible();
+    await expect(page.getByText('Enter a whole number between 1,000 and 2,000,000.')).not.toBeVisible();
     await expect(page.getByText(/\/ 75,000 tokens \(estimate\)/)).toBeVisible();
   });
 
@@ -358,6 +358,7 @@ test.describe('Slice 10: Export Package, Destination Presets, and Package Import
     // Select replace
     await replaceRadio.check();
     await expect(replaceRadio).toBeChecked();
+    await shot(page, 'import-conflict-dialog');
 
     // Submit import
     await page.getByRole('button', { name: 'Import project' }).click();
@@ -461,6 +462,7 @@ test.describe('Slice 10: Export Package, Destination Presets, and Package Import
     await page.getByRole('tab', { name: 'Export' }).click();
     await expect(page.getByRole('heading', { name: 'Export Handoff Package' })).toBeVisible();
     await expectNoSeriousA11y(page);
+    await shot(page, 'export-tab');
 
     // Audit Import Package Dialog
     await page.goto('/');
@@ -468,6 +470,7 @@ test.describe('Slice 10: Export Package, Destination Presets, and Package Import
     const importDialog = page.getByRole('dialog', { name: 'Import Handoff Package' });
     await expect(importDialog).toBeVisible();
     await expectNoSeriousA11y(page);
+    await shot(page, 'import-package-dialog');
   });
 
   test('11. Keyboard-only navigation across Export tab controls and truncation filters', async ({ page }) => {
@@ -495,5 +498,184 @@ test.describe('Slice 10: Export Package, Destination Presets, and Package Import
     const includedBtn = page.getByRole('button', { name: /Included \(/i });
     await includedBtn.focus();
     await page.keyboard.press('Enter');
+  });
+
+  test('12. Round-trip export then import package produces identical passport data structure', async ({ page }) => {
+    // 1. Create a project
+    await page.goto('/');
+    await page.getByRole('button', { name: /^New project$/i }).first().click();
+    const createDialog = page.getByRole('dialog', { name: 'New project' });
+    await createDialog.getByLabel('Project name').fill('Roundtrip Showcase App');
+    await createDialog.getByRole('button', { name: 'Create project' }).click();
+    await page.waitForURL(/\/project\/[a-zA-Z0-9_-]+/);
+
+    // 2. Add goal and summary in Passport tab (Basics is open by default)
+    await page.getByRole('tab', { name: 'Passport' }).click();
+    await page.getByLabel('Project goal').fill('Roundtrip fidelity verification goal');
+    await page.getByLabel('Executive summary').fill('Roundtrip summary verification');
+    await page.getByLabel('Executive summary').blur();
+    await expect(page.getByRole('status', { name: 'Autosave status' })).toContainText('Saved');
+
+    // 3. Go to Export tab and download full zip
+    await page.getByRole('tab', { name: 'Export' }).click();
+    await page.getByRole('button', { name: /Full package/i }).click();
+
+    const [download] = await Promise.all([
+      page.waitForEvent('download'),
+      page.getByRole('button', { name: 'Download package' }).click(),
+    ]);
+
+    const downloadPath = await download.path();
+    expect(downloadPath).not.toBeNull();
+    const zipBytes = fs.readFileSync(downloadPath!);
+
+    // 4. Return to Dashboard and import as copy
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Import package' }).click();
+    await page.locator('#package-file-input').setInputFiles({
+      name: 'roundtrip.zip',
+      mimeType: 'application/zip',
+      buffer: zipBytes,
+    });
+
+    await expect(page.getByText('Roundtrip Showcase App')).toBeVisible();
+    await expect(page.getByText('Verified Archive')).toBeVisible();
+
+    // Select import as copy
+    const copyRadio = page.getByLabel(/Import as a copy/i);
+    await copyRadio.check();
+
+    await page.getByRole('button', { name: 'Import project' }).click();
+    await page.waitForURL(/\/project\/[a-zA-Z0-9_-]+/);
+
+    // 5. Verify restored project fields match
+    await page.getByRole('tab', { name: 'Passport' }).click();
+    await expect(page.getByLabel('Project goal')).toHaveValue('Roundtrip fidelity verification goal');
+    await expect(page.getByLabel('Executive summary')).toHaveValue('Roundtrip summary verification');
+  });
+
+  test('13. Imported package files with secret findings go through review UI and Redact scrubs secret before storing', async ({
+    page,
+  }) => {
+    // 1. Build a synthetic package containing a fake secret built from fragments
+    const fakeKey = ['AK', 'IA', 'IOSFODNN7EXAMPLE'].join('');
+    const fileContent = `export const secretKey = "${fakeKey}";\nexport const env = "production";`;
+
+    const mockPassport = {
+      schemaVersion: 1,
+      project: {
+        id: 'pkg-with-secrets',
+        name: 'Secrets Review App',
+        goal: 'Verify import secret review UI',
+        summary: 'Secret review test',
+        status: 'in_progress',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      },
+      stack: [],
+      decisions: [],
+      completed: [],
+      tasks: [],
+      bugs: [],
+      bugsReviewed: false,
+      requirements: [],
+      instructions: [],
+      files: [
+        {
+          path: 'src/config.ts',
+          purpose: 'App configuration',
+          included: true,
+          sizeBytes: Buffer.byteLength(fileContent),
+        },
+      ],
+      conversations: [],
+      nextAction: '',
+      openQuestions: [],
+    };
+
+    const passportJson = JSON.stringify(mockPassport, null, 2);
+    const passportHash = await page.evaluate(async (json) => {
+      const buf = new TextEncoder().encode(json);
+      const digest = await crypto.subtle.digest('SHA-256', buf);
+      return Array.from(new Uint8Array(digest))
+        .map((b) => b.toString(16).padStart(2, '0'))
+        .join('');
+    }, passportJson);
+
+    const fileHash = await page.evaluate(async (txt) => {
+      const buf = new TextEncoder().encode(txt);
+      const digest = await crypto.subtle.digest('SHA-256', buf);
+      return Array.from(new Uint8Array(digest))
+        .map((b) => b.toString(16).padStart(2, '0'))
+        .join('');
+    }, fileContent);
+
+    const zip = new JSZip();
+    zip.file('project-passport.json', passportJson);
+    zip.file('files/src/config.ts', fileContent);
+    zip.file(
+      'MANIFEST.json',
+      JSON.stringify({
+        manifestVersion: 1,
+        schemaVersion: 1,
+        entries: [
+          {
+            path: 'project-passport.json',
+            sizeBytes: Buffer.byteLength(passportJson),
+            sha256: passportHash,
+          },
+          {
+            path: 'files/src/config.ts',
+            sizeBytes: Buffer.byteLength(fileContent),
+            sha256: fileHash,
+          },
+        ],
+      })
+    );
+
+    const zipBuffer = await zip.generateAsync({ type: 'nodebuffer' });
+
+    // 2. Open dashboard and upload
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Import package' }).click();
+    await page.locator('#package-file-input').setInputFiles({
+      name: 'secrets-pkg.zip',
+      mimeType: 'application/zip',
+      buffer: zipBuffer,
+    });
+
+    // 3. Verify secret findings review UI appears
+    await expect(page.getByText('We found 1 possible secret')).toBeVisible();
+    await expect(page.getByText('1 unresolved')).toBeVisible();
+    await expect(page.getByText(/src\/config\.ts:1/)).toBeVisible();
+    await expect(page.getByText(/AKIAIO\.\.\.MPLE/)).toBeVisible();
+
+    // 4. Click Redact
+    const redactButton = page.getByRole('button', { name: 'Redact' });
+    await expect(redactButton).toBeVisible();
+    await redactButton.click();
+
+    // Unresolved badge disappears
+    await expect(page.getByText('1 unresolved')).not.toBeVisible();
+
+    // 5. Complete import
+    await page.getByRole('button', { name: 'Import project' }).click();
+    await page.waitForURL(/\/project\/[a-zA-Z0-9_-]+/);
+
+    // 6. Verify stored file in IndexedDB is redacted
+    const storedContent = await page.evaluate(async (pId: string) => {
+      const req = indexedDB.open('ProjectPassportDB');
+      return new Promise<string>((resolve) => {
+        req.onsuccess = () => {
+          const db = req.result;
+          const tx = db.transaction('files', 'readonly');
+          const getReq = tx.objectStore('files').get(`${pId}:src/config.ts`);
+          getReq.onsuccess = () => resolve(getReq.result?.content || '');
+        };
+      });
+    }, 'pkg-with-secrets');
+
+    expect(storedContent).toContain('[REDACTED]');
+    expect(storedContent).not.toContain(fakeKey);
   });
 });

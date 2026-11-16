@@ -140,7 +140,7 @@ describe('ExportTab (RTL)', () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText('Token budget must be at least 1,000 tokens.')
+        screen.getByText('Enter a whole number between 1,000 and 2,000,000.')
       ).toBeInTheDocument();
     });
 
@@ -148,7 +148,7 @@ describe('ExportTab (RTL)', () => {
 
     await waitFor(() => {
       expect(
-        screen.queryByText('Token budget must be at least 1,000 tokens.')
+        screen.queryByText('Enter a whole number between 1,000 and 2,000,000.')
       ).toBeNull();
     });
   });

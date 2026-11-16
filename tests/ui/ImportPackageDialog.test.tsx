@@ -186,4 +186,87 @@ describe('ImportPackageDialog (RTL)', () => {
     const replaced = await db.projects.get(existingId);
     expect(replaced?.name).toBe('Imported Newer Name');
   });
+
+  it('scans imported package files for secrets, allows Redact, and applies redaction before storing', async () => {
+    const fakeKey = ['AK', 'IA', 'IOSFODNN7EXAMPLE'].join('');
+    const fileContent = `export const awsKey = "${fakeKey}";`;
+    const fileHash = await sha256Hex(fileContent);
+
+    const passport = createEmptyPassport('Secret Package Project');
+    passport.project.id = 'secret-pkg-id';
+    passport.files = [
+      {
+        path: 'src/config.ts',
+        purpose: 'Configuration',
+        included: true,
+        sizeBytes: new TextEncoder().encode(fileContent).length,
+      },
+    ];
+
+    const passportJson = JSON.stringify(passport, null, 2);
+    const passportHash = await sha256Hex(passportJson);
+
+    const zip = new JSZip();
+    zip.file('project-passport.json', passportJson);
+    zip.file('files/src/config.ts', fileContent);
+    zip.file(
+      'MANIFEST.json',
+      JSON.stringify({
+        manifestVersion: 1,
+        schemaVersion: 1,
+        entries: [
+          {
+            path: 'project-passport.json',
+            sizeBytes: new TextEncoder().encode(passportJson).length,
+            sha256: passportHash,
+          },
+          {
+            path: 'files/src/config.ts',
+            sizeBytes: new TextEncoder().encode(fileContent).length,
+            sha256: fileHash,
+          },
+        ],
+      })
+    );
+
+    const zipBuffer = await zip.generateAsync({ type: 'arraybuffer' });
+    const file = new File([zipBuffer], 'secrets.zip', { type: 'application/zip' });
+
+    const onSuccess = vi.fn();
+    renderDialog({ isOpen: true, onClose: vi.fn(), onImportSuccess: onSuccess });
+
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(fileInput, { target: { files: [file] } });
+
+    // Wait for secret review UI
+    await waitFor(() => {
+      expect(screen.getByText(/We found 1 possible secret/i)).toBeInTheDocument();
+      expect(screen.getByText(/src\/config\.ts:1/)).toBeInTheDocument();
+      expect(screen.getByText(/1 unresolved/)).toBeInTheDocument();
+    });
+
+    // Click Redact
+    const redactBtn = screen.getByRole('button', { name: /^Redact$/i });
+    fireEvent.click(redactBtn);
+
+    // Unresolved count is now gone
+    await waitFor(() => {
+      expect(screen.queryByText(/unresolved/)).toBeNull();
+    });
+
+    // Click Import project
+    const importBtn = screen.getByRole('button', { name: /Import project/i });
+    fireEvent.click(importBtn);
+
+    await waitFor(() => {
+      expect(onSuccess).toHaveBeenCalledWith('secret-pkg-id');
+    });
+
+    // Check stored file in database
+    const storedFile = await db.files.get('secret-pkg-id:src/config.ts');
+    expect(storedFile).toBeDefined();
+    expect(storedFile?.content).toContain('[REDACTED]');
+    expect(storedFile?.content).not.toContain(fakeKey);
+    expect(storedFile?.acknowledgedFindings?.length).toBe(1);
+  });
 });

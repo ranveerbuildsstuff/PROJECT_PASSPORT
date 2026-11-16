@@ -1941,9 +1941,10 @@ export async function importPackage(
     files: Array<{
       path: string;
       purpose: string;
-      content: string;
+      content?: string;
       sizeBytes: number;
       included: boolean;
+      acknowledgedFindings?: string[];
     }>;
     conversations: Array<{
       record: {
@@ -1984,6 +1985,13 @@ export async function importPackage(
     },
   };
 
+  // Sync file manifest included state from payload.files
+  const payloadFileMap = new Map(payload.files.map((f) => [f.path, f]));
+  finalPassport.files = (finalPassport.files || []).map((f) => {
+    const pf = payloadFileMap.get(f.path);
+    return pf ? { ...f, included: pf.included } : f;
+  });
+
   // Map conversation IDs if copying
   const convIdMap = new Map<string, string>();
   if (shouldCopy) {
@@ -1997,15 +2005,20 @@ export async function importPackage(
   }
 
   // Prepared files
-  const fileRecords: FileRecord[] = payload.files.map((f) => ({
-    id: `${targetProjectId}:${f.path}`,
-    projectId: targetProjectId,
-    path: f.path,
-    content: f.content,
-    sizeBytes: f.sizeBytes,
-    mime: 'text/plain',
-    acknowledgedFindings: [],
-  }));
+  const fileRecords: FileRecord[] = [];
+  for (const f of payload.files) {
+    if (f.included !== false && f.content !== undefined) {
+      fileRecords.push({
+        id: `${targetProjectId}:${f.path}`,
+        projectId: targetProjectId,
+        path: f.path,
+        content: f.content,
+        sizeBytes: f.sizeBytes,
+        mime: 'text/plain',
+        acknowledgedFindings: f.acknowledgedFindings ?? [],
+      });
+    }
+  }
 
   // Prepared conversations
   const convRecords: ConversationRecord[] = payload.conversations.map((c) => {

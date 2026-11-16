@@ -111,7 +111,7 @@ export function ExportTab({
 
   // Empty state check
   const isPassportEmpty =
-    !passport.project.name?.trim() && !passport.project.goal?.trim();
+    !passport.project.name.trim() && !passport.project.goal.trim();
 
   // Handlers
   const handleCopyPrompt = async () => {

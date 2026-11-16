@@ -735,6 +735,14 @@ Consolidated manual checklist tests into `storageService.test.ts` and deleted re
     - *Error:* `src/storage/__tests__/checkpointStorage.test.ts: error Unexpected any. Specify a different type @typescript-eslint/no-explicit-any`.
     - *Fix:* Replaced `any` casts with `as unknown as typeof db.projects.get` and typed parameter `(id: string)`.
 
+- **Modified & Created Files in Slice 9b:**
+  - `src/lib/autosaveFlusher.ts` (created): Global registry and flusher coordination module for flushing pending autosaves prior to checkpoints and exports.
+  - `src/pages/checkpoints/CheckpointsTab.tsx`: Checkpoints timeline tab with flusher integration, diff modal, and restore safety confirmation.
+  - `src/ui/RestoreCheckpointDialog.tsx`: Dialog for restoring checkpoints with exact stale-write conflict handling.
+  - `src/domain/diff.ts`: Added deduplication for duplicate item IDs during diff computation.
+  - `src/storage/storageService.ts`: Added `getCurrentFileHashes` and single-retry stale-write handling in checkpoint creation.
+  - `tests/domain/diff.test.ts`, `tests/domain/hash.test.ts`, `src/storage/__tests__/checkpointStorage.test.ts`, `tests/ui/CheckpointsTab.test.tsx`, `e2e/checkpoints.spec.ts`.
+
 ---
 
 ### Slice 10: Export Package, Destination Presets and Package Import
@@ -805,6 +813,79 @@ Consolidated manual checklist tests into `storageService.test.ts` and deleted re
   3. `[desktop] e2e/checkpoints.spec.ts:426:3` (11.8s) — 10a. Timeline layout and Axe accessibility audit (empty and populated)
   4. `[desktop] e2e/capture.spec.ts:125:3` (11.7s) — 3. Error path: truncated reply displays plain-language alert, then fixing text and re-checking succeeds
   5. `[desktop] e2e/passport.spec.ts:747:3` (11.6s) — 11. Screenshots: editor populated on desktop and mobile-360
+
+---
+
+### Slice 10b: Export Closeout
+
+- **Audit Findings, String Alignment & Spec Precision:**
+  - *SPEC.md §11 Hardening:*
+    - Explicitly codified tier rules (Tier 1 core identity, Tier 2 active items, Tier 2b completed items, Tier 3 manifest-ordered files, Tier 4 newest-turn conversation transcripts).
+    - Specified passport `included: false` marking for items omitted due to token budget limits.
+    - Clarified secret gate scope: files, conversations, and passport text (goal, summary, stack, decisions, requirements, tasks, bugs, nextAction, openQuestions).
+    - Codified same-ID collision handling on package import: `Import as a copy (Recommended)` vs `Replace existing project`.
+    - Documented `MANIFEST.json` schema and reversible, lossless conversation Markdown formatting.
+  - *Custom Budget Copy Harmonization:*
+    - Replaced fragmented error strings with the single unified exact copy: `"Enter a whole number between 1,000 and 2,000,000."` for all invalid custom token budgets (empty, non-integer, negative, decimal, out of bounds).
+    - Updated `src/export/presets.ts`, `tests/export/presets.test.ts`, `tests/ui/ExportTab.test.tsx`, and `e2e/export.spec.ts`.
+  - *Code vs Fixture Rigor (Eliminating Optional Chaining on Required Fields):*
+    - Removed unnecessary optional chaining on required fields in `src/export/budgeter.ts`, `src/export/continuePrompt.ts`, and `src/pages/export/ExportTab.tsx` (`passport.nextAction.trim()`, `passport.project.name.trim()`, `passport.project.goal.trim()`).
+    - Standardized test fixtures across unit and E2E suites to supply valid `PassportV1` data structures.
+  - *Import Scanning & Ingestion Secret Review UI:*
+    - Enhanced `src/ui/ImportPackageDialog.tsx` to detect secret findings and display a full review UI with `Redact`, `Exclude`, and `False Positive` options before writing to IndexedDB.
+    - Updated `importPackage` in `src/storage/storageService.ts` to respect excluded files (`included: false` in manifest, no file content row) and persist `acknowledgedFindings`.
+    - Added unit test in `tests/ui/ImportPackageDialog.test.tsx` and E2E test 13 in `e2e/export.spec.ts` using fragmented fake secrets.
+  - *E2E Scenario Map (Slice 10 Scenarios 1–13):*
+    - Scenario 1: Preset selection and live budget updates (`e2e/export.spec.ts:23`)
+    - Scenario 2: Custom budget validation boundary and format checks (`e2e/export.spec.ts:58`)
+    - Scenario 3: Lite format prompt copy and clipboard notification (`e2e/export.spec.ts:87`)
+    - Scenario 4: Full package zip download generation with verified manifest (`e2e/export.spec.ts:109`)
+    - Scenario 5: Secret gate export blocking and warning override (`e2e/export.spec.ts:152`)
+    - Scenario 6: Package import on dashboard and project restoration (`e2e/export.spec.ts:189`)
+    - Scenario 7: Package import same-ID collision options (`e2e/export.spec.ts:272`)
+    - Scenario 8: Package import integrity failure on tampered archive (`e2e/export.spec.ts:368`)
+    - Scenario 9: Zero outbound requests and zero secrets in console (`e2e/export.spec.ts:433`)
+    - Scenario 10: Accessibility audit and screenshot captures across dialogs (`e2e/export.spec.ts:452`)
+    - Scenario 11: Keyboard-only navigation across presets and filters (`e2e/export.spec.ts:472`)
+    - Scenario 12: Round-trip export then import package data structure fidelity (`e2e/export.spec.ts:499`)
+    - Scenario 13: Imported package secret review and redaction flow (`e2e/export.spec.ts:553`)
+  - *Slowdown Diagnostics & Suite Performance:*
+    - Machine state: TotalVisibleMemorySize = 6,237,832 KB, FreePhysicalMemory = ~270,000 - 1,500,000 KB.
+    - Standalone timings:
+      - `capture.spec.ts` test 1a: 6.6s
+      - `capture.spec.ts` test 2: 4.0s
+      - `passport.spec.ts` test 16a: 6.5s
+      All 3 standalone benchmark tests execute comfortably under the 20s ceiling.
+    - Suite duration explanation: The suite runs 240+ tests across dual projects (`desktop` and `mobile-360`) with 2 workers. Each test provisions Chrome, opens port 4179, seeds and cleans IndexedDB, performs DOM operations, executes full axe-core accessibility tree traversals, and takes full-page screenshots. At an average of 4-6s per test, `(240 * 5s) / 2 = 600s = 10m` plus build and browser startup overhead = ~12.4m.
+  - *16a Root Cause Analysis:*
+    - Pre-split 16a ran two active browser tabs simultaneously, performed storage mutations with async polling, and ran a full axe-core accessibility scan on Page B while Page A was still open. Under limited free memory, the cumulative duration reached ~38s, triggering the 20s timeout. Splitting into 16a (conflict logic & sync) and 16c (layout and axe scan) keeps each test under 9s with zero lost coverage.
+  - *Removed Axe Scans Audit:*
+    - Verified that the two scans moved in 9b remain 100% covered: Capture dialog by test 5; conflict alert by test 16c.
+
+- **Rule 13.7 Failure Disclosure during Slice 10b:**
+  - *`tests/ui/ImportPackageDialog.test.tsx` syntax error (Exit code 1):*
+    - *Error:* `E:/ranveer/PROJECT PASSPORT/src/ui/ImportPackageDialog.tsx:481:12: ERROR: Unterminated regular expression` due to an accidental duplicate block of dialog action buttons.
+    - *Fix:* Removed the duplicate action markup block in `ImportPackageDialog.tsx`.
+  - *`src/ui/ImportPackageDialog.tsx` & `tests/export/presets.test.ts` type errors during `npm run build` (Exit code 1):*
+    - *Error:* `Property 'maskedValue' does not exist on type 'SecretFinding'`; unused imports `MIN_CUSTOM_BUDGET` and `MAX_CUSTOM_BUDGET`.
+    - *Fix:* Replaced `maskedValue` with `f.masked`; removed unused imports from `presets.test.ts`.
+  - *`e2e/export.spec.ts` Run 1 (Exit code 1, 1 failed):*
+    - *Error (Test 12):* Timed out at `await page.getByLabel('Immediate next action').fill(...)` because non-Basics accordions are collapsed by default.
+    - *Fix:* Targeted default-open `Project goal` and `Executive summary` in the Basics accordion.
+
+- **Modified & Created Files in Slice 10b:**
+  - `SPEC.md`: Codified §11 export tiers, secret gate scope, same-ID collision, manifest format, reversible Markdown, and budget copy.
+  - `src/export/presets.ts`: Unified invalid custom budget message to `"Enter a whole number between 1,000 and 2,000,000."`.
+  - `src/export/budgeter.ts`: Removed optional chaining on required `passport.nextAction.trim()`.
+  - `src/export/continuePrompt.ts`: Removed optional chaining on required `filteredPassport.nextAction.trim()`.
+  - `src/pages/export/ExportTab.tsx`: Removed optional chaining on required `passport.project.name.trim()` and `passport.project.goal.trim()`.
+  - `src/ui/ImportPackageDialog.tsx`: Added interactive secret findings review UI (`Redact`, `Exclude`, `False Positive`).
+  - `src/storage/storageService.ts`: Supported excluded files and `acknowledgedFindings` persistence in `importPackage`.
+  - `tests/export/presets.test.ts`: Updated tests for unified budget error copy.
+  - `tests/ui/ExportTab.test.tsx`: Updated tests for unified budget error copy.
+  - `tests/ui/ImportPackageDialog.test.tsx`: Added unit test for import secret review and redaction.
+  - `e2e/export.spec.ts`: Added round-trip fidelity test (Scenario 12), import secret review test (Scenario 13), exact copy assertions, and screenshot hooks.
+  - `PROGRESS.md`: Corrected Slice 9b files list, recorded Slice 10b decisions, benchmarks, root cause analysis, and Rule 13.7 failure disclosures.
 
 ---
 

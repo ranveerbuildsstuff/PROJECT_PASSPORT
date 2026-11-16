@@ -79,6 +79,9 @@ export interface BudgetValidationResult {
   error?: string;
 }
 
+export const INVALID_CUSTOM_BUDGET_MESSAGE =
+  'Enter a whole number between 1,000 and 2,000,000.';
+
 /**
  * Validates a custom token budget input against boundary conditions.
  * Accepts numbers or numeric strings.
@@ -87,7 +90,7 @@ export function validateCustomBudget(value: unknown): BudgetValidationResult {
   if (value === undefined || value === null || value === '') {
     return {
       isValid: false,
-      error: 'Enter a token budget between 1,000 and 2,000,000.',
+      error: INVALID_CUSTOM_BUDGET_MESSAGE,
     };
   }
 
@@ -95,29 +98,15 @@ export function validateCustomBudget(value: unknown): BudgetValidationResult {
   if (!/^\d+$/.test(str)) {
     return {
       isValid: false,
-      error: 'Token budget must be a valid whole number.',
+      error: INVALID_CUSTOM_BUDGET_MESSAGE,
     };
   }
 
   const num = Number(str);
-  if (!Number.isFinite(num) || num <= 0) {
+  if (!Number.isFinite(num) || num < MIN_CUSTOM_BUDGET || num > MAX_CUSTOM_BUDGET) {
     return {
       isValid: false,
-      error: 'Token budget must be a valid whole number.',
-    };
-  }
-
-  if (num < MIN_CUSTOM_BUDGET) {
-    return {
-      isValid: false,
-      error: `Token budget must be at least ${MIN_CUSTOM_BUDGET.toLocaleString()} tokens.`,
-    };
-  }
-
-  if (num > MAX_CUSTOM_BUDGET) {
-    return {
-      isValid: false,
-      error: `Token budget cannot exceed ${MAX_CUSTOM_BUDGET.toLocaleString()} tokens.`,
+      error: INVALID_CUSTOM_BUDGET_MESSAGE,
     };
   }
 

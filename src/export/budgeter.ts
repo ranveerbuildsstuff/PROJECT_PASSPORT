@@ -128,7 +128,7 @@ export function planExport(input: ExportBudgeterInput, budget: number): ExportPl
   });
 
   // Next action
-  if (passport.nextAction?.trim()) {
+  if (passport.nextAction.trim()) {
     const naTokens = estimateTokens(`Next Action:\n${passport.nextAction.trim()}`);
     t1Tokens += naTokens;
     allItems.push({

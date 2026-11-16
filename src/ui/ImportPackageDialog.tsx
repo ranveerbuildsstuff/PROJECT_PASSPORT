@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { Dialog } from './Dialog';
 import { Button } from './Button';
 import { Badge } from './Badge';
@@ -6,12 +6,15 @@ import { useToast } from './useToast';
 import { FileArchive, AlertTriangle, CheckCircle2, ShieldAlert, Loader2 } from 'lucide-react';
 import { parsePackageZip, type PackageImportSuccess } from '../import/packageImport';
 import { importPackage, getProject } from '../storage';
+import { type SecretFinding, findingKey, redactText } from '../domain';
 
 export interface ImportPackageDialogProps {
   isOpen: boolean;
   onClose: () => void;
   onImportSuccess?: (projectId: string) => void;
 }
+
+type FindingAction = 'redact' | 'exclude' | 'false_positive';
 
 export function ImportPackageDialog({
   isOpen,
@@ -27,6 +30,23 @@ export function ImportPackageDialog({
   const [hasConflict, setHasConflict] = useState(false);
   const [conflictAction, setConflictAction] = useState<'copy' | 'replace'>('copy');
   const [isImporting, setIsImporting] = useState(false);
+  const [resolutions, setResolutions] = useState<Map<string, FindingAction>>(new Map());
+
+  const allFindings = useMemo<SecretFinding[]>(() => {
+    return parsedPackage ? parsedPackage.findings.flatMap((f) => f.findings) : [];
+  }, [parsedPackage]);
+
+  const setAction = (key: string, action: FindingAction) => {
+    setResolutions((prev) => {
+      const next = new Map(prev);
+      next.set(key, action);
+      return next;
+    });
+  };
+
+  const unresolvedCount = useMemo(() => {
+    return allFindings.filter((f) => !resolutions.has(findingKey(f))).length;
+  }, [allFindings, resolutions]);
 
   const resetState = () => {
     setIsParsing(false);
@@ -35,6 +55,7 @@ export function ImportPackageDialog({
     setHasConflict(false);
     setConflictAction('copy');
     setIsImporting(false);
+    setResolutions(new Map());
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -54,6 +75,7 @@ export function ImportPackageDialog({
     setParseError(null);
     setParsedPackage(null);
     setHasConflict(false);
+    setResolutions(new Map());
 
     try {
       const buffer = await file.arrayBuffer();
@@ -85,7 +107,69 @@ export function ImportPackageDialog({
 
     setIsImporting(true);
     try {
-      const importedId = await importPackage(parsedPackage, {
+      // Group findings to redact or exclude
+      const excludedPaths = new Set(
+        allFindings
+          .filter((f) => resolutions.get(findingKey(f)) === 'exclude')
+          .map((f) => f.path)
+      );
+
+      const redactionMap = new Map<string, SecretFinding[]>();
+      for (const f of allFindings) {
+        if (resolutions.get(findingKey(f)) === 'redact') {
+          const list = redactionMap.get(f.path) ?? [];
+          list.push(f);
+          redactionMap.set(f.path, list);
+        }
+      }
+
+      const ackSet = new Set(
+        allFindings
+          .filter((f) => {
+            const act = resolutions.get(findingKey(f));
+            return act === 'false_positive' || act === 'redact';
+          })
+          .map(findingKey)
+      );
+
+      const finalizedFiles = parsedPackage.files.map((file) => {
+        const isExcluded = excludedPaths.has(file.path);
+        const fileFindings =
+          parsedPackage.findings.find((pf) => pf.path === file.path)?.findings ?? [];
+        const fileAckKeys = fileFindings.map(findingKey).filter((k) => ackSet.has(k));
+
+        if (isExcluded) {
+          return {
+            path: file.path,
+            purpose: file.purpose,
+            sizeBytes: file.sizeBytes,
+            included: false,
+            acknowledgedFindings: fileAckKeys,
+          };
+        }
+
+        const toRedact = redactionMap.get(file.path);
+        let finalContent = file.content;
+        if (toRedact && toRedact.length > 0) {
+          finalContent = redactText(finalContent, toRedact);
+        }
+
+        return {
+          path: file.path,
+          purpose: file.purpose,
+          content: finalContent,
+          sizeBytes: new Blob([finalContent]).size,
+          included: file.included,
+          acknowledgedFindings: fileAckKeys,
+        };
+      });
+
+      const payloadToImport = {
+        ...parsedPackage,
+        files: finalizedFiles,
+      };
+
+      const importedId = await importPackage(payloadToImport, {
         conflictAction: hasConflict ? conflictAction : undefined,
       });
 
@@ -187,15 +271,87 @@ export function ImportPackageDialog({
               </div>
             </div>
 
-            {/* Findings Notice */}
-            {parsedPackage.findings.length > 0 && (
-              <div className="p-3 rounded-lg border border-color-warning/30 bg-color-warning/10 text-xs flex items-start gap-2">
-                <ShieldAlert className="w-4 h-4 text-color-warning shrink-0 mt-0.5" aria-hidden="true" />
-                <div>
-                  <span className="font-semibold text-color-warning">Security notice</span>
-                  <p className="text-[11px] text-text-muted mt-0.5">
-                    This package contains {parsedPackage.findings.length} files with secret findings. You can review them in the Files tab after import.
-                  </p>
+            {/* Secret Review Section */}
+            {allFindings.length > 0 && (
+              <div className="flex flex-col gap-3 p-3.5 rounded-lg bg-color-warning/10 border border-color-warning/40">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 text-color-warning">
+                    <ShieldAlert className="w-4 h-4 shrink-0" aria-hidden="true" />
+                    <span className="text-xs font-semibold">
+                      We found {allFindings.length} possible secret{allFindings.length === 1 ? '' : 's'}. Choose what to do with each one before importing.
+                    </span>
+                  </div>
+                  {unresolvedCount > 0 && (
+                    <Badge variant="warning" className="text-[10px]">
+                      {unresolvedCount} unresolved
+                    </Badge>
+                  )}
+                </div>
+
+                <div className="flex flex-col gap-2.5 mt-1 max-h-56 overflow-y-auto pr-1">
+                  {allFindings.map((f) => {
+                    const key = findingKey(f);
+                    const action = resolutions.get(key);
+
+                    return (
+                      <div
+                        key={key}
+                        className="p-3 rounded-md bg-bg-surface border border-border-subtle flex flex-col gap-2"
+                      >
+                        <div className="flex items-center justify-between gap-2 flex-wrap text-xs">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <Badge variant="brass" className="text-[10px]">
+                              {f.category}
+                            </Badge>
+                            <span className="font-mono text-text-primary text-[11px] font-medium">
+                              {f.path}:{f.line}
+                            </span>
+                          </div>
+                          <span className="text-[11px] text-text-muted font-mono">
+                            {f.masked}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-2 pt-1 border-t border-border-subtle/50">
+                          <button
+                            type="button"
+                            onClick={() => setAction(key, 'redact')}
+                            className={`px-2.5 py-1 text-xs rounded border transition-colors min-h-[36px] flex items-center gap-1.5 ${
+                              action === 'redact'
+                                ? 'bg-accent-brass text-accent-brass-contrast border-accent-brass font-medium'
+                                : 'bg-bg-app text-text-primary border-border-subtle hover:border-accent-brass/80'
+                            }`}
+                          >
+                            <span>Redact</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setAction(key, 'exclude')}
+                            className={`px-2.5 py-1 text-xs rounded border transition-colors min-h-[36px] flex items-center gap-1.5 ${
+                              action === 'exclude'
+                                ? 'bg-color-danger text-white border-color-danger font-medium'
+                                : 'bg-bg-app text-text-primary border-border-subtle hover:border-color-danger/80'
+                            }`}
+                          >
+                            <span>Exclude</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setAction(key, 'false_positive')}
+                            className={`px-2.5 py-1 text-xs rounded border transition-colors min-h-[36px] flex items-center gap-1.5 ${
+                              action === 'false_positive'
+                                ? 'bg-color-success text-white border-color-success font-medium'
+                                : 'bg-bg-app text-text-primary border-border-subtle hover:border-color-success/80'
+                            }`}
+                          >
+                            <span>False Positive</span>
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}

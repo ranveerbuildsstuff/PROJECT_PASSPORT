@@ -248,27 +248,34 @@ Readiness measures handoff preparedness across 7 equally-weighted checks:
 ## 11. Export (Handoff Package)
 
 - **Destination Presets (Editable Token Budgets):**
-  - **Lite paste:** 6,000 tokens
-  - **ChatGPT:** 30,000 tokens
-  - **Claude:** 60,000 tokens
-  - **Gemini:** 100,000 tokens
-  - **Coding Agent:** 40,000 tokens
-  - **Custom:** User-specified budget
-- **Budget Truncation Priority (When Over Budget):**
-  1. `PROJECT_STATE.md` + core passport metadata (always retained first)
-  2. Active decisions, pending tasks, and open bugs
-  3. Included files (prioritized by explicit manifest order)
-  4. Conversation excerpts (most recent turns first, oldest trimmed)
-  *The UI must explicitly display what was included, trimmed, or omitted, along with the rationale.*
+  - **Lite paste:** 6,000 tokens (Lite format recommended)
+  - **ChatGPT:** 30,000 tokens (Lite format recommended)
+  - **Claude:** 60,000 tokens (Lite format recommended)
+  - **Gemini:** 100,000 tokens (Full package recommended)
+  - **Coding Agent:** 40,000 tokens (Full package recommended)
+  - **Custom:** User-specified budget between 1,000 and 2,000,000 tokens. Invalid custom inputs (out of bounds, non-integer, empty) produce the exact error: `"Enter a whole number between 1,000 and 2,000,000."`.
+- **Budget Truncation Priority & Tier Rules (When Over Budget):**
+  - **Tier 1 (Core Identity):** Fixed continue instructions, project metadata, goal, summary, status, stack, requirements, instructions, next action. Always retained first; never dropped. If Tier 1 alone exceeds budget, an over-budget warning is returned.
+  - **Tier 2 (Active Context):** Active decisions, pending tasks, open bugs, open questions.
+  - **Tier 2b (Historical / Completed Context):** Superseded decisions, done tasks, fixed bugs, completed items.
+  - **Tier 3 (Project Files):** Included files in explicit manifest order. Evaluated whole files only; stops at the first file that does not fit to preserve manifest priority.
+  - **Tier 4 (Conversation Transcripts):** Most recent turns first, whole turns only, oldest trimmed at turn boundaries.
+  - **Budget-Omitted Passport Marking:** When content is omitted or excluded due to token budget limits, corresponding entries in the exported `project-passport.json` manifest are explicitly marked with `included: false` so recipient agents understand the omission rationale without losing file/conversation references.
+  *The UI must explicitly display what was included, trimmed, or omitted, along with token estimates and plain-language rationale.*
 - **Package Formats:**
   - **Lite Package:** Single formatted `CONTINUE_PROMPT` markdown text copied directly to clipboard.
   - **Full Package (.zip archive):**
-    - `project-passport.json` (raw valid passport schema)
+    - `project-passport.json` (raw valid passport schema with budget-adjusted `included` flags)
     - `PROJECT_STATE.md` (human/AI-readable executive project summary)
     - `CONTINUE_PROMPT.md` (instructions for the target AI model)
     - `files/` (directory of included project source files)
     - `conversations/` (directory of included conversations formatted as Markdown)
     - `MANIFEST.json` (file and artifact hashes for integrity verification)
+- **Manifest Format (`MANIFEST.json`):**
+  - Schema: `{ manifestVersion: 1, schemaVersion: 1, createdAt: string, entries: Array<{ path: string, sizeBytes: number, sha256: string }> }`.
+  - Every file in the archive is checked against `MANIFEST.json` via SHA-256 before importing. Any missing, extra, or modified entry rejects import with a plain-language error.
+- **Reversible Conversation Markdown:**
+  - Standardized lossless Markdown format: header block `=== CONVERSATION: {id} | {title} | {source} ===` followed by turn headers `--- TURN: {role} | {timestamp} ---`. Backslash escapes prevent collisions with message content, allowing 100% reversible round-trip parsing back to typed conversation models.
 - **CONTINUE_PROMPT Instructions:**
   Must instruct the recipient AI to first confirm, in its own words:
   1. Project objective and scope.
@@ -277,10 +284,14 @@ Readiness measures handoff preparedness across 7 equally-weighted checks:
   4. Current status and active bugs.
   5. Next planned task.
   *The AI must pause and ask about any ambiguities before modifying code or proposing new architecture.*
-- **Secret Gate:**
-  Export generation is strictly blocked whenever unresolved scanner findings exist, unless the user explicitly acknowledges a security warning override.
-- **Package Import:**
-  A Full `.zip` package can be imported on another machine or browser instance. Round-trip export then import must yield an identical passport data structure.
+- **Secret Gate Scope:**
+  Export generation is strictly blocked whenever unresolved scanner findings exist across: (1) included project files, (2) included conversations, and (3) passport text (goal, summary, instructions, decisions, requirements, tasks, bugs, nextAction, openQuestions). The user may override this block only with an explicit security warning acknowledgment checkbox.
+- **Package Import & Same-ID Collision Handling:**
+  A Full `.zip` package can be imported on another machine or browser instance. Round-trip export then import yields an identical passport data structure.
+  - When importing a package whose project ID collides with an existing local project:
+    - **Import as a copy (Recommended):** Generates a new project ID, remaps conversation and file IDs, appends `(Copy)` to the name, and preserves the local project intact.
+    - **Replace existing project:** Atomically replaces the existing project, passport, conversations, and files with the package contents.
+  - Imported package files are scanned for secrets before storing, passing findings through the review UI (Redact, Exclude, False Positive).
 
 ## 12. Local Storage & Full Database Backup
 
