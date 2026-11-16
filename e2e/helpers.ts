@@ -316,3 +316,122 @@ export function collectExternalRequests(page: Page): () => Array<{ url(): string
 
   return () => [...externalRequests];
 }
+
+/**
+ * Tabs through the page's interactive elements and verifies that every focused
+ * element has a visible focus indicator (either a non-zero CSS outline or a CSS box-shadow ring).
+ * Throws with exact element tags, accessible names, and computed styles if any element lacks a visible indicator.
+ */
+export async function expectVisibleFocusRing(
+  page: Page,
+  options: { maxTabs?: number; contextName?: string } = {}
+): Promise<{ checkedCount: number }> {
+  const { maxTabs = 40, contextName = 'Page' } = options;
+
+  // Blur any active focus
+  await page.evaluate(() => {
+    (document.activeElement as HTMLElement)?.blur();
+  });
+
+  const violations: string[] = [];
+  const visited = new Set<string>();
+  let checkedCount = 0;
+
+  for (let i = 0; i < maxTabs; i++) {
+    await page.keyboard.press('Tab');
+
+    const result = await page.evaluate(() => {
+      const el = document.activeElement as HTMLElement | null;
+      if (!el || el === document.body || el === document.documentElement) {
+        return null;
+      }
+
+      // Check visibility
+      const rect = el.getBoundingClientRect();
+      const style = window.getComputedStyle(el);
+      if (
+        rect.width === 0 ||
+        rect.height === 0 ||
+        style.display === 'none' ||
+        style.visibility === 'hidden'
+      ) {
+        return null;
+      }
+
+      const tag = el.tagName.toLowerCase();
+      const accessibleName =
+        el.getAttribute('aria-label') ||
+        el.getAttribute('title') ||
+        el.innerText?.trim().slice(0, 30) ||
+        (el as HTMLInputElement).value ||
+        el.getAttribute('placeholder') ||
+        '';
+
+      // 1. Outline check:
+      // Chrome default focus ring is "auto" or "solid", with width > 0 and non-transparent color
+      const hasOutline =
+        style.outlineStyle !== 'none' &&
+        parseFloat(style.outlineWidth) > 0 &&
+        style.outlineColor !== 'transparent' &&
+        style.outlineColor !== 'rgba(0, 0, 0, 0)';
+
+      // 2. Box shadow / ring check:
+      // Tailwind uses comma-separated box-shadow layers with ring spread >= 1px
+      const shadow = style.boxShadow;
+      let hasShadowRing = false;
+      if (shadow && shadow !== 'none') {
+        const layers = shadow.split(/,(?![^(]*\))/).map((s) => s.trim());
+        for (const layer of layers) {
+          const isTransparent =
+            layer.startsWith('rgba(0, 0, 0, 0)') ||
+            layer.startsWith('transparent') ||
+            layer.includes('rgba(0, 0, 0, 0) 0px 0px 0px 0px');
+          const hasDimension = /[1-9]\d*px/.test(layer);
+          if (!isTransparent && hasDimension) {
+            hasShadowRing = true;
+            break;
+          }
+        }
+      }
+
+      const hasVisibleIndicator = hasOutline || hasShadowRing;
+
+      const elementKey = `${tag}:${accessibleName}:${rect.top.toFixed(0)}:${rect.left.toFixed(0)}`;
+
+      return {
+        elementKey,
+        tag,
+        accessibleName,
+        hasVisibleIndicator,
+        outlineStyle: style.outlineStyle,
+        outlineWidth: style.outlineWidth,
+        outlineColor: style.outlineColor,
+        boxShadow: shadow,
+      };
+    });
+
+    if (!result) continue;
+
+    if (visited.has(result.elementKey)) {
+      // Cycled back to previously focused element
+      break;
+    }
+    visited.add(result.elementKey);
+    checkedCount++;
+
+    if (!result.hasVisibleIndicator) {
+      violations.push(
+        `<${result.tag}> "${result.accessibleName}" has no visible focus indicator (outlineStyle: ${result.outlineStyle}, outlineWidth: ${result.outlineWidth}, boxShadow: ${result.boxShadow})`
+      );
+    }
+  }
+
+  if (violations.length > 0) {
+    throw new Error(
+      `[${contextName}] ${violations.length} interactive element(s) missing visible focus indicator:\n` +
+        violations.map((v) => `  - ${v}`).join('\n')
+    );
+  }
+
+  return { checkedCount };
+}

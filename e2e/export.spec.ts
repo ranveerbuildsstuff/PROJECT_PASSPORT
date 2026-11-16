@@ -538,14 +538,15 @@ test.describe('Slice 10: Export Package, Destination Presets, and Package Import
       buffer: zipBytes,
     });
 
-    await expect(page.getByText('Roundtrip Showcase App')).toBeVisible();
-    await expect(page.getByText('Verified Archive')).toBeVisible();
+    const importDialog = page.getByRole('dialog');
+    await expect(importDialog.getByText('Roundtrip Showcase App')).toBeVisible();
+    await expect(importDialog.getByText('Verified Archive')).toBeVisible();
 
     // Select import as copy
-    const copyRadio = page.getByLabel(/Import as a copy/i);
+    const copyRadio = importDialog.getByLabel(/Import as a copy/i);
     await copyRadio.check();
 
-    await page.getByRole('button', { name: 'Import project' }).click();
+    await importDialog.getByRole('button', { name: 'Import project' }).click();
     await page.waitForURL(/\/project\/[a-zA-Z0-9_-]+/);
 
     // 5. Verify restored project fields match

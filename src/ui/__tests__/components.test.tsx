@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
 import {
   Button,
   Badge,
@@ -60,6 +60,36 @@ describe('UI Primitives and Design System', () => {
       </Dialog>
     );
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('Dialog gives initial focus to first form control, or safe action in confirmations', async () => {
+    // 1. With form controls, first input is focused
+    const { unmount } = render(
+      <Dialog isOpen={true} onClose={vi.fn()} title="Form Dialog">
+        <form>
+          <input aria-label="First Field" />
+          <input aria-label="Second Field" />
+        </form>
+      </Dialog>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('First Field')).toHaveFocus();
+    });
+    unmount();
+
+    // 2. Without form controls (e.g. confirmation), safe action button is focused instead of close button
+    render(
+      <Dialog isOpen={true} onClose={vi.fn()} title="Confirmation Dialog">
+        <div>Are you sure?</div>
+        <button type="button">Cancel</button>
+        <button type="button">Confirm</button>
+      </Dialog>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Cancel' })).toHaveFocus();
+    });
   });
 
   it('renders Tabs with accessible tablist and triggers onChange', () => {

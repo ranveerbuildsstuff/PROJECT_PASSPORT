@@ -13,10 +13,17 @@ export interface ToastMessage {
   title?: string;
   message: string;
   action?: ToastAction;
+  duration?: number;
 }
 
 export interface ToastContextValue {
-  showToast: (message: string, type?: ToastType, title?: string, action?: ToastAction) => void;
+  showToast: (
+    message: string,
+    type?: ToastType,
+    title?: string,
+    action?: ToastAction,
+    duration?: number
+  ) => void;
   removeToast: (id: string) => void;
 }
 

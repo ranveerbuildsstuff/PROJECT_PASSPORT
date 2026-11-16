@@ -28,17 +28,36 @@ export function Dialog({
     if (isOpen) {
       previouslyFocusedElementRef.current = document.activeElement as HTMLElement | null;
 
-      // Focus the first focusable element inside the dialog, or the dialog container itself
+      // Focus the first form control, safe action in confirmations, or the dialog container
       const timer = setTimeout(() => {
-        if (dialogRef.current) {
-          const focusable = dialogRef.current.querySelectorAll<HTMLElement>(
-            'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-          );
-          if (focusable.length > 0) {
-            focusable[0]?.focus();
-          } else {
-            dialogRef.current.focus();
-          }
+        if (!dialogRef.current) return;
+
+        // 1. First interactive form control (input, textarea, select)
+        const formControl = dialogRef.current.querySelector<HTMLElement>(
+          'input:not([type="hidden"]):not([disabled]), textarea:not([disabled]), select:not([disabled])'
+        );
+        if (formControl) {
+          formControl.focus();
+          return;
+        }
+
+        // 2. Safe action or non-close button in confirmations
+        const actionButton = dialogRef.current.querySelector<HTMLElement>(
+          'button:not([aria-label="Close dialog"]):not([disabled]), [href]'
+        );
+        if (actionButton) {
+          actionButton.focus();
+          return;
+        }
+
+        // 3. Fallback to any focusable element, or the dialog container itself
+        const allFocusable = dialogRef.current.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        );
+        if (allFocusable.length > 0) {
+          allFocusable[0]?.focus();
+        } else {
+          dialogRef.current.focus();
         }
       }, 0);
 

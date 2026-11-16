@@ -1,4 +1,5 @@
 import { DatabaseZap, AlertCircle, RefreshCw } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { Button } from '../ui';
 
 export interface StorageBlockedPageProps {
@@ -42,6 +43,16 @@ export function StorageBlockedPage({ onRetry }: StorageBlockedPageProps) {
             <RefreshCw className="w-4 h-4 mr-2" aria-hidden="true" />
             <span>Retry storage check</span>
           </Button>
+        </div>
+
+        <div className="flex items-center justify-center gap-4 text-xs text-text-muted pt-2 border-t border-border-subtle w-full">
+          <Link to="/welcome" className="hover:text-text-primary underline">
+            About &amp; Guide
+          </Link>
+          <span>&bull;</span>
+          <Link to="/privacy" className="hover:text-text-primary underline">
+            Privacy &amp; Security
+          </Link>
         </div>
       </div>
     </div>

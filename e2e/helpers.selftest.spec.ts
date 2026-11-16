@@ -4,6 +4,7 @@ import {
   collectConsoleErrors,
   getBackgroundAlpha,
   collectExternalRequests,
+  expectVisibleFocusRing,
 } from './helpers';
 
 test.describe('E2E Helpers Selftest', () => {
@@ -236,6 +237,53 @@ test.describe('E2E Helpers Selftest', () => {
     const requests = getExternalRequests();
     expect(requests.length).toBeGreaterThan(0);
     expect(requests.some((r) => r.url() === 'https://example.com/api/test')).toBe(true);
+  });
+
+  test('expectVisibleFocusRing fails on an element with outline: none and no replacement', async ({
+    page,
+  }) => {
+    await page.setContent(`
+      <!DOCTYPE html>
+      <html>
+        <body>
+          <main>
+            <h1>Focus Ring Violation Selftest</h1>
+            <button style="outline: none; box-shadow: none;">Broken Button</button>
+          </main>
+        </body>
+      </html>
+    `);
+
+    let caughtError: Error | null = null;
+    try {
+      await expectVisibleFocusRing(page, { maxTabs: 5, contextName: 'Broken Page' });
+    } catch (err) {
+      caughtError = err as Error;
+    }
+
+    expect(caughtError).not.toBeNull();
+    expect(caughtError?.message).toContain('missing visible focus indicator');
+    expect(caughtError?.message).toContain('Broken Button');
+  });
+
+  test('expectVisibleFocusRing passes on an element with visible outline or box-shadow ring', async ({
+    page,
+  }) => {
+    await page.setContent(`
+      <!DOCTYPE html>
+      <html>
+        <body>
+          <main>
+            <h1>Focus Ring Valid Selftest</h1>
+            <button style="outline: 2px solid #E5A84B;">Good Outline Button</button>
+            <button style="outline: none; box-shadow: 0 0 0 2px #E5A84B;">Good Ring Button</button>
+          </main>
+        </body>
+      </html>
+    `);
+
+    const result = await expectVisibleFocusRing(page, { maxTabs: 5, contextName: 'Valid Page' });
+    expect(result.checkedCount).toBe(2);
   });
 });
 

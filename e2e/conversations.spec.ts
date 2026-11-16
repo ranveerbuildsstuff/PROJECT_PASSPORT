@@ -351,8 +351,8 @@ test.describe('Slice 6: Conversation Paste Import & Reconstruct Prompt', () => {
     const dialog = page.getByRole('dialog', { name: 'Paste conversation' });
     await expect(dialog).toBeVisible();
 
-    // Tab from Close (X) button to Title input
-    await page.keyboard.press('Tab');
+    // Initial focus is on the first form control (Title input)
+    await expect(page.getByLabel('Conversation title')).toBeFocused();
     await page.keyboard.type('Keyboard Only Session');
 
     // Tab to content textarea

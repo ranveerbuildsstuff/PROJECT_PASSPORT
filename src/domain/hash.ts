@@ -6,6 +6,7 @@
  * - Returns lowercase hexadecimal string
  * - Non-blocking, pure, zero logging
  * - Never await inside a Dexie transaction!
+ * - Non-crashing fallback if crypto.subtle is unavailable (e.g. insecure context)
  */
 
 export async function sha256Hex(data: Uint8Array | string): Promise<string> {
@@ -17,6 +18,6 @@ export async function sha256Hex(data: Uint8Array | string): Promise<string> {
     return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
   }
 
-  // Fallback for node/test environments if crypto.subtle is somehow unavailable
-  throw new Error('Web Crypto API (crypto.subtle) is not available in this environment.');
+  // Non-crashing fallback for insecure contexts / environments where crypto.subtle is unavailable
+  return 'unavailable';
 }

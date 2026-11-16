@@ -19,6 +19,7 @@ import {
   addProjectFiles,
   describeStorageError,
 } from '../storage';
+import { detectCapabilities, FOLDER_UPLOAD_UNAVAILABLE_MESSAGE } from '../lib/capabilities';
 import {
   ShieldAlert,
   AlertTriangle,
@@ -47,6 +48,7 @@ export function AddFilesDialog({
   onSuccess,
 }: AddFilesDialogProps): React.ReactElement {
   const { showToast } = useToast();
+  const capabilities = useMemo(() => detectCapabilities(), []);
 
   const [step, setStep] = useState<'empty' | 'scanning' | 'error' | 'review'>('empty');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -368,12 +370,25 @@ export function AddFilesDialog({
               <label className="flex flex-col items-center justify-center p-5 rounded-lg border border-border-subtle bg-bg-surface hover:border-accent-brass/80 hover:bg-bg-app transition-colors cursor-pointer text-center group min-h-[44px]">
                 <Folder className="w-6 h-6 text-text-muted group-hover:text-accent-brass mb-2" />
                 <span className="text-xs font-semibold text-text-primary">Choose folder</span>
-                <span className="text-[11px] text-text-muted mt-1">Directory tree</span>
+                <span className="text-[11px] text-text-muted mt-1">
+                  {capabilities.webkitdirectory
+                    ? 'Directory tree'
+                    : 'Folder upload falls back to file selection'}
+                </span>
+                {!capabilities.webkitdirectory && (
+                  <span className="text-[10px] text-color-warning mt-1 leading-tight">
+                    {FOLDER_UPLOAD_UNAVAILABLE_MESSAGE}
+                  </span>
+                )}
                 <input
                   type="file"
-                  // @ts-expect-error - webkitdirectory is standard in browsers but non-standard TS HTMLInputElement
-                  webkitdirectory=""
-                  directory=""
+                  multiple
+                  {...(capabilities.webkitdirectory
+                    ? {
+                        webkitdirectory: '',
+                        directory: '',
+                      }
+                    : {})}
                   onChange={(e) => handleFilesSelected(e, false)}
                   className="sr-only"
                   aria-label="Choose folder"

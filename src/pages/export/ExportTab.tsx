@@ -29,6 +29,7 @@ import { planExport } from '../../export/budgeter';
 import { generateContinuePrompt } from '../../export/continuePrompt';
 import { evaluateSecretGate } from '../../domain/secretGate';
 import { handleExportWorkerMessage } from '../../export/export.worker';
+import { detectCapabilities, HASHING_UNAVAILABLE_MESSAGE } from '../../lib/capabilities';
 
 export interface ExportTabProps {
   projectId: string;
@@ -42,6 +43,7 @@ export function ExportTab({
   onNavigateToPassport,
 }: ExportTabProps): React.ReactElement {
   const { showToast } = useToast();
+  const capabilities = useMemo(() => detectCapabilities(), []);
 
   const [files, setFiles] = useState<FileRecord[]>([]);
   const [conversations, setConversations] = useState<
@@ -223,6 +225,18 @@ export function ExportTab({
 
   return (
     <div className="space-y-6">
+      {/* Capability warning */}
+      {!capabilities.webCryptoSubtle && (
+        <div
+          role="status"
+          aria-label="Security warning"
+          className="p-3.5 rounded-lg border border-color-warning/40 bg-color-warning/10 text-xs text-text-primary flex items-center gap-2"
+        >
+          <AlertTriangle className="w-4 h-4 text-color-warning shrink-0" aria-hidden="true" />
+          <span>{HASHING_UNAVAILABLE_MESSAGE}</span>
+        </div>
+      )}
+
       {/* Header */}
       <div>
         <h2 className="text-lg sm:text-xl font-bold tracking-tight text-text-primary flex items-center gap-2">

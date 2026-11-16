@@ -1,6 +1,6 @@
 # PROGRESS.md — Project Roadmap & Status
 
-Current slice: none (Slice 4b & Ticket T2 complete)
+Current slice: none (Slice 11 complete)
 
 ## Slices Checklist
 
@@ -24,9 +24,12 @@ Current slice: none (Slice 4b & Ticket T2 complete)
 - [x] Slice 6b: Conversation import closeout
 - [x] Slice 7: ChatGPT / Claude export import
 - [x] Slice 8: Project files + secret scanner
-- [ ] Slice 9: Checkpoints (timeline, compare, restore)
-- [ ] Slice 10: Export package, destination presets, import package
-- [ ] Slice 11: Polish, PWA, landing + privacy pages, deploy docs
+- [x] Slice 8b: Files and scanner closeout
+- [x] Slice 9: Checkpoints (timeline, compare, restore)
+- [x] Slice 9b: Checkpoints closeout
+- [x] Slice 10: Export package, destination presets, import package
+- [x] Slice 10b: Export closeout
+- [x] Slice 11: Polish, PWA, landing + privacy pages, deploy docs
 
 ---
 
@@ -889,7 +892,146 @@ Consolidated manual checklist tests into `storageService.test.ts` and deleted re
 
 ---
 
+### Slice 11: Polish, PWA, Landing + Privacy Pages & Deploy Docs
+
+- **Accomplishments & Features Delivered:**
+  - *Dependency:* Installed `vite-plugin-pwa` (as specified in `AGENTS.md §2` for Slice 11). No other packages installed.
+  - *Application Icons & PWA Web Manifest:*
+    - Created `scripts/generate-icons.mjs` using Playwright (zero image library dependencies) to generate all required line-style brass-on-dark icons: `public/pwa-192x192.png`, `public/pwa-512x512.png`, `public/pwa-maskable-512x512.png`, `public/apple-touch-icon.png`, `public/favicon-32x32.png`, and `public/favicon.svg`. Added `"icons"` npm script.
+    - Configured PWA manifest in `vite.config.ts` with name, short name, start_url, standalone display mode, and DESIGN dark theme tokens (`#0E1116` background, `#161B22` theme color).
+  - *Service Worker & Safe Prompt-Style Updates:*
+    - Configured Workbox precaching for all static build assets (43 entries: HTML, JS, CSS, fonts, Web Workers, manifest, icons) with client route navigation fallback to `/index.html`.
+    - PWA service worker never intercepts or caches user content or IndexedDB data.
+    - Implemented prompt-style updates with `src/lib/pwaUpdater.ts` and `src/ui/usePwaUpdate.ts`. When an update is ready, a non-blocking toast informs the user *"A new version is ready"* with a *"Reload"* action. Activating Reload runs `flushActiveAutosave()` first. If the draft fails validation or flushing, the reload halts to protect unsaved work.
+  - *Content Security Policy (CSP):*
+    - Enforced strict zero-leak CSP across `public/_headers`, `public/_redirects`, `vercel.json`, and `vite.config.ts` (preview headers):
+      `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none';`
+    - Verified 0 CSP violations, 0 external network requests, and zero content logging across all screens.
+  - *Browser Capabilities Detection (`src/lib/capabilities.ts`):*
+    - Pure capability detection for `indexedDB`, `webCryptoSubtle`, `moduleWorkers`, `fileAndBlobArrayBuffer`, and `webkitdirectory`.
+    - Integrated non-crashing plain-language notifications when capabilities are absent:
+      - Hashing in checkpoints and export: *"Hashing in checkpoints and export needs a secure (HTTPS) connection."*
+      - Folder upload: *"This browser can’t upload a whole folder. Choose files or a .zip instead."*
+    - Fallback in `src/domain/hash.ts` returns `'unavailable'` without throwing when `crypto.subtle` is missing.
+    - Comprehensive unit tests in `tests/lib/capabilities.test.tsx` verifying deletion of `crypto.subtle` and folder selection fallbacks.
+  - *Zero-Storage Landing (`/welcome`) & Privacy (`/privacy`) Pages:*
+    - Landing page (`/welcome`): Left-aligned design with single paragraph *"The AI is replaceable; the project is not."*, 5-step numbered workflow with stamp badges (Capture, Structure, Checkpoint, Export, Continue), "What it is not" section, and "Honest limits" with direct link to Backup & restore. Renders independently of storage.
+    - Privacy page (`/privacy`): Plain statements of exact storage (IndexedDB `ProjectPassportDB` stores: `projects`, `passports`, `checkpoints`, `conversations`, `files`; localStorage `theme`), what never leaves the device (0 network requests, verified via Network tab), offline reliability note, protections (hard-blocked files, secret scanner), limitations (unencrypted at rest), and data removal instructions. Renders independently of storage.
+    - Navigation: Footer links to `/welcome` and `/privacy` in `AppShell.tsx`, empty Dashboard links, and Storage Blocked fallback links.
+  - *Dialog Initial Focus Polish:*
+    - Updated `src/ui/Dialog.tsx` to automatically place initial focus on the first form control (`input, textarea, select`), or on the safe action button in confirmation dialogs, rather than defaulting to the close button.
+  - *Focus Indicator Verification & Viewport Sweeps:*
+    - Implemented `expectVisibleFocusRing` in `e2e/helpers.ts` inspecting outline and Tailwind box-shadow layers.
+    - Added selftests in `e2e/helpers.selftest.spec.ts` proving failure on unstyled focus elements and success on compliant rings.
+    - Viewport sweep tests across 360x640, 768x1024, 1280x800, 1920x1080, and 3840x2160 (4K) verifying no horizontal overflow and max-width layout containment.
+    - Prefers-reduced-motion testing verifying all animations and spinners honor reduced-motion media query.
+  - *Comprehensive Final Workflow Regression Suite (`e2e/workflow-journey.spec.ts`):*
+    - Test 1: Edit passport, capture paste-back and merge, create checkpoint, restore checkpoint.
+    - Test 2: Attach conversation and files with secret scanner review, export Full `.zip` package.
+    - Test 3: Import Full package in clean context and verify round-trip fidelity.
+    - Test 4: Offline PWA test: service worker control, offline reload, edit project, generate Lite prompt.
+    - All 4 journey tests execute under 10 seconds (well within the 20s ceiling) on both desktop and mobile-360.
+  - *Production Deployment Documentation (`DEPLOY.md`):*
+    - Complete PowerShell commands for install, build, preview, and test.
+    - Static hosting and SPA fallback instructions for generic Nginx, Netlify (`_headers` and `_redirects`), Cloudflare Pages, and Vercel (`vercel.json`).
+    - CSP directives, HTTPS requirement, PWA lifecycle, offline verification, and zero-outbound validation steps.
+    - Browser support matrix highlighting the Safari 16.4+ requirement for regex lookbehinds.
+
+- **Rule 13.7 Failure Disclosure during Slice 11:**
+  1. *`src/ui/__tests__/components.test.tsx` (Exit code 1):*
+     - *Error:* `ReferenceError: waitFor is not defined` at line 76 in dialog focus unit test.
+     - *Fix:* Added `waitFor` to `@testing-library/react` import.
+  2. *`tests/lib/capabilities.test.ts` Transform Error (Exit code 1):*
+     - *Error:* `Expected ">" but found "projectId"` (esbuild JSX transform failure).
+     - *Fix:* Renamed file from `.ts` to `.tsx`.
+  3. *`tests/lib/capabilities.test.tsx` Runtime Errors (Exit code 1):*
+     - *Error:* `createDefaultPassport is not a function`; `Error: useToast must be used within a ToastProvider`.
+     - *Fix:* Imported `createEmptyPassport` and wrapped test renders in `<ToastProvider>`.
+  4. *`src/pages/export/ExportTab.tsx` React Hook Order Error (Exit code 1):*
+     - *Error:* `Error: Rendered more hooks than during the previous render.`
+     - *Fix:* Moved `useMemo` capability check to the top of `ExportTab` before conditional loading returns.
+  5. *`npm run typecheck` compilation errors (Exit code 1):*
+     - *Error:* `src/lib/pwaUpdater.ts:22:8: result is of type 'unknown'`; `src/ui/AddFilesDialog.tsx:388:25: Unused '@ts-expect-error' directive`; unused imports in test file.
+     - *Fix:* Added return type `Promise<AutosaveFlushResult>` to `flushActiveAutosave`; removed stale `@ts-expect-error` comment; cleaned unused imports.
+  6. *`e2e/pwa-pages.spec.ts` Compilation & Assertion Failures (Exit code 1):*
+     - *Error 1:* Unused `expectNoTouchOverflow` and missing function call on `consoleErrors.length`.
+     - *Fix:* Replaced `getConsoleErrors()` with `consoleErrors.length` and cleaned imports.
+     - *Error 2:* Strict mode violation on `getByRole('heading', { name: 'Project Passport' })` (Header vs Page).
+     - *Fix:* Added `{ exact: true }` to heading assertions.
+     - *Error 3:* Strict mode violation on `getByText(/Zero outbound network requests/i)`.
+     - *Fix:* Added `{ exact: true }` to listitem label.
+     - *Error 4:* Manifest background color assertion expected `#161B22` instead of `#0E1116`.
+     - *Fix:* Updated assertion to `#0E1116` matching DESIGN dark background token.
+     - *Error 5:* CSP font violations blocking data: fonts from `@fontsource` packages.
+     - *Fix:* Added `font-src 'self' data:;` to `_headers`, `vercel.json`, and `vite.config.ts`.
+     - *Error 6:* `expectVisibleFocusRing` rejected Tailwind ring due to transparent default shadow layer (`rgba(0,0,0,0)`).
+     - *Fix:* Enhanced helper to parse comma-separated box-shadow layers and check each layer for non-transparent color and dimensions.
+  7. *`e2e/workflow-journey.spec.ts` Compilation Errors (Exit code 1):*
+     - *Error:* Invalid arguments to `planExport`; invalid property `sha256` on `FileRecord`; invalid `source: 'manual'` on `ConversationRecord`.
+     - *Fix:* Matched exact domain and storage types (`{ passport, files, conversations }`, `mime`, `source: 'paste'`).
+  8. *`e2e/workflow-journey.spec.ts` Test Failures (Exit code 1):*
+     - *Error 1 (Test 1):* Timed out waiting for `Capture from AI` status card because synthetic JSON had invalid task status values (`completed`, `in_progress`).
+     - *Fix:* Changed task statuses to valid schema values (`done`, `doing`).
+     - *Error 2 (Test 1):* Assertion failed on `getByText('1 checkpoint recorded')` because capture merge automatically creates a `"Before merge"` checkpoint.
+     - *Fix:* Updated assertion to `getByText('2 checkpoints recorded')`.
+     - *Error 3 (Test 2):* Scoped `pasteDialog` locator timed out on `Attach to project` because dialog title changed from `"Paste conversation"` to `"Review parsed conversation"`.
+     - *Fix:* Targeted `page.getByRole('button', { name: 'Attach to project' })`.
+     - *Error 4 (Test 2):* Strict mode violation on `getByText('Architecture Discussion')` (matched list row and toast notification).
+     - *Fix:* Added `{ exact: true }`.
+     - *Error 5 (Test 2):* Filename pattern mismatch on download (`Received string: "journey-two-passport.zip"`).
+     - *Fix:* Updated assertion to `expect(download.suggestedFilename()).toBe('journey-two-passport.zip')`.
+     - *Error 6 (Test 3):* `src/app.ts` missing on Files tab because `passport.files` in synthetic test fixture was empty.
+     - *Fix:* Populated `passport.files` and `passport.conversations` with valid references matching schema.
+     - *Error 7 (Test 4):* Assertion failed on `getByText('2. Package Format')` instead of `'2. Export Format'`.
+     - *Fix:* Harmonized test assertion with actual UI string `'2. Export Format'`.
+  9. *WebServer Startup Failure during E2E Run (Exit code 1):*
+     - *Error:* `e2e/workflow-journey.spec.ts:4:3: error TS6133: 'expectNoSeriousA11y' is declared but its value is never read.`
+     - *Fix:* Removed unused import.
+  10. *`npm run lint` Lint Errors (Exit code 1):*
+     - *Error:* `src/lib/capabilities.ts:28:8: Unexpected any. Specify a different type @typescript-eslint/no-explicit-any`; `tests/lib/capabilities.test.tsx:188:23: Unexpected any.`
+     - *Fix:* Replaced `any` with `unknown` and typed casting; `delete (el as unknown as Record<string, unknown>).webkitdirectory`.
+  11. *`npm run build` Typecheck Failure (Exit code 1):*
+     - *Error:* `tests/lib/capabilities.test.tsx: error TS2345: Argument of type '{ ... Blob: () => void ... }' is not assignable to parameter of type 'CapabilityEnvironment'.`
+     - *Fix:* Broadened `detectCapabilities(env: unknown)` to safely inspect `env` using `typeof` and safe property lookups.
+  12. *`npm run test:e2e` Strict Mode Violation (Exit code 1):*
+     - *Error:* `e2e/export.spec.ts:541: strict mode violation: getByText('Roundtrip Showcase App') resolved to 2 elements (dashboard list item link and modal dialog header).`
+     - *Fix:* Scoped locator to `importDialog.getByText('Roundtrip Showcase App')`.
+
+- **Created & Modified Files in Slice 11:**
+  - `package.json`: Added `vite-plugin-pwa` dev dependency and `"icons"` script.
+  - `vite.config.ts`: Configured `VitePWA` plugin (manifest, precache, prompt updates) and preview CSP headers.
+  - `scripts/generate-icons.mjs`: Script using Playwright to generate all PWA icons and favicons without image libraries.
+  - `public/pwa-192x192.png`, `public/pwa-512x512.png`, `public/pwa-maskable-512x512.png`, `public/apple-touch-icon.png`, `public/favicon-32x32.png`, `public/favicon.svg`: Generated PWA assets.
+  - `public/_headers`, `public/_redirects`, `vercel.json`: Production HTTP headers (CSP, security) and SPA route fallback rules.
+  - `src/lib/capabilities.ts`: Pure capability detection module and plain-language messages.
+  - `src/lib/pwaUpdater.ts`: Pure PWA update reload handler with autosave flush safety guard.
+  - `src/ui/usePwaUpdate.ts`: React hook managing PWA service worker registration and update prompt.
+  - `src/ui/Toast.tsx` & `src/ui/useToast.ts`: Supported persistent toasts (`duration: 0`) for PWA reload actions.
+  - `src/ui/Dialog.tsx`: Polish for initial focus (first form control or safe action in confirmations).
+  - `src/domain/hash.ts`: Graceful non-crashing fallback returning `'unavailable'` when `crypto.subtle` is missing.
+  - `src/pages/WelcomePage.tsx`: Zero-storage landing page at `/welcome`.
+  - `src/pages/PrivacyPage.tsx`: Zero-storage privacy & security statement page at `/privacy`.
+  - `src/pages/StorageBlockedPage.tsx`: Added links to `/welcome` and `/privacy`.
+  - `src/pages/DashboardPage.tsx`: Added links to `/welcome` and `/privacy` in empty state.
+  - `src/ui/AppShell.tsx`: Wired PWA update prompt toast and footer links to `/welcome` and `/privacy`.
+  - `src/pages/checkpoints/CheckpointsTab.tsx`: Added non-crashing capability banner when HTTPS / Web Crypto is missing.
+  - `src/pages/export/ExportTab.tsx`: Added non-crashing capability banner when HTTPS / Web Crypto is missing.
+  - `src/ui/AddFilesDialog.tsx`: Added folder upload fallback notification when `webkitdirectory` is missing.
+  - `tests/lib/capabilities.test.tsx`: Unit tests for capability detection, missing crypto.subtle, and folder fallback.
+  - `e2e/helpers.ts`: Implemented `expectVisibleFocusRing` helper.
+  - `e2e/helpers.selftest.spec.ts`: Added selftests verifying `expectVisibleFocusRing` fails on non-conforming elements and passes on compliant rings.
+  - `e2e/pwa-pages.spec.ts`: E2E specs for Landing, Privacy, Web Manifest, CSP, Viewport sweep (360px to 4K), and Reduced Motion.
+  - `e2e/workflow-journey.spec.ts`: End-to-end regression journeys (passport edit & capture merge, conversation & files with secret review, round-trip package import, offline PWA reload and export).
+  - `e2e/conversations.spec.ts`: Updated dialog focus test to assert initial focus on first input without redundant Tab.
+  - `e2e/export.spec.ts`: Fixed locator scoping on roundtrip import package dialog to prevent strict mode collision.
+  - `DEPLOY.md`: Complete deployment, hosting, CSP, PWA, and browser compatibility guide.
+  - `SPEC.md`: Codified §13 Privacy & Security Model and §14 PWA & Offline Reliability.
+  - `TASKS.md`: Checked off all Slice 11 tasks.
+  - `PROGRESS.md`: Documented Slice 11 accomplishments, decisions, files, and Rule 13.7 error disclosures.
+
+---
+
 ## Known Issues
 
-- **Dialog Initial Focus:** `Dialog` gives initial focus to the Close button upon opening, requiring keyboard users to press Tab once to reach the first interactive form field. Retained as designed in Slice 3; not changed in this ticket.
-- **Unbounded Checkpoint Growth:** Checkpoints accumulate indefinitely as snapshots, merges, and restores occur. Pruning or manual deletion is explicitly out of scope for Slice 9 and will be evaluated in future slices.
+- **Dialog Initial Focus:** Resolved in Slice 11. `Dialog` now automatically gives initial focus to the first interactive form control (`input, textarea, select`), or to the safe action button in confirmation dialogs.
+- **Unbounded Checkpoint Growth (Documented Limitation):** Checkpoints accumulate indefinitely as snapshots, merges, and restores occur. This is an intentional append-only architecture decision for local auditability and safety. Users can clear historical checkpoints by exporting a clean package or re-importing as a new project.

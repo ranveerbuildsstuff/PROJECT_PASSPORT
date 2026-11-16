@@ -306,11 +306,37 @@ Readiness measures handoff preparedness across 7 equally-weighted checks:
   - Importing into an empty database restores all included projects cleanly.
   - If writing any project within the backup fails, the entire transaction rolls back, leaving pre-existing data untouched.
 
-## 13. Privacy Rule
+## 13. Privacy & Security Model
 
 User content (conversations, file contents, code snippets, passport text) **never** leaves the local device. It is **never** sent to any external server, never logged to the browser console, never included in URLs, and never included in error reports shown to third parties.
 
-## 14. Roadmap
+- **Zero Outbound Data Transmission:**
+  No telemetry, no analytics, no external CDNs, no remote tracking. After the initial static assets load, the application functions with zero network requests.
+- **Client Storage Specification:**
+  All user state is strictly confined to client-side storage:
+  - IndexedDB database: `ProjectPassportDB` containing object stores: `projects`, `passports`, `checkpoints`, `conversations`, `files`.
+  - LocalStorage: Exactly one key (`theme` with values `'light'` or `'dark'`).
+- **Cryptographic & Transport Security:**
+  - Checkpoint integrity hashing, manifest generation, and signature verification require the Web Crypto API (`crypto.subtle`), available strictly in secure contexts (HTTPS or localhost).
+  - On non-HTTPS origins, a non-crashing informational banner alerts the user: *"Hashing in checkpoints and export needs a secure (HTTPS) connection."*
+- **Content Security Policy (CSP):**
+  A strict CSP is enforced across static headers, hosting configurations, and development preview:
+  `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none';`
+- **Zero-Storage Landing & Privacy Pages:**
+  The landing page (`/welcome`) and privacy statement page (`/privacy`) render independently of IndexedDB or LocalStorage, ensuring full visibility even when browser storage is blocked or in restrictive private browsing modes.
+
+## 14. Progressive Web Application (PWA) & Offline Reliability
+
+- **Service Worker Lifecycle:**
+  Configured via `vite-plugin-pwa` with `registerType: 'prompt'`.
+- **Precache Manifest:**
+  All static build output (HTML, CSS, JS chunks, Web Workers, self-hosted Inter & JetBrains Mono fonts, and web manifest) is precached during service worker installation. Navigation requests fall back to `/index.html` for client-side routing.
+- **Zero User Data Caching:**
+  The service worker never intercepts or caches user data, IndexedDB operations, or passport files.
+- **Safe Prompt Updates:**
+  When a service worker update is detected, a toast informs the user *"A new version is ready"* with a *"Reload"* action. Activating Reload automatically triggers `flushActiveAutosave()`. If the flush fails or contains validation errors, the reload halts immediately to prevent data loss. The app never reloads on its own.
+
+## 15. Roadmap
 
 Build **ONE** slice per ticket. Never build ahead, but never make architecture choices that block subsequent slices.
 
@@ -326,7 +352,7 @@ Build **ONE** slice per ticket. Never build ahead, but never make architecture c
 10. **Slice 10:** Export package, destination presets, import package
 11. **Slice 11:** Polish, PWA, landing + privacy pages, deploy docs
 
-## 15. Parking Lot (NOT in MVP; Do Not Build, Do Not Block)
+## 16. Parking Lot (NOT in MVP; Do Not Build, Do Not Block)
 
 - Cloud synchronization across devices
 - User accounts, authentication, or cloud database profiles

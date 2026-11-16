@@ -214,14 +214,31 @@ export function DashboardPage() {
 
       {/* Main Content: Empty State or Project List */}
       {projects.length === 0 ? (
-        <EmptyState
-          icon={<FolderPlus className="w-6 h-6" aria-hidden="true" />}
-          title="No projects yet"
-          description="Project Passport keeps a structured, portable record of your AI-assisted project so you can switch tools without starting over. All your project context stays strictly on this device in local storage."
-          actionLabel="New project"
-          onAction={handleOpenCreate}
-          className="mt-6"
-        />
+        <div className="flex flex-col items-center w-full">
+          <EmptyState
+            icon={<FolderPlus className="w-6 h-6" aria-hidden="true" />}
+            title="No projects yet"
+            description="Project Passport keeps a structured, portable record of your AI-assisted project so you can switch tools without starting over. All your project context stays strictly on this device in local storage."
+            actionLabel="New project"
+            onAction={handleOpenCreate}
+            className="mt-6 w-full"
+          />
+          <div className="flex items-center justify-center gap-4 mt-6 text-xs text-text-muted flex-wrap">
+            <Link
+              to="/welcome"
+              className="hover:text-text-primary underline transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-brass rounded px-1.5 py-1 min-h-[44px] inline-flex items-center"
+            >
+              New here? Read the guide
+            </Link>
+            <span aria-hidden="true">&bull;</span>
+            <Link
+              to="/privacy"
+              className="hover:text-text-primary underline transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-brass rounded px-1.5 py-1 min-h-[44px] inline-flex items-center"
+            >
+              How your data is protected
+            </Link>
+          </div>
+        </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
           {projects.map((p) => (

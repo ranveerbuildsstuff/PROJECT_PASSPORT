@@ -12,6 +12,7 @@ import type { PassportV1 } from '../../domain/passport.schema';
 import { checkpointKind, checkpointSequence, countActivePassportSections } from '../../domain/checkpoint';
 import { listCheckpoints } from '../../storage/storageService';
 import { formatDateTime } from '../../lib';
+import { detectCapabilities, HASHING_UNAVAILABLE_MESSAGE } from '../../lib/capabilities';
 
 export interface CheckpointsTabProps {
   projectId: string;
@@ -63,9 +64,22 @@ export function CheckpointsTab({
   }, [fetchCheckpoints]);
 
   const sequenceMap = useMemo(() => checkpointSequence(checkpoints), [checkpoints]);
+  const capabilities = useMemo(() => detectCapabilities(), []);
 
   return (
     <div className="flex flex-col gap-6">
+      {/* Capability warning */}
+      {!capabilities.webCryptoSubtle && (
+        <div
+          role="status"
+          aria-label="Security warning"
+          className="p-3.5 rounded-lg border border-color-warning/40 bg-color-warning/10 text-xs text-text-primary flex items-center gap-2"
+        >
+          <AlertCircle className="w-4 h-4 text-color-warning shrink-0" aria-hidden="true" />
+          <span>{HASHING_UNAVAILABLE_MESSAGE}</span>
+        </div>
+      )}
+
       {/* Tab Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>

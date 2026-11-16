@@ -368,16 +368,16 @@
 
 ## Slice 11: Polish, PWA, Landing + Privacy Pages & Deploy Docs
 
-- [ ] Configure `vite-plugin-pwa` with web manifest, offline service worker caching, and application icons.
-- [ ] Build clean, informative Landing Page explaining the concept without hype or misleading claims.
-- [ ] Build standalone Privacy & Security Page detailing zero-cloud architecture, local IndexedDB storage, and client-side processing.
-- [ ] Perform accessibility audit: verify 44px minimum touch targets, keyboard navigation, visible focus indicators, and WCAG contrast.
-- [ ] Perform responsive layout verification on viewport sizes 360x640 up to 4K displays.
-- [ ] Write production build and deployment documentation in `DEPLOY.md`.
-- [ ] Final end-to-end regression testing across all user workflows.
-- [ ] **Tests added:** End-to-end workflow verification tests and routing tests for landing and privacy pages.
-- [ ] **Docs updated:** Finalize `PROGRESS.md` with full project roadmap completion.
-- [ ] **Commit message:** `Slice 11: polish, PWA, landing and privacy pages, deploy docs`
+- [x] Configure `vite-plugin-pwa` with web manifest, offline service worker caching, and application icons.
+- [x] Build clean, informative Landing Page explaining the concept without hype or misleading claims.
+- [x] Build standalone Privacy & Security Page detailing zero-cloud architecture, local IndexedDB storage, and client-side processing.
+- [x] Perform accessibility audit: verify 44px minimum touch targets, keyboard navigation, visible focus indicators, and WCAG contrast.
+- [x] Perform responsive layout verification on viewport sizes 360x640 up to 4K displays.
+- [x] Write production build and deployment documentation in `DEPLOY.md`.
+- [x] Final end-to-end regression testing across all user workflows.
+- [x] **Tests added:** End-to-end workflow verification tests and routing tests for landing and privacy pages.
+- [x] **Docs updated:** Finalize `PROGRESS.md` with full project roadmap completion.
+- [x] **Commit message:** `Slice 11: polish, PWA, landing and privacy pages, deploy docs`
 
 **Done when:**
 - `npm run typecheck`, `npm run lint`, `npm test`, and `npm run build` pass.

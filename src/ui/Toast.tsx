@@ -11,14 +11,22 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const showToast = useCallback(
-    (message: string, type: ToastType = 'info', title?: string, action?: { label: string; onClick: () => void }) => {
+    (
+      message: string,
+      type: ToastType = 'info',
+      title?: string,
+      action?: { label: string; onClick: () => void },
+      duration = 4000
+    ) => {
       const id = `${idPrefix}-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
-      const newToast: ToastMessage = { id, type, title, message, action };
+      const newToast: ToastMessage = { id, type, title, message, action, duration };
       setToasts((prev) => [...prev, newToast]);
 
-      setTimeout(() => {
-        removeToast(id);
-      }, 4000);
+      if (duration > 0) {
+        setTimeout(() => {
+          removeToast(id);
+        }, duration);
+      }
     },
     [idPrefix, removeToast]
   );
