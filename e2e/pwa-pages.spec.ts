@@ -83,7 +83,7 @@ test.describe('PWA, Landing, Privacy, and Responsive Audit', () => {
     await expect(page.getByRole('heading', { name: 'What the app protects' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'What it does not protect' })).toBeVisible();
     await expect(page.getByText(/No encryption at rest/i)).toBeVisible();
-    await expect(page.getByText(/We never claim “100% secure”/i)).toBeVisible();
+    await expect(page.getByText(/No guarantee against zero-day leaks/i)).toBeVisible();
 
     // How to remove everything
     await expect(page.getByRole('heading', { name: 'How to remove everything' })).toBeVisible();

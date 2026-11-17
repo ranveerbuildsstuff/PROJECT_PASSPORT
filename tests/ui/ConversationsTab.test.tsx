@@ -134,7 +134,7 @@ describe('ConversationViewer & Dialogs (RTL)', () => {
       render(<ViewerTestWrapper initialTurns={turns} />);
 
       // Merge turn 1 with turn 2
-      const mergeBtn = screen.getByRole('button', { name: /Merge Message 1 with next/i });
+      const mergeBtn = screen.getByRole('button', { name: /Merge with next.*Message 1/i });
       fireEvent.click(mergeBtn);
 
       // Now only 1 message remains with concatenated text

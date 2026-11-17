@@ -15,6 +15,25 @@ export interface BrowserCapabilities {
   webkitdirectory: boolean;
 }
 
+export interface CapabilityEnvironment {
+  indexedDB?: unknown;
+  crypto?: {
+    subtle?: {
+      digest?: unknown;
+    };
+  } | null;
+  Worker?: unknown;
+  Blob?: {
+    prototype?: {
+      arrayBuffer?: unknown;
+    };
+  } | null;
+  File?: unknown;
+  document?: {
+    createElement?: (tag: string) => unknown;
+  } | null;
+}
+
 export const HASHING_UNAVAILABLE_MESSAGE =
   'Hashing in checkpoints and export needs a secure (HTTPS) connection.';
 
@@ -25,12 +44,9 @@ export const FOLDER_UPLOAD_UNAVAILABLE_MESSAGE =
  * Detect capabilities in the given environment (defaults to global window).
  */
 export function detectCapabilities(
-  env: unknown = typeof window !== 'undefined' ? window : {}
+  env: CapabilityEnvironment | null = typeof window !== 'undefined' ? window : {}
 ): BrowserCapabilities {
-  const envObj =
-    env && typeof env === 'object'
-      ? (env as Record<string, unknown>)
-      : {};
+  const envObj = (env ?? (typeof window !== 'undefined' ? window : {})) as Record<string, unknown>;
 
   const indexedDB = Boolean(envObj.indexedDB);
 

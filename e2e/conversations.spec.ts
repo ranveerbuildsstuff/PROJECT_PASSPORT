@@ -141,7 +141,7 @@ test.describe('Slice 6: Conversation Paste Import & Reconstruct Prompt', () => {
     await expectNoSeriousA11y(page);
   });
 
-  test('3. Editing: flip role, merge with next, delete turn in viewer, save and reload persistence', async ({
+  test('3a. Editing: flip role, merge with next, delete turn in viewer, save and reload persistence', async ({
     page,
   }) => {
     // Seed initial conversation
@@ -167,7 +167,7 @@ test.describe('Slice 6: Conversation Paste Import & Reconstruct Prompt', () => {
     await expect(msg1Group.getByText('ASSISTANT')).toBeVisible();
 
     // Merge Message 1 with Message 2
-    const mergeBtn = editDialog.getByRole('button', { name: 'Merge Message 1 with next' });
+    const mergeBtn = editDialog.getByRole('button', { name: /Merge with next.*Message 1/i });
     await mergeBtn.click();
     // Message count reduced from 4 to 3
     await expect(editDialog.getByText('3 messages')).toBeVisible();
@@ -186,7 +186,26 @@ test.describe('Slice 6: Conversation Paste Import & Reconstruct Prompt', () => {
     await page.getByRole('tab', { name: 'Conversations' }).click();
     const row = page.getByRole('listitem', { name: 'Editable Discussion' });
     await expect(row.getByText('2 messages')).toBeVisible();
+  });
 
+  test('3b. View and edit conversation dialog: layout and axe accessibility scan', async ({ page }) => {
+    // Seed initial conversation
+    await page.getByRole('button', { name: 'Paste conversation' }).first().click();
+    const pasteDialog = page.getByRole('dialog', { name: 'Paste conversation' });
+    await pasteDialog.getByLabel('Conversation Title').fill('Accessible Dialog Chat');
+    await pasteDialog
+      .getByLabel('Transcript Content')
+      .fill('User: Question 1\nAssistant: Answer 1');
+    await pasteDialog.getByRole('button', { name: 'Parse' }).click();
+    await page.getByRole('button', { name: 'Attach to project' }).click();
+    await expect(page.getByRole('listitem', { name: 'Accessible Dialog Chat' })).toBeVisible();
+
+    // Open View/edit dialog
+    await page.getByRole('button', { name: 'View/edit Accessible Dialog Chat' }).click();
+    const editDialog = page.getByRole('dialog', { name: 'View and edit conversation' });
+    await expect(editDialog).toBeVisible();
+
+    // Scan view/edit dialog for accessibility
     await expectNoSeriousA11y(page);
   });
 

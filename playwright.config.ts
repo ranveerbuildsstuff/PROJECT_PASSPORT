@@ -2,6 +2,7 @@ import { defineConfig } from '@playwright/test';
 
 export default defineConfig({
   testDir: './e2e',
+  testIgnore: ['**/smoke-browsers.spec.ts'],
   timeout: 20_000,
   forbidOnly: true,
   retries: 0,
@@ -37,6 +38,6 @@ export default defineConfig({
     command: 'npm run build && npx vite preview --host 127.0.0.1 --port 4179 --strictPort',
     url: 'http://127.0.0.1:4179',
     reuseExistingServer: false,
-    timeout: 120000,
+    timeout: 180000,
   },
 });

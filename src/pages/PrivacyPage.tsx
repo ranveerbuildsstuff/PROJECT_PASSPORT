@@ -88,7 +88,7 @@ export function PrivacyPage(): React.ReactElement {
           <ul className="list-disc list-inside space-y-1.5">
             <li><strong>No encryption at rest:</strong> Data in IndexedDB is unencrypted on your local hard drive. Any process or browser extension with access to your browser profile can read it. Use full-disk encryption (e.g. BitLocker, FileVault) for local protection.</li>
             <li><strong>External AI provider terms:</strong> Once you copy a continuation prompt or handoff zip and paste it into ChatGPT, Claude, Gemini, or any third-party provider, that provider’s data retention and privacy policies govern the data.</li>
-            <li><strong>No guarantee against zero-day leaks:</strong> We never claim &ldquo;100% secure&rdquo;. You remain in control of what code and secrets you paste into browser workspaces.</li>
+            <li><strong>No guarantee against zero-day leaks:</strong> No system is invulnerable or immune to zero-day browser vulnerabilities. You remain in control of what code and secrets you paste into browser workspaces.</li>
           </ul>
         </div>
       </section>

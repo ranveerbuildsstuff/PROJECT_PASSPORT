@@ -75,7 +75,7 @@ export function WelcomePage(): React.ReactElement {
           <li className="p-4 rounded-lg border border-border-subtle bg-bg-surface flex items-start gap-3">
             <Badge variant="brass" className="shrink-0 mt-0.5">5. CONTINUE</Badge>
             <div className="space-y-1">
-              <p className="text-sm font-semibold text-text-primary">Continue seamlessly in any assistant</p>
+              <p className="text-sm font-semibold text-text-primary">Continue directly in any assistant</p>
               <p className="text-xs text-text-muted leading-relaxed">
                 Paste the synthesized continuation prompt into a fresh AI conversation and pick up immediately where you left off.
               </p>

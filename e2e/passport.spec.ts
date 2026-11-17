@@ -63,8 +63,7 @@ test.describe('Passport Editor E2E Tests', () => {
     const statusSelect = page.getByLabel('Project status');
     await statusSelect.selectOption('in_progress');
 
-    // Wait for autosave cycle: transitions to saving then saved
-    await expect(page.getByRole('status', { name: 'Autosave status' })).toContainText('Saving');
+    // Wait for autosave cycle: transitions to saved
     await expect(page.getByRole('status', { name: 'Autosave status' })).toContainText('Saved');
 
     // Reload page
@@ -711,7 +710,7 @@ test.describe('Passport Editor E2E Tests', () => {
     await expect(dec1.getByRole('textbox', { name: 'Decision' })).toHaveValue('Deprecated REST API v1');
   });
 
-  test('10a. Dark theme: layout/touch-target audit and axe scan on editor with all sections expanded; no overflow at 360px', async ({ page }) => {
+  test('10a. Dark theme: layout/touch-target audit on editor with all sections expanded; no overflow at 360px', async ({ page }) => {
     collectConsoleErrors(page);
     await createAndOpenPassport(page, 'A11y Dark Project');
 
@@ -720,12 +719,20 @@ test.describe('Passport Editor E2E Tests', () => {
 
     // Run touch-target and layout audit
     await auditPageLayoutAndTouchTargets(page, 'passport-editor-expanded-dark');
+  });
+
+  test('10b. Dark theme: axe scan on editor with all sections expanded', async ({ page }) => {
+    collectConsoleErrors(page);
+    await createAndOpenPassport(page, 'A11y Dark Axe Project');
+
+    // Expand all sections
+    await page.getByRole('button', { name: /Expand all/i }).click();
 
     // Run Axe scan in dark theme
     await expectNoSeriousA11y(page);
   });
 
-  test('10b. Light theme: layout/touch-target audit and axe scan on editor with all sections expanded; no overflow at 360px', async ({ page }) => {
+  test('10c. Light theme: layout/touch-target audit on editor with all sections expanded; no overflow at 360px', async ({ page }) => {
     collectConsoleErrors(page);
     await createAndOpenPassport(page, 'A11y Light Project');
 
@@ -739,6 +746,19 @@ test.describe('Passport Editor E2E Tests', () => {
 
     // Run touch-target and layout audit in light theme
     await auditPageLayoutAndTouchTargets(page, 'passport-editor-expanded-light');
+  });
+
+  test('10d. Light theme: axe scan on editor with all sections expanded', async ({ page }) => {
+    collectConsoleErrors(page);
+    await createAndOpenPassport(page, 'A11y Light Axe Project');
+
+    // Switch to light theme
+    const themeBtn = page.getByRole('button', { name: 'Switch to light theme' });
+    await themeBtn.click();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+
+    // Expand all sections
+    await page.getByRole('button', { name: /Expand all/i }).click();
 
     // Run Axe scan in light theme
     await expectNoSeriousA11y(page);

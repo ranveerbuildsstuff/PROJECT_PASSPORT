@@ -63,10 +63,11 @@ describe('UI Primitives and Design System', () => {
   });
 
   it('Dialog gives initial focus to first form control, or safe action in confirmations', async () => {
-    // 1. With form controls, first input is focused
+    // 1. With form controls, first enabled input is focused
     const { unmount } = render(
       <Dialog isOpen={true} onClose={vi.fn()} title="Form Dialog">
         <form>
+          <input disabled aria-label="Disabled Field" />
           <input aria-label="First Field" />
           <input aria-label="Second Field" />
         </form>
@@ -78,7 +79,18 @@ describe('UI Primitives and Design System', () => {
     });
     unmount();
 
-    // 2. Without form controls (e.g. confirmation), safe action button is focused instead of close button
+    // 2. With textarea or select as first control
+    const { unmount: unmountArea } = render(
+      <Dialog isOpen={true} onClose={vi.fn()} title="Textarea Dialog">
+        <textarea aria-label="Project Summary" />
+      </Dialog>
+    );
+    await waitFor(() => {
+      expect(screen.getByLabelText('Project Summary')).toHaveFocus();
+    });
+    unmountArea();
+
+    // 3. Without form controls (e.g. confirmation), safe action button is focused instead of close button
     render(
       <Dialog isOpen={true} onClose={vi.fn()} title="Confirmation Dialog">
         <div>Are you sure?</div>

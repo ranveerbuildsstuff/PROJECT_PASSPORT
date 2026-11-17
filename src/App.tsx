@@ -22,8 +22,10 @@ export function App(): React.ReactElement {
   }, []);
 
   useEffect(() => {
-    checkStorage();
-  }, [checkStorage]);
+    if (!isStorageFreeRoute) {
+      checkStorage();
+    }
+  }, [checkStorage, isStorageFreeRoute]);
 
   if (isStorageFreeRoute) {
     return (

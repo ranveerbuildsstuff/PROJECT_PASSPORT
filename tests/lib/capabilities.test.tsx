@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import {
   detectCapabilities,
+  CapabilityEnvironment,
   HASHING_UNAVAILABLE_MESSAGE,
   FOLDER_UPLOAD_UNAVAILABLE_MESSAGE,
 } from '../../src/lib/capabilities';
@@ -42,11 +43,16 @@ describe('Browser Capabilities Detection & Fallbacks', () => {
   });
 
   it('detects full capabilities when all modern APIs are available', () => {
-    const mockEnv = {
+    class MockBlob {
+      arrayBuffer() {
+        return Promise.resolve(new ArrayBuffer(0));
+      }
+    }
+    const mockEnv: CapabilityEnvironment = {
       indexedDB: {},
       crypto: { subtle: { digest: vi.fn() } },
       Worker: function () {},
-      Blob: function () {},
+      Blob: MockBlob,
       File: function () {},
       document: {
         createElement: (tag: string) => {
@@ -57,7 +63,6 @@ describe('Browser Capabilities Detection & Fallbacks', () => {
         },
       },
     };
-    mockEnv.Blob.prototype = { arrayBuffer: vi.fn() };
 
     const caps = detectCapabilities(mockEnv);
     expect(caps.indexedDB).toBe(true);
@@ -68,11 +73,12 @@ describe('Browser Capabilities Detection & Fallbacks', () => {
   });
 
   it('detects missing webCryptoSubtle and returns false', () => {
-    const mockEnv = {
+    class MockBlob {}
+    const mockEnv: CapabilityEnvironment = {
       indexedDB: {},
       crypto: {}, // no subtle
       Worker: function () {},
-      Blob: function () {},
+      Blob: MockBlob,
       File: function () {},
     };
 
@@ -81,7 +87,7 @@ describe('Browser Capabilities Detection & Fallbacks', () => {
   });
 
   it('detects missing webkitdirectory when input does not support it', () => {
-    const mockEnv = {
+    const mockEnv: CapabilityEnvironment = {
       document: {
         createElement: () => ({}),
       },

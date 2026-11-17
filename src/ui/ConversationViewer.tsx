@@ -248,7 +248,7 @@ export function ConversationViewer({
                       variant="ghost"
                       size="sm"
                       onClick={() => handleMergeWithNext(index)}
-                      aria-label={`Merge Message ${index + 1} with next`}
+                      aria-label={`Merge with next (Message ${index + 1})`}
                       title="Merge this message with the next message"
                       className="min-h-[44px] min-w-[44px] gap-1 text-xs"
                     >
